@@ -26,8 +26,9 @@ def get_fast_aji(true, pred, mode='plus'):
     true = np.copy(true)
     pred = np.copy(pred)
 
-    pred = remap_label(pred)
-    true = remap_label(true)
+    if mode == 'plus':
+        pred = remap_label(pred)
+        true = remap_label(true)
 
     true_id = list(np.unique(true))
     pred_id = list(np.unique(pred)) 
