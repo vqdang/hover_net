@@ -1,15 +1,13 @@
 
-import random
 
 import cv2
-import numpy as np
 import tensorflow as tf
 from tensorpack import imgaug
 
 from loader.augs import (BinarizeLabel, GaussianBlur, GenInstanceDistance,
                          GenInstanceXY, MedianBlur)
 
-
+# TODO: make a general func to seed RNG
 #### 
 class Config(object):
     def __init__(self):
@@ -31,8 +29,8 @@ class Config(object):
         
         self.data_ext = '.npy'
         self.train_dir = ['../../../train/Kumar/paper/train/XXXX/']
-        self.valid_dir = ['../../train/Kumar/paper/valid_same/XXXX/',
-                          '../../train/Kumar/paper/valid_diff/XXXX/']
+        self.valid_dir = ['../../../train/Kumar/paper/valid_same/XXXX/',
+                          '../../../train/Kumar/paper/valid_diff/XXXX/']
         # nr of processes for parallel processing input
         self.nr_procs_train = 8 
         self.nr_procs_valid = 4 
@@ -70,9 +68,9 @@ class Config(object):
         self.model_name = '%s/%s' % (exp_id, model_id)
         # loading chkpts in tensorflow, the path must not contain extra '/'
         self.log_path = '/media/vqdang/Data_2/dang/output/NUC-SEG/collab'
-        self.save_dir = '%s/%s/' % (self.log_path, self.model_name )
+        self.save_dir = '%s/%s' % (self.log_path, self.model_name)
 
-        self.pretrained_preact_resnet50_path = '../../pretrained/ImageNet-ResNet50-Preact.npz'
+        self.pretrained_preact_resnet50_path = '../../../pretrained/ImageNet-ResNet50-Preact.npz'
 
         ####
         metric_dict = {'valid_dice' : '>',
@@ -148,19 +146,19 @@ class Config(object):
 
     def get_valid_augmentors(self, view=False):
         shape_augs = [
-            imgaug.CenterCrop(self.train_input_shape),
+            imgaug.CenterCrop(self.infer_input_shape),
         ]
 
         input_augs = None
 
         # default to 'xy'
         if self.model_mode != 'dst+np':
-            label_augs = [GenInstanceXY(self.train_mask_shape)]
+            label_augs = [GenInstanceXY(self.infer_mask_shape)]
         else:
-            label_augs = [GenInstanceDistance(self.train_mask_shape)]
+            label_augs = [GenInstanceDistance(self.infer_mask_shape)]
         label_augs.append(BinarizeLabel())
 
         if not view:
-            label_augs.append(imgaug.CenterCrop(self.train_mask_shape))        
+            label_augs.append(imgaug.CenterCrop(self.infer_mask_shape))        
 
         return shape_augs, input_augs, label_augs

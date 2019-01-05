@@ -44,7 +44,7 @@ def valid_generator(ds, shape_aug=None, input_aug=None, label_aug=None, batch_si
     ### augment just the input
     ds = ds if input_aug is None else AugmentImageComponent(ds, input_aug, index=0, copy=False)
     ### augment just the output
-    ds = ds if input_aug is None else AugmentImageComponent(ds, label_aug, index=0, copy=True)
+    ds = ds if label_aug is None else AugmentImageComponent(ds, label_aug, index=0, copy=True)
     #
     ds = BatchData(ds, batch_size, remainder=True)
     ds = CacheData(ds) # cache all inference images 
@@ -59,7 +59,7 @@ def train_generator(ds, shape_aug=None, input_aug=None, label_aug=None, batch_si
     ### augment just the input i.e index 0 within each yield of DatasetSerial
     ds = ds if input_aug is None else AugmentImageComponent(ds, input_aug, index=0, copy=False)
     ### augment just the output i.e index 1 within each yield of DatasetSerial
-    ds = ds if input_aug is None else AugmentImageComponent(ds, label_aug, index=1, copy=True)
+    ds = ds if label_aug is None else AugmentImageComponent(ds, label_aug, index=1, copy=True)
     #
     ds = BatchDataByShape(ds, batch_size, idx=0)
     ds = PrefetchDataZMQ(ds, nr_procs)
