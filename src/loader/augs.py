@@ -55,9 +55,8 @@ class GenInstanceXY(GenInstance):
         fixed_ann = self._fix_mirror_padding(orig_ann)
         # re-cropping with fixed instance id map
         crop_ann = cropping_center(fixed_ann, self.crop_shape)
-        # removing rear pixels that are too small for balancing com
-        if crop_ann.sum() > 0: # to avoide the 1 label warning
-            crop_ann = morph.remove_small_objects(crop_ann, min_size=30)
+        # TODO: deal with 1 label warning
+        crop_ann = morph.remove_small_objects(crop_ann, min_size=30)
 
         x_map = np.zeros(orig_ann.shape[:2], dtype=np.float32)
         y_map = np.zeros(orig_ann.shape[:2], dtype=np.float32)

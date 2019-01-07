@@ -1,18 +1,6 @@
-import argparse
-import colorsys
-import glob
-import math
-import os
-import random
-import re  # regex
-import warnings
 
-import cv2
-import matplotlib.pyplot as plt
+import warnings
 import numpy as np
-import scipy.io as sio
-from matplotlib import cm
-from scipy.ndimage import measurements
 
 #####--------------------------Optimized for Speed
 def get_fast_aji(true, pred, mode='plus'):

@@ -11,7 +11,7 @@ from loader.augs import (BinarizeLabel, GaussianBlur, GenInstanceDistance,
 #### 
 class Config(object):
     def __init__(self):
-        ####
+        #### Input - Output Height Width
         train_diff_shape = 190
         self.train_input_shape = [0, 0]
         self.train_mask_shape = [80, 80] # 
@@ -37,12 +37,12 @@ class Config(object):
 
         #### Training parameters
         ###
-        # xy: double branches nework, 
+        # np+xy : double branches nework, 
         #     1 branch nuclei pixel classification (segmentation)
         #     1 branch regressing XY coordinate w.r.t the (supposed) 
         #     nearest nuclei centroids, coordinate is normalized to 0-1 range
         #
-        # dst+np: double branches nework, 
+        # np+dst: double branches nework, 
         #     1 branch nuclei pixel classification (segmentation)
         #     1 branch regressing nuclei instance distance map (chessboard in this case),
         #     the distance map is normalized to 0-1 range
@@ -50,6 +50,7 @@ class Config(object):
         self.model_mode  = 'xy'
         self.input_norm  = True # normalize RGB to 0-1 range
         self.loss_term   = ['bce', 'dice', 'mse', 'msge']
+        # np+dst run with 'bce', 'mse' flags
 
         #### 
         self.init_lr    = 1.0e-4
@@ -78,15 +79,19 @@ class Config(object):
 
         self.inf_manual_chkpts = False
         self.inf_model_path  = self.save_dir + 'model-30420.index'
-        # self.inf_eval_metric = 'valid_dice' if self.model_mode != 'xy' else 'valid_mse'
         self.inf_eval_metric = 'valid_dice'
         self.inf_comparator = metric_dict[self.inf_eval_metric]
 
-        self.inf_imgs_ext      = '.png'
-        self.inf_imgs_dir      = '../../data/NUC_TNBC/Images/XXXX/'
-        self.inf_norm_root_dir = '../../data/NUC_TNBC/Images/'
-        self.inf_norm_codes    = ['XXXX']
-        self.inf_output_dir    = 'output/%s/TNBC/%s' % (exp_id, 'tune')
+        #### Info for running inference
+        self.inf_imgs_ext = '.tif'
+        # 'inf_norm_root_dir' has various subdir each which contains a set of 
+        # images such as orignal ('XXXX') or stain-normed wrt to a given target images
+        # (like '5784' means TCGA-21-5784-01Z-00-DX1). The inference only run
+        # with subdir provided by 'inf_norm_codes'
+        self.inf_norm_root_dir = '../../../data/NUC_Kumar/train-set/imgs_norm/'
+        self.inf_norm_codes    = ['XXXX']           
+        self.inf_output_dir    = 'output/%s/Kumar/%s' % (exp_id, model_id)
+
 
         #### name of nodes to extract output from GPU then feed to CPU
         # or feed input from CPU to GPU 
@@ -96,8 +101,6 @@ class Config(object):
         self.eval_inf_output_tensor_names = ['predmap-coded']
         # for inference during training mode i.e run by trainer.py
         self.train_inf_output_tensor_names = ['predmap-coded', 'truemap-coded']
-
-        return
 
     def get_train_augmentors(self, view=False):
         shape_augs = [
@@ -133,7 +136,7 @@ class Config(object):
         ]
 
         # default to 'xy'
-        if self.model_mode != 'dst+np':
+        if self.model_mode != 'np+dst':
             label_augs = [GenInstanceXY(self.train_mask_shape)]
         else:
             label_augs = [GenInstanceDistance(self.train_mask_shape)]
@@ -152,7 +155,7 @@ class Config(object):
         input_augs = None
 
         # default to 'xy'
-        if self.model_mode != 'dst+np':
+        if self.model_mode != 'np+dst':
             label_augs = [GenInstanceXY(self.infer_mask_shape)]
         else:
             label_augs = [GenInstanceDistance(self.infer_mask_shape)]
