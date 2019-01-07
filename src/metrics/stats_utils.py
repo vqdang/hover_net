@@ -17,7 +17,9 @@ from scipy.ndimage import measurements
 #####--------------------------Optimized for Speed
 def get_fast_aji(true, pred, mode='plus'):
     """
-    Fast AJI
+    Fast AJI, has built-in call to `remap_label` to re-name
+    instance ID. If 'plus' mode is on, reordering by size is done,
+    else the ID is shifted but the ordering of instance unchanged
 
     Args:
         mode: 'plus' to use the AJI+ version else, using the orignal
@@ -27,8 +29,11 @@ def get_fast_aji(true, pred, mode='plus'):
     pred = np.copy(pred)
 
     if mode == 'plus':
-        pred = remap_label(pred)
-        true = remap_label(true)
+        pred = remap_label(pred, by_size=True)
+        true = remap_label(true, by_size=True)
+    else:
+        pred = remap_label(pred, by_size=False)
+        true = remap_label(true, by_size=False)
 
     true_id = list(np.unique(true))
     pred_id = list(np.unique(pred)) 
@@ -130,6 +135,11 @@ def get_fast_dice_2(true, pred):
     return 2 * overall_inter / overall_total
 #####
 def get_fast_panoptic_quality(true, pred, match_iou=0.75):
+    """
+    Fast computation requires instance IDs are in contiguous
+    orderding i.e [1, 2, 3, 4] not [2, 3, 6, 10]. Please call
+    `remap_label` before hand.
+    """
     true = np.copy(true)
     pred = np.copy(pred)
     true_id = list(np.unique(true))
@@ -288,8 +298,10 @@ def get_aji(true, pred):
 #####
 def remap_label(pred, by_size=True):
     """
-    Rename all instance id so that the id (sorting from min to max)
-    is contiguos i.e [0, 1, 2, 3] not [0, 2, 4, 6].
+    Rename all instance id so that the id is contiguous i.e [0, 1, 2, 3] 
+    not [0, 2, 4, 6]. The ordering of instances (which one comes first) 
+    is preserved unless by_size=True, then the instances will be reordered
+    so that bigger nucler has smaller ID
 
     Args:
         pred    : the 2d array contain instances where each instances is marked
