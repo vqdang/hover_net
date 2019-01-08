@@ -16,7 +16,7 @@ A dual branch network, where one branch predicts the nuclear pixels while the ot
 
 If any part of this code is used, we appreciate appropriate citation to our paper: <br />
 
-Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Jin Tae Kwak, and Nasir Rajpoot. "XY Network for Nuclear Segmentation in Multi-Tissue Histology Images." arXiv preprint arXiv:1812.06499 (2018). <br />
+**Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Jin Tae Kwak, and Nasir Rajpoot. "XY Network for Nuclear Segmentation in Multi-Tissue Histology Images." arXiv preprint arXiv:1812.06499 (2018).** <br />
 
 BibLatex entry: <br />
 ```
@@ -42,6 +42,6 @@ OpenCV 3.2
 
 ## License
 
-This project is licensed under the some License - see the [LICENSE.md](LICENSE.md) file for details
+This project is licensed under the some License - see the [LICENSE](LICENSE) file for details
 
 
