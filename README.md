@@ -19,7 +19,7 @@ If any part of this code is used, we appreciate appropriate citation to our pape
 
 **Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Jin Tae Kwak, and Nasir Rajpoot. "XY Network for Nuclear Segmentation in Multi-Tissue Histology Images." arXiv preprint arXiv:1812.06499 (2018).** <br />
 
-BibLatex entry: <br />
+BibTex entry: <br />
 ```
 @article{graham2018xy,
   title={XY Network for Nuclear Segmentation in Multi-Tissue Histology Images},
