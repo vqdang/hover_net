@@ -1,7 +1,8 @@
 # XY Network for Nuclear Segmentation in Multi-Tissue Histology Images
 
-A dual branch network, where one branch predicts the nuclear pixels while the other branch predicts the X and Y distance of each pixel to the nearest nuclear centroids.
+A dual branch network, where one branch predicts the nuclear pixels while the other branch predicts the X and Y distance of each pixel to the nearest nuclear centroids. <br />
 
+[Link to paper](https://arxiv.org/abs/1812.06499)
 
 ## Repository Structure
 
