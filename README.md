@@ -6,7 +6,7 @@ A dual branch network, where one branch predicts the nuclear pixels while the ot
 ## Repository Structure
 
 * `src/` contains executable files used to run the model. Further information on running the code can be found in the corresponding directory.
-* `src/metric/` contains the evaluation code. Further information can be found in the corresponding directory.
+* `src/metrics/` contains the evaluation code. Further information can be found in the corresponding directory.
 * `data/` refers to information on the data used within the paper
 
 ## XY-Net
