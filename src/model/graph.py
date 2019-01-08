@@ -5,7 +5,6 @@ from tensorpack import *
 from tensorpack.models import BatchNorm, BNReLU, Conv2D, MaxPooling, FixedUnPooling
 from tensorpack.tfutils.summary import *
 
-
 from .utils import *
 
 import sys
@@ -36,7 +35,7 @@ class Model(ModelDesc, Config):
         ####
         def upsample2x(name, x):
             """
-            Nearest neighbor up-sampling
+            Nearest neighbour up-sampling
             """
             return FixedUnPooling(
                         name, x, 2, unpool_mat=np.ones((2, 2), dtype='float32'),
@@ -94,6 +93,7 @@ class Model(ModelDesc, Config):
 
         ####
         def encoder(i):
+            # ResNet 50 Encoder
             d1 = Conv2D('conv0',  i, 64, 7, padding='valid', strides=1, activation=BNReLU)
             d1 = res_blk('group0', d1, [ 64,  64,  256], [1, 3, 1], 3, strides=1)                       
             
@@ -111,7 +111,7 @@ class Model(ModelDesc, Config):
         ####
         def decoder(name, i):
             ####
-            pad = 'valid'
+            pad = 'valid' # To prevent boundary arte
             with tf.variable_scope(name):
                 with tf.variable_scope('u3'):
                     u3 = upsample2x('rz', i[-1])
@@ -133,7 +133,7 @@ class Model(ModelDesc, Config):
                     u1 = upsample2x('rz', u2)
                     u1_sum = tf.add_n([u1, i[-4]])
 
-                    u1 = u1_sum # for legacy
+                    u1 = u1_sum # for consistency
 
             return u1
         ####
@@ -176,7 +176,7 @@ class Model(ModelDesc, Config):
 
         ####
         if get_current_tower_context().is_training:
-            ######## LOSS
+            #---- LOSS ----#
             ### XY regression loss
             loss_mse = o_pred_xy - o_true_xy
             loss_mse = loss_mse * loss_mse
@@ -223,7 +223,7 @@ class Model(ModelDesc, Config):
 
             add_param_summary(('.*/W', ['histogram']))   # monitor W
 
-            #### logging visual sthg
+            ### logging visual sthg
             orig_imgs = tf.cast(orig_imgs  , tf.uint8)
             tf.summary.image('input', orig_imgs, max_outputs=1)
 

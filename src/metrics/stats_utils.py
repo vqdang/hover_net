@@ -1,4 +1,3 @@
-
 import warnings
 import numpy as np
 
@@ -10,7 +9,7 @@ def get_fast_aji(true, pred, mode='plus'):
     else the ID is shifted but the ordering of instance unchanged
 
     Args:
-        mode: 'plus' to use the AJI+ version else, using the orignal
+        mode: 'plus' to use the AJI+ version else, using the original
                AJI computation
     """
     true = np.copy(true)
