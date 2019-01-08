@@ -13,6 +13,12 @@ A dual branch network, where one branch predicts the nuclear pixels while the ot
 
 ![](network.png)
 
+(a) Overall network architecture <br />
+(b) Residual unit <br />
+(c) Dense decoder unit <br />
+(d) Key
+
+
 ## Citation
 
 If any part of this code is used, we appreciate appropriate citation to our paper: <br />
@@ -43,6 +49,6 @@ OpenCV 3.2
 
 ## License
 
-This project is licensed under the some License - see the [LICENSE](LICENSE) file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
 
 
