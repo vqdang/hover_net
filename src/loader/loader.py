@@ -29,10 +29,9 @@ class DatasetSerial(RNGDataFlow):
 
             data = np.load(self.path_list[idx])
 
-            # TODO: reverse here after debug RGB-ID
             # split stack channel into image and label
             img = data[...,:3]
-            ann = data[...,4:] # instance ID map
+            ann = data[...,3:] # instance ID map
            
             img = img.astype('uint8')            
             yield [img, ann]
@@ -44,11 +43,10 @@ def valid_generator(ds, shape_aug=None, input_aug=None, label_aug=None, batch_si
     ### augment just the input
     ds = ds if input_aug is None else AugmentImageComponent(ds, input_aug, index=0, copy=False)
     ### augment just the output
-    ds = ds if label_aug is None else AugmentImageComponent(ds, label_aug, index=0, copy=True)
+    ds = ds if label_aug is None else AugmentImageComponent(ds, label_aug, index=1, copy=True)
     #
     ds = BatchData(ds, batch_size, remainder=True)
     ds = CacheData(ds) # cache all inference images 
-    # TODO: check sampling correct or not
     ds = PrefetchDataZMQ(ds, nr_procs)
     return ds
 
