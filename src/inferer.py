@@ -88,14 +88,7 @@ class Inferer(Config):
 
     ####
     def run(self):
-        if self.inf_manual_chkpts:
-            model_path = self.inf_model_path
-        else:
-            save_dir = self.save_dir + '/tune/'
-            model_path = get_best_chkpts(
-                                    save_dir, 
-                                    self.inf_eval_metric,
-                                    self.inf_comparator)
+        model_path = self.inf_model_path
 
         pred_config = PredictConfig(
             model        = Model(),

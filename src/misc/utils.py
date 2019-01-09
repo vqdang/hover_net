@@ -54,38 +54,3 @@ def get_files(data_dir_list, data_ext):
 
     return data_files
 
-####
-def get_best_chkpts(path, metric_name, comparator='>'):
-    """
-    Return the path to checkpoint having largest/smallest measurement 
-    values
-
-    Args:
-        path       :  chkpts directory, must contain "stats.json" file
-        metric_name:  name of the metric within "stats.json" such as
-                      'valid_acc' or 'valid_dice' etc,
-        comparator :  '>' or '<'
-    """
-    stat_file_path = path + '/stats.json'
-    ops = {
-            '>': operator.gt,
-            '<': operator.lt,
-          }
-
-    op_func = ops[comparator]
-    with open(stat_file_path) as stat_file:
-        info = json.load(stat_file)
-    
-    if comparator == '>':
-        best_value  = -float("inf")
-    else:
-        best_value  = +float("inf")
-
-    best_chkpts = 0
-    for epoch_stat in info:
-        epoch_value = epoch_stat[metric_name]
-        if op_func(epoch_value, best_value):
-            best_value  = epoch_value
-            best_chkpts = epoch_stat['global_step']
-    best_chkpts = "%smodel-%d.index" % (path, best_chkpts)
-    return best_chkpts

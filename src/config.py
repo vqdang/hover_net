@@ -47,7 +47,7 @@ class Config(object):
         #     1 branch regressing nuclei instance distance map (chessboard in this case),
         #     the distance map is normalized to 0-1 range
 
-        self.model_mode  = 'xy'
+        self.model_mode  = 'np+xy'
         self.input_norm  = True # normalize RGB to 0-1 range
         self.loss_term   = ['bce', 'dice', 'mse', 'msge']
         # np+dst run with 'bce', 'mse' flags
@@ -73,14 +73,8 @@ class Config(object):
 
         self.pretrained_preact_resnet50_path = '../../../pretrained/ImageNet-ResNet50-Preact.npz'
 
-        ####
-        metric_dict = {'valid_dice' : '>',
-                       'valid_mse'  : '<'}
-
-        self.inf_manual_chkpts = False
-        self.inf_model_path  = self.save_dir + 'model-30420.index'
-        self.inf_eval_metric = 'valid_dice'
-        self.inf_comparator = metric_dict[self.inf_eval_metric]
+        ####      
+        self.inf_model_path  = self.save_dir + '/tune3/model-23998.index'
 
         #### Info for running inference
         self.inf_imgs_ext = '.tif'
@@ -127,9 +121,9 @@ class Config(object):
                 ), 0.5),
             # standard color augmentation
             imgaug.RandomOrderAug(
-                [imgaug.Hue((-8, 8), rgb=True), # 0.04 * 90 degree
+                [imgaug.Hue((-8, 8), rgb=True), 
                 imgaug.Saturation(0.2, rgb=True),
-                imgaug.Brightness(26, clip=True), # 0.1 * 255 
+                imgaug.Brightness(26, clip=True),  
                 imgaug.Contrast((0.75, 1.25), clip=True),
                 ]),
             imgaug.ToUint8(),
