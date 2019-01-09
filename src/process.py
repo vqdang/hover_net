@@ -51,15 +51,15 @@ def proc_np_xy(pred, marker_mode=2, energy_mode=2):
     Args:
         pred: prediction output, assuming 
                 channel 0 contain probability map of nuclei
-                channel 1 containing the regressed Y-map
-                channel 2 containing the regressed X-map
+                channel 1 containing the regressed X-map
+                channel 2 containing the regressed Y-map
     """
     assert marker_mode == 2 or marker_mode == 1, 'Only support 1 or 2'
     assert energy_mode == 2 or energy_mode == 1, 'Only support 1 or 2'
 
     blb_raw = pred[...,0]
-    x_dir_raw = pred[...,2]
-    y_dir_raw = pred[...,1]
+    x_dir_raw = pred[...,1]
+    y_dir_raw = pred[...,2]
 
     ##### Processing 
     blb = np.copy(blb_raw)
@@ -126,6 +126,9 @@ def proc_np_xy(pred, marker_mode=2, energy_mode=2):
 
 ###################
 
+## WARNING: check the prediction channels, wrong ordering will break the code !
+## It should match augs.py
+
 cfg = Config()
 
 proc_mode = 'np+xy'
@@ -139,8 +142,8 @@ for norm_target in cfg.inf_norm_codes:
     # pred_dir = '%s/%s/' % (cfg.inf_output_dir, norm_target)
     # proc_dir = '%s/%s_proc/' % (cfg.inf_output_dir, norm_target)
 
-    pred_dir = 'output/XXXX/'
-    proc_dir = 'output/XXXX_proc_e1m1/'
+    pred_dir = 'output/v6.0.3.0/Kumar/xy_temp/XXXX/'
+    proc_dir = 'output/v6.0.3.0/Kumar/xy_temp/XXXX_proc/'
 
     # TODO: cache list to check later norm dir has same number of files
     file_list = glob.glob('%s/*.mat' % (pred_dir))
