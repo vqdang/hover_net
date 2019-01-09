@@ -24,7 +24,7 @@ class Model(ModelDesc, Config):
 
     def _get_inputs(self):
         return [InputDesc(tf.float32, [None] + self.train_input_shape + [3], 'images'),
-                InputDesc(tf.float32, [None] + self.train_mask_shape + [3], 'truemap-coded')]
+                InputDesc(tf.float32, [None] + self.train_mask_shape  + [3], 'truemap-coded')]
           
     def _get_optimizer(self):
         lr = tf.get_variable('learning_rate', initializer=self.init_lr, trainable=False)
@@ -197,7 +197,7 @@ class Model(ModelDesc, Config):
                 loss_msge = tf.identity(loss_msge, name='loss_msge')
                 add_moving_summary(loss_msge)
 
-                loss_xy = 2 * loss_mse + 2 * loss_msge
+                loss_xy = 2 * loss_mse + loss_msge
                 
             loss_xy = tf.identity(loss_xy, name='overall-xy')
 
