@@ -42,7 +42,7 @@ class Config(object):
         #     1 branch regressing XY coordinate w.r.t the (supposed) 
         #     nearest nuclei centroids, coordinate is normalized to 0-1 range
         #
-        # np+dst: double branches nework, TODO: not yet completed !!!!
+        # np+dst: double branches nework
         #     1 branch nuclei pixel classification (segmentation)
         #     1 branch regressing nuclei instance distance map (chessboard in this case),
         #     the distance map is normalized to 0-1 range
@@ -54,13 +54,14 @@ class Config(object):
 
         #### 
         self.init_lr    = 1.0e-4
-        self.nr_epochs  = 60
-        self.lr_sched   = [('30', 1.0e-5)]
+        self.nr_epochs  = 20
+        self.lr_sched   = [('10', 1.0e-5)]
         self.nr_classes = 2        
         self.optim = tf.train.AdamOptimizer
         ####
 
-        self.train_batch_size = 8
+        self.train_phase1_batch_size = 8 # unfreezing everything will 
+        self.train_phase2_batch_size = 4 # consume more memory
         self.infer_batch_size = 16
 
         ####
