@@ -126,7 +126,6 @@ class GenInstanceXY(GenInstance):
         return img
 
 ####
-import matplotlib.pyplot as plt
 class GenInstanceDistance(GenInstance):   
     """
         Input annotation must be of original shape.
