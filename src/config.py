@@ -42,7 +42,7 @@ class Config(object):
         #     1 branch regressing XY coordinate w.r.t the (supposed) 
         #     nearest nuclei centroids, coordinate is normalized to 0-1 range
         #
-        # np+dst: double branches nework, 
+        # np+dst: double branches nework, TODO: not yet completed !!!!
         #     1 branch nuclei pixel classification (segmentation)
         #     1 branch regressing nuclei instance distance map (chessboard in this case),
         #     the distance map is normalized to 0-1 range
