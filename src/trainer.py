@@ -43,13 +43,16 @@ class StatCollector(Inferencer, Config):
         pred = np.array(self.pred_list)
         true = np.array(self.true_list)
 
+        # have to get total number pixels for mean per pixel
+        nr_pixels = np.ones(true[...,:1].shape).sum()
+
         # classification statistic
         pred_blb = pred[...,:1]
+        true_blb = true[...,:1]
         pred_blb[pred_blb >  0.5] = 1.0
         pred_blb[pred_blb <= 0.5] = 0.0
-        true_blb = true[...,:1]
 
-        accuracy = np.mean(pred_blb == true_blb)
+        accuracy = (pred_blb == true_blb).sum() / nr_pixels
         inter = (pred_blb * true_blb).sum()
         total = (pred_blb + true_blb).sum()
         dice = 2 * inter / total
@@ -61,11 +64,11 @@ class StatCollector(Inferencer, Config):
         pred_xy = pred[...,-2:]
         true_xy = true[...,-2:]
         error = pred_xy - true_xy
-        mae  = np.mean(np.abs(error))
-        mse = np.mean(error * error)
+        mae = np.sum(np.abs(error)) / nr_pixels
+        mse = np.sum(error * error) / nr_pixels
 
-        stat_dict[self.prefix + '_mse'] = mse
         stat_dict[self.prefix + '_mae'] = mae
+        stat_dict[self.prefix + '_mse'] = mse
         return stat_dict
 
 ###########################################
@@ -76,22 +79,25 @@ class Trainer(Config):
             batch_size = self.train_batch_size
             augmentors = self.get_train_augmentors(view)
             data_files = get_files(self.train_dir, self.data_ext)
+            data_generator = loader.train_generator
             nr_procs = self.nr_procs_train
         else:
             batch_size = self.infer_batch_size
             augmentors = self.get_valid_augmentors(view)
             data_files = get_files(self.valid_dir, self.data_ext)
+            data_generator = loader.valid_generator
             nr_procs = self.nr_procs_valid
 
         # set nr_proc=1 for viewing to ensure clean ctrl-z
         nr_procs = 1 if view else nr_procs
         dataset = loader.DatasetSerial(data_files)
-        datagen = loader.train_generator(dataset,
-                                shape_aug=augmentors[0],
-                                input_aug=augmentors[1],
-                                label_aug=augmentors[2],
-                                batch_size=batch_size,
-                                nr_procs=nr_procs)
+        datagen = data_generator(dataset,
+                        shape_aug=augmentors[0],
+                        input_aug=augmentors[1],
+                        label_aug=augmentors[2],
+                        batch_size=batch_size,
+                        nr_procs=nr_procs)
+        
         return datagen        
     ####
     def view_dataset(self, mode='train'):
