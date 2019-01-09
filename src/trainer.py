@@ -1,5 +1,6 @@
 
 import os
+import json
 import argparse
 
 import numpy as np
@@ -13,7 +14,7 @@ from tensorpack.train import (SyncMultiGPUTrainerParameterServer, TrainConfig, l
 import loader.loader as loader
 from config import Config
 from misc.utils import get_files
-from model.graph import Model
+from model.graph import Model_NP_XY, Model_NP_DIST
 
 
 ####
@@ -131,8 +132,10 @@ class Trainer(Config):
         ######
         steps_per_epoch = train_datagen.size() // nr_gpus
 
+        MODEL_MAKER = Model_NP_XY if self.model_mode == 'np+xy' else Model_NP_DIST
+
         config = TrainConfig(
-                    model           = Model(freeze)  ,
+                    model           = MODEL_MAKER(freeze),
                     callbacks       = callbacks      ,
                     dataflow        = train_datagen  ,
                     steps_per_epoch = steps_per_epoch,
@@ -152,15 +155,22 @@ class Trainer(Config):
         Phase 2: unfreeze all layer, training whole, weigths taken from last epoch of
                  Phase 1
         """
-        self.train_batch_size = 8
+        def get_last_chkpt_path(phase1_dir):
+            stat_file_path = phase1_dir + '/stats.json'
+            with open(stat_file_path) as stat_file:
+                info = json.load(stat_file)
+            chkpt_list = [epoch_stat['global_step'] for epoch_stat in info]
+            last_chkpts_path = "%smodel-%d.index" % (phase1_dir, max(chkpt_list))
+            return last_chkpts_path
+
         save_dir = self.save_dir + '/base/'
+        self.train_batch_size = self.train_phase1_batch_size
         init_weights = get_model_loader(self.pretrained_preact_resnet50_path)
         self.run_once(nr_gpus, True, sess_init=init_weights, save_dir=save_dir)
 
-        # TODO: make this dynamic, and the batch size should not be here
-        self.train_batch_size = 4
         save_dir = self.save_dir + '/tune/'
-        phase1_last_model_path = '%s/base/%s' % (self.save_dir, 'model-10140.index')
+        self.train_batch_size = self.train_phase2_batch_size
+        phase1_last_model_path = get_last_chkpt_path(self.save_dir + '/base/')
         init_weights = SaverRestore(phase1_last_model_path, ignore=['learning_rate'])
         self.run_once(nr_gpus, False, sess_init=init_weights, save_dir=save_dir)
         return
