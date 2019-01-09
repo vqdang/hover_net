@@ -57,7 +57,6 @@ def valid_generator(ds, shape_aug=None, input_aug=None, label_aug=None, batch_si
     #
     ds = BatchData(ds, batch_size, remainder=True)
     ds = CacheData(ds) # cache all inference images 
-    ds = PrefetchDataZMQ(ds, nr_procs)
     return ds
 
 ####
