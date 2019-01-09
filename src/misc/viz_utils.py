@@ -19,6 +19,7 @@ def random_colors(N, bright=True):
     colors = list(map(lambda c: colorsys.hsv_to_rgb(*c), hsv))
     random.shuffle(colors)
     return colors
+
 ####
 def visualize_instances(mask, canvas=None, color=None):
     """
@@ -44,9 +45,10 @@ def visualize_instances(mask, canvas=None, color=None):
                                 cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(canvas, contours[1], -1, inst_color, 2)
     return canvas
+
 ####
 def gen_figure(imgs_list, titles, fig_inch, shape=None,
-                share_ax='all', show=False, colormap=cm.jet):
+                share_ax='all', show=False, colormap=plt.get_cmap('jet')):
 
     num_img = len(imgs_list)
     if shape is None:
