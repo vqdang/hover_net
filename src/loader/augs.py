@@ -234,16 +234,3 @@ class MedianBlur(ImageAugmentor):
     def _augment(self, img, ksize):
         return cv2.medianBlur(img, ksize)
 
-#### TODO: add test run here
-# if __name__ == '__main__':
-    
-#     # for debugging
-#     trans = GenInstanceXY()
-#     trans.reset_state()
-
-#     img = cv2.imread('sample.png')
-#     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-#     out = trans.test_run(img)
-#     out = cv2.cvtColor(out, cv2.COLOR_RGB2BGR)
-#     cv2.imwrite('out.png', out)
