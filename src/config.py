@@ -64,17 +64,17 @@ class Config(object):
         self.infer_batch_size = 16
 
         ####
-        exp_id = 'v6.0.3.0'
-        model_id = '%s_temp' % (self.model_mode)
+        exp_id = 'v1.0.0.0'
+        model_id = '%s' % (self.model_mode)
         self.model_name = '%s/%s' % (exp_id, model_id)
         # loading chkpts in tensorflow, the path must not contain extra '/'
-        self.log_path = '/media/vqdang/Data_2/dang/output/NUC-SEG/collab'
+        self.log_path = 'chkpts/'
         self.save_dir = '%s/%s' % (self.log_path, self.model_name)
 
         self.pretrained_preact_resnet50_path = '../../../pretrained/ImageNet-ResNet50-Preact.npz'
 
         ####      
-        self.inf_model_path  = self.save_dir + '/tune3/model-23998.index'
+        self.inf_model_path  = self.save_dir + '/tune/model-23998.index'
 
         #### Info for running inference
         self.inf_imgs_ext = '.tif'
