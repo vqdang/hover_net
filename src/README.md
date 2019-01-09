@@ -13,23 +13,30 @@
 ## Training
 
 To train the network, the command is: <br/>
-`python train.py --gpu='x,y'` <br/>
-where x and y denote the GPU numbers to use. For example, if we are using GPU number 0 and 1, the command is: <br/>
+`python train.py --gpu='gpu_ids'` <br/>
+where gpu_id denote which GPU will be used for training. For example, if we are using GPU number 0 and 1, the command is: <br/>
 `python train.py --gpu='0,1'` <br/>
 
 Before training, set in `config.py`:
+- path to pretrained weight Preact-ResNet50
 - path to the data directories
 - path where checkpoints will be saved
 
 ## Inference
 
-To process images, the command is: <br/>
-`python infer.py --gpu='x,y'` <br/>
-where x and y denote the GPU numbers to use, like above. 
+To generate the network predictions, the command is: <br/>
+`python infer.py --gpu='gpu_id'` <br/>
+similar to the above. However, the code only support 1 GPU for inference. To run inference with GPU number 0, the command is
+`python infer.py --gpu='0'` <br/>
 
 Before running inference, set in `config.py`:
 - path where the output will be saved
-- if manual checkpoints are selected, include an appropriate checkpoint path.
+- path to data root directories
+- path to model checkpoint
+
+To obtain final nuclei instance segmentation, use the command: <br/>
+`python process.py` <br/>
+for post-processing the network predictions.
 
 ## Modifying the Model
 
