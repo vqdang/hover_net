@@ -11,9 +11,19 @@ from tensorpack.dataflow import (AugmentImageComponent, AugmentImageComponents,
 class DatasetSerial(RNGDataFlow):
     """
     Produce ``(image, label)`` pair, where 
-        ``image`` has shape (H, W, C (3(BGR))) and ranges in [0,255].
-        ``Label`` is an int image of shape (H, W, classes) in range [0, no.classes - 1].
-        ``dist_sample
+        ``image`` has shape HWC and is RGB, has values in range [0-255].    
+
+        ``label`` is a float image of shape (H, W, C). Number of C depends
+                  on `self.model_mode` within `config.py`
+
+                  If self.model_mode is 'np+xy': 
+                    channel 0 binary nuclei map, values are either 0 (background) or 1 (nuclei)
+                    channel 1 containing the X-map, values in range [-1, 1]
+                    channel 2 containing the Y-map, values in range [-1, 1]
+
+                  If self.model_mode is 'np+dst': 
+                    channel 0 binary nuclei map, values are either 0 (background) or 1 (nuclei)
+                    channel 1 containing the per nuclei distance map, values in range [0, 1]
     """
 
     def __init__(self, path_list):
@@ -29,8 +39,8 @@ class DatasetSerial(RNGDataFlow):
 
             data = np.load(self.path_list[idx])
 
-            # split stack channel into image and label
-            img = data[...,:3]
+            # split stacked channel into image and label
+            img = data[...,:3] # RGB images
             ann = data[...,3:] # instance ID map
            
             img = img.astype('uint8')            
