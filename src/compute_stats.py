@@ -26,7 +26,7 @@ metrics = [[], [], [], [], []]
 for filename in file_list:
     filename = os.path.basename(filename)
     basename = filename.split('.')[0]
-    
+
     true = np.load(true_dir + basename + '.npy')
     true = true.astype('int32')
 
@@ -42,11 +42,11 @@ for filename in file_list:
     metrics[3].append(metrics[1][-1] * metrics[2][-1])
     metrics[4].append(get_fast_aji(true, pred))
         
-    print(basename, end="\t")
     if print_img_stats:
+        print(basename, end="\t")
         for scores in metrics:
             print("%f " % scores[-1], end="\t")
-    print()
+        print()
 ####
 metrics = np.array(metrics)
 metrics = np.mean(metrics, axis=-1)
