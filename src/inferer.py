@@ -12,9 +12,8 @@ from tensorpack.predict import OfflinePredictor, PredictConfig
 from tensorpack.tfutils.sessinit import get_model_loader
 
 from config import Config
-from misc.utils import get_best_chkpts, rm_n_mkdir
-from model.graph import Model
-
+from misc.utils import rm_n_mkdir
+from model.graph import Model_NP_DIST, Model_NP_XY
 
 class Inferer(Config):
 
@@ -90,8 +89,10 @@ class Inferer(Config):
     def run(self):
         model_path = self.inf_model_path
 
+        MODEL_MAKER = Model_NP_XY if self.model_mode == 'np+xy' else Model_NP_DIST
+
         pred_config = PredictConfig(
-            model        = Model(),
+            model        = MODEL_MAKER(),
             session_init = get_model_loader(model_path),
             input_names  = self.eval_inf_input_tensor_names,
             output_names = self.eval_inf_output_tensor_names)
