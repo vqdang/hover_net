@@ -5,7 +5,6 @@ from tensorpack import *
 from tensorpack.models import BatchNorm, BNReLU, Conv2D, MaxPooling, FixedUnPooling
 from tensorpack.tfutils.summary import add_moving_summary, add_param_summary
 
-
 from .utils import *
 
 import sys
@@ -61,6 +60,10 @@ def dense_blk(name, l, ch, ksize, count, split=1, padding='valid'):
     return l
 ####
 def encoder(i, freeze):
+    """
+    Pre-activated ResNet50 Encoder
+    """
+
     d1 = Conv2D('conv0',  i, 64, 7, padding='valid', strides=1, activation=BNReLU)
     d1 = res_blk('group0', d1, [ 64,  64,  256], [1, 3, 1], 3, strides=1, freeze=freeze)                       
     
@@ -77,7 +80,7 @@ def encoder(i, freeze):
     return [d1, d2, d3, d4]
 ####
 def decoder(name, i):
-    pad = 'valid'
+    pad = 'valid' # to prevent boundary artifacts
     with tf.variable_scope(name):
         with tf.variable_scope('u3'):
             u3 = upsample2x('rz', i[-1])
@@ -182,7 +185,7 @@ class Model_NP_XY(Model):
 
         ####
         if get_current_tower_context().is_training:
-            ######## LOSS
+            #---- LOSS ----#
             ### XY regression loss
             loss_mse = o_pred_xy - o_true_xy
             loss_mse = loss_mse * loss_mse
@@ -229,7 +232,7 @@ class Model_NP_XY(Model):
 
             add_param_summary(('.*/W', ['histogram']))   # monitor W
 
-            #### logging visual sthg
+            ### logging visual sthg
             orig_imgs = tf.cast(orig_imgs  , tf.uint8)
             tf.summary.image('input', orig_imgs, max_outputs=1)
 
