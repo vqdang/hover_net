@@ -319,7 +319,7 @@ class Model_NP_DIST(Model):
         ####
         if get_current_tower_context().is_training:
             ######## LOSS
-            ### XY regression loss
+            ### Distance regression loss
             loss_mse = o_pred_dist - o_true_dist
             loss_mse = loss_mse * loss_mse
             loss_mse = tf.reduce_mean(loss_mse, name='loss-mse')
