@@ -126,8 +126,9 @@ def proc_np_xy(pred, marker_mode=2, energy_mode=2):
 
 ###################
 
-## WARNING: check the prediction channels, wrong ordering will break the code !
-## It should match augs.py
+## WARNING: 
+## check the prediction channels, wrong ordering will break the code !
+## the prediction channels ordering should match ones produced in augs.py
 
 cfg = Config()
 
@@ -139,11 +140,8 @@ marker_mode = 2
 
 for norm_target in cfg.inf_norm_codes:
     imgs_dir = '%s/XXXX/' % (cfg.inf_norm_root_dir)            
-    # pred_dir = '%s/%s/' % (cfg.inf_output_dir, norm_target)
-    # proc_dir = '%s/%s_proc/' % (cfg.inf_output_dir, norm_target)
-
-    pred_dir = 'output/v6.0.3.0/Kumar/xy_temp/XXXX/'
-    proc_dir = 'output/v6.0.3.0/Kumar/xy_temp/XXXX_proc/'
+    pred_dir = '%s/%s/' % (cfg.inf_output_dir, norm_target)
+    proc_dir = '%s/%s_proc/' % (cfg.inf_output_dir, norm_target)
 
     # TODO: cache list to check later norm dir has same number of files
     file_list = glob.glob('%s/*.mat' % (pred_dir))
