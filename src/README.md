@@ -18,7 +18,7 @@ where gpu_id denote which GPU will be used for training. For example, if we are 
 `python train.py --gpu='0,1'` <br/>
 
 Before training, set in `config.py`:
-- path to pretrained weight Preact-ResNet50
+- path to pretrained weights Preact-ResNet50. Download the weights [here](https://drive.google.com/file/d/1l3OmsNJb0Tl9xY6kWKMk73E3ijioeP58/view?usp=sharing).
 - path to the data directories
 - path where checkpoints will be saved
 
@@ -32,7 +32,7 @@ similar to the above. However, the code only support 1 GPU for inference. To run
 Before running inference, set in `config.py`:
 - path where the output will be saved
 - path to data root directories
-- path to model checkpoint
+- path to model checkpoint. Download [here](https://drive.google.com/open?id=1pckSMgtK4ErWiEwmxH_0MJg1t1Sh_EAq) the checkpoint traned with no stain normalisation, 
 
 To obtain final nuclei instance segmentation, use the command: <br/>
 `python process.py` <br/>
