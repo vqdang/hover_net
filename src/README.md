@@ -32,7 +32,7 @@ similar to the above. However, the code only support 1 GPU for inference. To run
 Before running inference, set in `config.py`:
 - path where the output will be saved
 - path to data root directories
-- path to model checkpoint. Download [here](https://drive.google.com/open?id=1pckSMgtK4ErWiEwmxH_0MJg1t1Sh_EAq) the checkpoint traned with no stain normalisation, 
+- path to model checkpoint. Download [here](https://drive.google.com/open?id=1pckSMgtK4ErWiEwmxH_0MJg1t1Sh_EAq) the checkpoint trained with no stain normalisation, 
 
 To obtain final nuclei instance segmentation, use the command: <br/>
 `python process.py` <br/>
