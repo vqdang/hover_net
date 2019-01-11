@@ -36,13 +36,6 @@ BibTex entry: <br />
 }
 ```
 
-## Prerequisites 
-
-Python 3.6 <br />
-TensorFlow 1.8 <br />
-Tensorpack  <br />
-OpenCV 3.2
-
 ## Authors
 
 * [Quoc Dang Vu](https://github.com/vqdang)
