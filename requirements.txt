@@ -1,0 +1,4 @@
+Python 3.6
+TensorFlow 1.8
+Tensorpack
+Opencv 3.2
