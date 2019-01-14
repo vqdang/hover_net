@@ -110,7 +110,7 @@ class Inferer(Config):
             for filename in file_list:
                 filename = os.path.basename(filename)
                 basename = filename.split('.')[0]
-                print(basename, norm_target, end=' ')
+                print(basename, norm_target, end=' ', flush=True)
 
                 ##
                 img = cv2.imread(norm_dir + filename)
