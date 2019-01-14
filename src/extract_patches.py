@@ -46,6 +46,7 @@ if __name__ == '__main__':
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) 
 
         ann = np.load(ann_dir + basename + '.npy')
+        ann = np.expand_dims(ann, axis=-1) # HxWx1
 
         img = np.concatenate([img, ann], axis=-1)
         sub_patches = xtractor.extract(img, extract_type)
