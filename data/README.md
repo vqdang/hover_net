@@ -17,7 +17,8 @@ Please refer to this [link](https://drive.google.com/open?id=1HKNOed4n0IV5frKFs_
 ```
           
 `Images` contains the original images, that are split into `train` and `test` directories. <br/> 
-We also split `test` into `same_tissue` and `diff_tissue` test sets. `same_tissue` contains tissue types that have been seen during training, whereas `diff_tissue` contains tissue types that are not represented in the training set. A very similar strategy was used in **[1]**, but the exact data split was not given. Therefore, we recommend people using this dataset to follow the exact data split to encourage reproducibility.
+
+We split `test` into `same_tissue` and `diff_tissue` test sets. `same_tissue` contains tissue types that have been seen during training, whereas `diff_tissue` contains tissue types that are not represented in the training set. A very similar strategy was used in **[1]**, but the exact data split was not given. We recommend people using this dataset to follow the exact data split to encourage reproducibility.
 
 `Labels` contains a numpy file for each image, that contains the instance-level ground truth. The background is labelled as 0 and each nucleus is assigned a unique integer. 
 
