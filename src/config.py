@@ -25,12 +25,16 @@ class Config(object):
         self.infer_input_shape[1] = self.infer_mask_shape[1] + infer_diff_shape
 
         #### Training data
-        self.do_valid = True
+
+        # patches are stored as numpy arrays with 4 channels
+        # first 3 channels: image
+        # final channel: instance label
+        self.do_valid = True # run validation during training
         
-        self.data_ext = '.npy'
-        self.train_dir = ['../../../train/Kumar/paper/train/XXXX/']
-        self.valid_dir = ['../../../train/Kumar/paper/valid_same/XXXX/',
-                          '../../../train/Kumar/paper/valid_diff/XXXX/']
+        self.data_ext = '.npy' 
+        self.train_dir = ['../../../train/Kumar/paper/train/XXXX/'] # directory of training patches
+        self.valid_dir = ['../../../train/Kumar/paper/valid_same/XXXX/', 
+                          '../../../train/Kumar/paper/valid_diff/XXXX/'] # directory of validation patches
         # nr of processes for parallel processing input
         self.nr_procs_train = 8 
         self.nr_procs_valid = 4 
@@ -49,13 +53,18 @@ class Config(object):
 
         self.model_mode  = 'np+xy'
         self.input_norm  = True # normalize RGB to 0-1 range
-        self.loss_term   = ['bce', 'dice', 'mse', 'msge']
+        #### Loss terms- refer to paper for more info
+        # bce: binary cross entropy loss on the NP map
+        # dice: soft dice loss on the NP map
+        # mse: mean squared error on the XY map
+        # msge: mean squared error on the gradient of XY map
+        self.loss_term   = ['bce', 'dice', 'mse', 'msge'] 
         # np+dst run with 'bce', 'mse' flags
 
         #### 
         self.init_lr    = 1.0e-4
         self.nr_epochs  = 20
-        self.lr_sched   = [('10', 1.0e-5)]
+        self.lr_sched   = [('10', 1.0e-5)] 
         self.nr_classes = 2        
         self.optim = tf.train.AdamOptimizer
         ####
@@ -69,8 +78,8 @@ class Config(object):
         model_id = '%s' % (self.model_mode)
         self.model_name = '%s/%s' % (exp_id, model_id)
         # loading chkpts in tensorflow, the path must not contain extra '/'
-        self.log_path = 'chkpts/'
-        self.save_dir = '%s/%s' % (self.log_path, self.model_name)
+        self.log_path = 'chkpts/' # log root path
+        self.save_dir = '%s/%s' % (self.log_path, self.model_name) # log file destination
 
         self.pretrained_preact_resnet50_path = '../../../pretrained/ImageNet-ResNet50-Preact.npz'
 
@@ -97,6 +106,8 @@ class Config(object):
         # for inference during training mode i.e run by trainer.py
         self.train_inf_output_tensor_names = ['predmap-coded', 'truemap-coded']
 
+    # refer to https://tensorpack.readthedocs.io/modules/dataflow.imgaug.html for 
+    # information on how to modify the augmentation parameters
     def get_train_augmentors(self, view=False):
         shape_augs = [
             imgaug.Affine(
