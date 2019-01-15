@@ -31,7 +31,7 @@ The code within the repository uses patches in `.npy` format. Each patch contain
 - Channel 4: Instance-level label
 
 Step 1) Stack the original image and the ground truth label <br/>
-Step 2) Use `/src/extract_patches.py` to break extract patches from the stack 
+Step 2) Use `/src/extract_patches.py` to extract patches from the stack 
 
 ## References
 **[1]**  Kumar, Neeraj, Ruchika Verma, Sanuj Sharma, Surabhi Bhargava, Abhishek Vahadane, and Amit Sethi. "A dataset and a technique for generalized nuclear segmentation for computational pathology." IEEE transactions on medical imaging 36, no. 7 (2017): 1550-1560. <br/>
