@@ -8,10 +8,10 @@ Please refer to this [link](https://drive.google.com/open?id=1HKNOed4n0IV5frKFs_
 
 ```
 -- Images/
-	-- train/
-	-- test/
-    		-- same_tissue/
-    		-- diff_tissue/
+	 -- train/
+	 -- test/
+    	       -- same_tissue/
+    	       -- diff_tissue/
 -- Labels/
 -- Overlay/
 ```
