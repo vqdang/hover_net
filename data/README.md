@@ -29,6 +29,7 @@ We split `test` into `same_tissue` and `diff_tissue` test sets. `same_tissue` co
 The code within the repository uses patches in `.npy` format. Each patch contains 4 channels:
 - Channels 1-3: Original RGB image
 - Channel 4: Instance-level label
+<br/> 
 Use `/src/extract_patches.py` to generate patches from the original RGB image and label (the code automatically stacks the original image and the ground truth label before extraction).
 
 ## References
