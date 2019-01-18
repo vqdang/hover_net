@@ -2,7 +2,7 @@
 
 ## Kumar Dataset
 
-Please refer to this [link](https://drive.google.com/open?id=1HKNOed4n0IV5frKFs_-kMtfiqqzBKMX5) to download the data that we used for the Kumar dataset. 
+Please refer to this [link](https://drive.google.com/open?id=1HKNOed4n0IV5frKFs_-kMtfiqqzBKMX5) to download the data that we used for the Kumar dataset. If you use this dataset in your research, please rememeber to cite the paper **[1]**, where the data was originally used. 
 
 ### File Structure
 
