@@ -125,7 +125,6 @@ class Inferer(Config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
-    parser.add_argument('--tta', action='store_true', help='make a set of prediction for tta')
     args = parser.parse_args()
         
     if args.gpu:
