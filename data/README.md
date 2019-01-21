@@ -1,45 +1,37 @@
 # Nuclear Segmentation Data
 
-As mentioned in our paper, we report the full training and testing split that we used for the Kumar dataset to encourage reproducibility.
-
 ## Kumar Dataset
 
-Train:
+Please refer to this [link](https://drive.google.com/open?id=1HKNOed4n0IV5frKFs_-kMtfiqqzBKMX5) to download the data that we used for the Kumar dataset. If you use this dataset in your research, please rememeber to cite the paper **[1]**, where the data was originally used. 
 
-TCGA-18-5592-01Z-00-DX1 <br/>
-TCGA-21-5784-01Z-00-DX1 <br/>
-TCGA-38-6178-01Z-00-DX1 <br/>
-TCGA-50-5931-01Z-00-DX1 <br/>
-TCGA-A7-A13E-01Z-00-DX1 <br/>
-TCGA-AR-A1AK-01Z-00-DX1 <br/>
-TCGA-AR-A1AS-01Z-00-DX1 <br/>
-TCGA-B0-5711-01Z-00-DX1 <br/>
-TCGA-E2-A14V-01Z-00-DX1 <br/>
-TCGA-G9-6348-01Z-00-DX1 <br/>
-TCGA-G9-6356-01Z-00-DX1 <br/>
-TCGA-G9-6362-01Z-00-DX1 <br/>
-TCGA-G9-6363-01Z-00-DX1 <br/>
-TCGA-HE-7128-01Z-00-DX1 <br/>
-TCGA-HE-7129-01Z-00-DX1 <br/>
-TCGA-HE-7130-01Z-00-DX1 <br/>
+### File Structure
 
-Test Same Tissue:
+```
+-- Images/
+	 -- train/
+	 -- test/
+    	       -- same_tissue/
+    	       -- diff_tissue/
+-- Labels/
+-- Overlay/
+```
+          
+`Images` contains the original images, that are split into `train` and `test` directories. <br/> 
 
-TCGA-21-5786-01Z-00-DX1 <br/>
-TCGA-49-4488-01Z-00-DX1 <br/>
-TCGA-A7-A13F-01Z-00-DX1 <br/>
-TCGA-CH-5767-01Z-00-DX1 <br/>
-TCGA-E2-A1B5-01Z-00-DX1 <br/>
-TCGA-G9-6336-01Z-00-DX1 <br/>
-TCGA-B0-5698-01Z-00-DX1 <br/>
-TCGA-B0-5710-01Z-00-DX1 <br/>
+We split `test` into `same_tissue` and `diff_tissue` test sets. `same_tissue` contains tissue types that have been seen during training, whereas `diff_tissue` contains tissue types that are not represented in the training set. A very similar strategy was used in **[1]**, but the exact data split was not given. We recommend people using this dataset to follow the exact data split to encourage reproducibility.
 
-Test Different Tissue:
+`Labels` contains a numpy file for each image, that contains the instance-level ground truth. The background is labelled as 0 and each nucleus is assigned a unique integer. 
 
-TCGA-AY-A8YK-01A-01-TS1 <br/>
-TCGA-DK-A2I6-01A-01-TS1 <br/>
-TCGA-KB-A93J-01A-01-TS1 <br/>
-TCGA-NH-A8F7-01A-01-TS1 <br/>
-TCGA-RD-A8N9-01A-01-TS1 <br/>
-TCGA-G2-A2EK-01A-02-TSB <br/>
+`Overlay` shows the ground truth overlaid on top of the original images. 
+
+### Using the Data
+
+The code within the repository uses patches in `.npy` format. Each patch contains 4 channels:
+- Channels 1-3: Original RGB image
+- Channel 4: Instance-level label
+<br/> 
+Use `/src/extract_patches.py` to generate patches from the original RGB image and label (the code automatically stacks the original image and the ground truth label before extraction).
+
+## References
+**[1]**  Kumar, Neeraj, Ruchika Verma, Sanuj Sharma, Surabhi Bhargava, Abhishek Vahadane, and Amit Sethi. "A dataset and a technique for generalized nuclear segmentation for computational pathology." IEEE transactions on medical imaging 36, no. 7 (2017): 1550-1560. <br/>
 
