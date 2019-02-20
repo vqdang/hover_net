@@ -83,7 +83,8 @@ class Config(object):
 
         self.pretrained_preact_resnet50_path = '../../../pretrained/ImageNet-ResNet50-Preact.npz'
 
-        ####      
+        ####
+        # path to checkpoints will be used for inference, replace accordingly
         self.inf_model_path  = self.save_dir + '/tune/model-23998.index'
 
         #### Info for running inference
