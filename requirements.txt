@@ -1,4 +1,7 @@
-Python 3.6
-TensorFlow 1.8
-Tensorpack 0.9.0.1
-Opencv 3.2
+python 3.6
+tensorFlow 1.8
+tensorpack 0.9.0.1
+opencv 3.2
+skimage
+matplotlib
+numpy 
