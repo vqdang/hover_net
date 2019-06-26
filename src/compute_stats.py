@@ -179,7 +179,7 @@ def run_nuclei_inst_stat(pred_dir, true_dir, ext='.mat'):
         metrics[2].append(pq_info[1]) # sq
         metrics[3].append(pq_info[2]) # pq
         metrics[4].append(get_fast_aji_plus(true, pred))
-        metrics[5].append(get_fast_aji_0727(true, pred))
+        metrics[5].append(get_fast_aji(true, pred))
 
         if print_img_stats:
             print(basename, end="\t")

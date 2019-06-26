@@ -6,7 +6,7 @@
 In this directory, the script `stats_utils.py` contains the statistical measurements code for instance segmentation. In order of appearance, the available measurements are AJI+, AJIm DICE2, Panoptic Quality (PQ), DICE which can be access through following functions:
 
 `get_fast_aji()`: aji ported from the matlab code but is optimised for speed **[1]**. <br/>
-`get_aji_plus()`: extension of aggregated jaccard index that doesn't suffer from over-penalisation. <br/>
+`get_fast_aji_plus()`: extension of aggregated jaccard index that doesn't suffer from over-penalisation. <br/>
 `get_dice_1()` and `get_dice_2()`: standard dice and ensemble dice (DICE2) **[2]** measures respectively. <br/> 
 `get_fast_dice_2()`: ensemble dice optimised for speed. <br/>
 `get_fast_panoptic_quality()`: panoptic quality as used in **[3]**.
