@@ -33,7 +33,7 @@ If any part of this code is used, please give appropriate citation to our paper:
 
 BibTex entry: <br />
 ```
-@article{graham2018xy,
+@article{graham2019hover,
   title={HoVer-Net: Simultaneous Segmentation and Classification of Nuclei in Multi-Tissue Histology Images},
   author={Simon Graham, Quoc Dang Vu, Shan E Ahmed Raza, Ayesha Azam, Yee Wah Tsang, Jin Tae Kwak, Nasir Rajpoot},
   journal={arXiv preprint arXiv:1812.06499v4},
