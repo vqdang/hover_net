@@ -1,23 +1,24 @@
 
-import os
-import json
 import argparse
+import json
+import os
+import random
 
 import numpy as np
 import tensorflow as tf
 from tensorpack import Inferencer, logger
 from tensorpack.callbacks import (DataParallelInferenceRunner, ModelSaver,
-                                  ScheduledHyperParamSetter)
-from tensorpack.tfutils import get_model_loader, SaverRestore
-from tensorpack.train import (SyncMultiGPUTrainerParameterServer, TrainConfig, launch_train_with_config)
+                                  MinSaver, MaxSaver, ScheduledHyperParamSetter)
+from tensorpack.tfutils import SaverRestore, get_model_loader
+from tensorpack.train import (SyncMultiGPUTrainerParameterServer, TrainConfig,
+                              launch_train_with_config)
 
 import loader.loader as loader
 from config import Config
 from misc.utils import get_files
-from model.graph import Model_NP_XY, Model_NP_DIST
 
+import matplotlib.pyplot as plt
 
-####
 class StatCollector(Inferencer, Config):
     """
     Accumulate output of inference during training.
@@ -40,51 +41,108 @@ class StatCollector(Inferencer, Config):
         self.pred_list.extend(pred)
  
     def _after_inference(self):
+        # ! factor this out
+        def _dice(true, pred, label):
+            true = np.array(true == label, np.int32)            
+            pred = np.array(pred == label, np.int32)            
+            inter = (pred * true).sum()
+            total = (pred + true).sum()
+            return 2 * inter /  (total + 1.0e-8)
+
         stat_dict = {}
         pred = np.array(self.pred_list)
         true = np.array(self.true_list)
 
         # have to get total number pixels for mean per pixel
-        nr_pixels = np.ones(true[...,:1].shape).sum()
+        nr_pixels = np.size(true[...,:1])
+
+        if self.type_classification:            
+            pred_type = pred[...,:self.nr_classes]
+            pred_inst = pred[...,self.nr_classes:]
+
+            true_inst = true
+            true_type = true[...,1]
+            true_np = (true_type > 0).astype('int32')
+        else:
+            pred_inst = pred
+            true_inst = true
+            true_np = true[...,0]
+
+        # * index selection followed what is defined in the graph
+        # * and all model's graphs must follow same index ordering protocol
 
         # classification statistic
-        pred_blb = pred[...,:1]
-        true_blb = true[...,:1]
-        pred_blb[pred_blb >  0.5] = 1.0
-        pred_blb[pred_blb <= 0.5] = 0.0
+        if self.model_type == 'dist':
+            # regression
+            pred_dst = pred_inst[...,-1]
+            true_dst = true_inst[...,-1]
+            error = pred_dst - true_dst
+            mse = np.sum(error * error) / nr_pixels
+            stat_dict[self.prefix + '_mse'] = mse
+        elif self.model_type == 'np_hv':
+            pred_hv = pred_inst[...,-2:]
+            true_hv = true_inst[...,-2:]
+            error = pred_hv - true_hv
+            mse = np.sum(error * error) / nr_pixels
+            stat_dict[self.prefix + '_mse'] = mse
 
-        accuracy = (pred_blb == true_blb).sum() / nr_pixels
-        inter = (pred_blb * true_blb).sum()
-        total = (pred_blb + true_blb).sum()
-        dice = 2 * inter / total
+        # classification statistic
+        if self.model_type != 'dist':
+            pred_np = pred_inst[...,0]
+            true_np = true_inst[...,0]
 
-        stat_dict[self.prefix + '_acc' ] = accuracy
-        stat_dict[self.prefix + '_dice'] = dice
+            pred_np[pred_np >  0.5] = 1.0
+            pred_np[pred_np <= 0.5] = 0.0
 
-        # regression statistic
-        pred_xy = pred[...,-2:]
-        true_xy = true[...,-2:]
-        error = pred_xy - true_xy
-        mae = np.sum(np.abs(error)) / nr_pixels
-        mse = np.sum(error * error) / nr_pixels
+            accuracy = (pred_np == true_np).sum() / nr_pixels
+            inter = (pred_np * true_np).sum()
+            total = (pred_np + true_np).sum()
+            dice = 2 * inter / (total + 1.0e-8)
 
-        stat_dict[self.prefix + '_mae'] = mae
-        stat_dict[self.prefix + '_mse'] = mse
+            stat_dict[self.prefix + '_acc' ] = accuracy
+            stat_dict[self.prefix + '_dice'] = dice
+
+            if self.model_type == 'dcan':
+                # do one more for contour
+                pred_np = pred_inst[...,1]
+                true_np = true_inst[...,1]
+                pred_np[pred_np >  0.5] = 1.0
+                pred_np[pred_np <= 0.5] = 0.0
+
+                inter = (pred_np * true_np).sum()
+                total = (pred_np + true_np).sum()
+                dice = 2 * inter / (total + 1.0e-8)
+
+                stat_dict[self.prefix + '_cnt_dice'] = dice
+
+        if self.type_classification:
+            pred_type = np.argmax(pred_type, axis=-1)
+            # ! either automate this or set the nuclei type name by hand
+            stat_dict[self.prefix + '_dice_msc'] = _dice(true_type, pred_type, 1)
+            stat_dict[self.prefix + '_dice_inf'] = _dice(true_type, pred_type, 2)
+            stat_dict[self.prefix + '_dice_epi'] = _dice(true_type, pred_type, 3)
+            stat_dict[self.prefix + '_dice_fib'] = _dice(true_type, pred_type, 4)
+
         return stat_dict
+####
 
 ###########################################
 class Trainer(Config):   
     ####
-    def get_datagen(self, mode='train', view=False):
+    def get_datagen(self, batch_size, mode='train', view=False):
         if mode == 'train':
-            batch_size = self.train_batch_size
-            augmentors = self.get_train_augmentors(view)
+            augmentors = self.get_train_augmentors(
+                                            self.train_input_shape,
+                                            self.train_mask_shape,
+                                            view)
             data_files = get_files(self.train_dir, self.data_ext)
             data_generator = loader.train_generator
             nr_procs = self.nr_procs_train
         else:
-            batch_size = self.infer_batch_size
-            augmentors = self.get_valid_augmentors(view)
+            augmentors = self.get_valid_augmentors(
+                                            self.infer_input_shape,
+                                            self.infer_mask_shape,
+                                            view)
             data_files = get_files(self.valid_dir, self.data_ext)
             data_generator = loader.valid_generator
             nr_procs = self.nr_procs_valid
@@ -99,47 +157,51 @@ class Trainer(Config):
                         batch_size=batch_size,
                         nr_procs=nr_procs)
         
-        return datagen        
+        return datagen      
     ####
     def view_dataset(self, mode='train'):
         assert mode == 'train' or mode == 'valid', "Invalid view mode"
-        datagen = self.get_datagen(mode=mode, view=True)
+        datagen = self.get_datagen(4, mode=mode, view=True)
         loader.visualize(datagen, 4)
         return
     ####
-    def run_once(self, nr_gpus, freeze, sess_init=None, save_dir=None):
+    def run_once(self, opt, sess_init=None, save_dir=None):
         ####
-        train_datagen = self.get_datagen(mode='train')
-        valid_datagen = self.get_datagen(mode='valid')
+        train_datagen = self.get_datagen(opt['train_batch_size'], mode='train')
+        valid_datagen = self.get_datagen(opt['infer_batch_size'], mode='valid')
 
         ###### must be called before ModelSaver
         if save_dir is None:
             logger.set_logger_dir(self.save_dir)
         else:
             logger.set_logger_dir(save_dir)
-            
-        callbacks=[
-                ModelSaver(max_to_keep=200),
-                ScheduledHyperParamSetter('learning_rate', self.lr_sched),
-                ]
-        ######
 
+        ######            
+        model_flags = opt['model_flags']
+        model = self.get_model()(**model_flags)
+        ######
+        callbacks=[
+                ModelSaver(max_to_keep=20), # TODO dynamic this
+        ]
+
+        for param_name, param_info in opt['manual_parameters'].items():
+            model.add_manual_variable(param_name, param_info[0])
+            callbacks.append(ScheduledHyperParamSetter(param_name, param_info[1]))
         # multi-GPU inference (with mandatory queue prefetch)
         infs = [StatCollector()]
         callbacks.append(DataParallelInferenceRunner(
                                 valid_datagen, infs, list(range(nr_gpus))))
-
+        callbacks.append(MaxSaver('valid_dice'))
+        
         ######
         steps_per_epoch = train_datagen.size() // nr_gpus
 
-        MODEL_MAKER = Model_NP_XY if self.model_mode == 'np+xy' else Model_NP_DIST
-
         config = TrainConfig(
-                    model           = MODEL_MAKER(freeze),
+                    model           = model,
                     callbacks       = callbacks      ,
                     dataflow        = train_datagen  ,
                     steps_per_epoch = steps_per_epoch,
-                    max_epoch       = self.nr_epochs ,
+                    max_epoch       = opt['nr_epochs'],
                 )
         config.session_init = sess_init
 
@@ -147,32 +209,44 @@ class Trainer(Config):
         tf.reset_default_graph() # remove the entire graph in case of multiple runs
         return
     ####
-    def run(self, nr_gpus):
-        """
-        Do the 2 phase training, both phases have the same nr_epochs and lr_sched
-        Phase 1: finetune decoder portion (together with the first 7x7 in the encoder),
-                 using the pretrained preact-resnet50 on ImageNet 
-        Phase 2: unfreeze all layer, training whole, weigths taken from last epoch of
-                 Phase 1
-        """
-        def get_last_chkpt_path(phase1_dir):
-            stat_file_path = phase1_dir + '/stats.json'
+    def run(self):
+        def get_last_chkpt_path(prev_phase_dir):
+            stat_file_path = prev_phase_dir + '/stats.json'
             with open(stat_file_path) as stat_file:
                 info = json.load(stat_file)
             chkpt_list = [epoch_stat['global_step'] for epoch_stat in info]
-            last_chkpts_path = "%smodel-%d.index" % (phase1_dir, max(chkpt_list))
+            last_chkpts_path = "%smodel-%d.index" % (prev_phase_dir, max(chkpt_list))
             return last_chkpts_path
 
-        save_dir = self.save_dir + '/base/'
-        self.train_batch_size = self.train_phase1_batch_size
-        init_weights = get_model_loader(self.pretrained_preact_resnet50_path)
-        self.run_once(nr_gpus, True, sess_init=init_weights, save_dir=save_dir)
+        phase_opts = self.training_phase
 
-        save_dir = self.save_dir + '/tune/'
-        self.train_batch_size = self.train_phase2_batch_size
-        phase1_last_model_path = get_last_chkpt_path(self.save_dir + '/base/')
-        init_weights = SaverRestore(phase1_last_model_path, ignore=['learning_rate'])
-        self.run_once(nr_gpus, False, sess_init=init_weights, save_dir=save_dir)
+        if len(phase_opts) > 1:
+            for idx, opt in enumerate(phase_opts):
+                random.seed(self.seed)
+                np.random.seed(self.seed)
+                tf.random.set_random_seed(self.seed)
+
+                log_dir = '%s/%02d/' % (self.save_dir, idx)
+                pretrained_path = opt['pretrained_path'] 
+                if pretrained_path == -1:
+                    pretrained_path = get_last_chkpt_path(prev_log_dir)
+                    init_weights = SaverRestore(pretrained_path, ignore=['learning_rate'])
+                elif pretrained_path is not None:
+                    init_weights = get_model_loader(pretrained_path)
+                self.run_once(opt, sess_init=init_weights, save_dir=log_dir)
+                prev_log_dir = log_dir
+        else:
+            random.seed(self.seed)
+            np.random.seed(self.seed)
+            tf.random.set_random_seed(self.seed)
+
+            opt = phase_opts[0]
+            init_weights = None
+            if 'pretrained_path' in opt:
+                assert opt['pretrained_path'] != -1
+                init_weights = get_model_loader(opt['pretrained_path'])
+            self.run_once(opt, sess_init=init_weights, save_dir=self.save_dir)
+
         return
     ####
 ####
@@ -191,4 +265,4 @@ if __name__ == '__main__':
     else:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
         nr_gpus = len(args.gpu.split(','))
-        trainer.run(nr_gpus)
+        trainer.run()

@@ -10,59 +10,89 @@ from tensorpack.tfutils.summary import *
 
 from matplotlib import cm
 
+# TODO: assert for data format
 ####
-def resize_op(x, height_factor, width_factor, interp='bicubic', data_format='NHWC'):
-    if data_format == 'NCHW':
-        original_shape = x.get_shape().as_list()
-        new_shape = tf.cast(tf.shape(x)[2:], tf.float32)    
-        new_shape *= tf.constant(np.array([height_factor, width_factor]).astype('float32'))
-        new_shape = tf.cast(new_shape, tf.int32)    
-        x = tf.transpose(x, [0, 2, 3, 1])
-        if interp == 'bicubic':
-            x = tf.image.resize_bicubic(x, new_shape)
-        elif interp == 'bilinear':
-            x = tf.image.resize_bilinear(x, new_shape)
+def resize_op(x, height_factor=None, width_factor=None, size=None, 
+                interp='bicubic', data_format='channels_last'):
+    """
+    Resize by a factor if `size=None` else resize to `size`
+    """
+    original_shape = x.get_shape().as_list()
+    if size is not None:
+        if data_format == 'channels_first':
+            x = tf.transpose(x, [0, 2, 3, 1])
+            if interp == 'bicubic':
+                x = tf.image.resize_bicubic(x, size)
+            elif interp == 'bilinear':
+                x = tf.image.resize_bilinear(x, size)
+            else:
+                x = tf.image.resize_nearest_neighbor(x, size)
+            x = tf.transpose(x, [0, 3, 1, 2])
+            x.set_shape((None, 
+                original_shape[1] if original_shape[1] is not None else None, 
+                size[0], size[1]))
         else:
-            x = tf.image.resize_nearest_neighbor(x, new_shape)
-        x = tf.transpose(x, [0, 3, 1, 2])
-        x.set_shape((None,
-                    original_shape[1] if original_shape[3] is not None else None,
-                    int(original_shape[2] * height_factor) if original_shape[2] is not None else None,
-                    int(original_shape[3] * width_factor) if original_shape[3] is not None else None))
+            if interp == 'bicubic':
+                x = tf.image.resize_bicubic(x, size)
+            elif interp == 'bilinear':
+                x = tf.image.resize_bilinear(x, size)
+            else:
+                x = tf.image.resize_nearest_neighbor(x, size)
+            x.set_shape((None, 
+                size[0], size[1], 
+                original_shape[3] if original_shape[3] is not None else None))
     else:
-        original_shape = x.get_shape().as_list()
-        new_shape = tf.cast(tf.shape(x)[1:3], tf.float32)    
-        new_shape *= tf.constant(np.array([height_factor, width_factor]).astype('float32'))
-        new_shape = tf.cast(new_shape, tf.int32)    
-        if interp == 'bicubic':
-            x = tf.image.resize_bicubic(x, new_shape)
-        elif interp == 'bilinear':
-            x = tf.image.resize_bilinear(x, new_shape)
+        if data_format == 'channels_first':
+            new_shape = tf.cast(tf.shape(x)[2:], tf.float32)    
+            new_shape *= tf.constant(np.array([height_factor, width_factor]).astype('float32'))
+            new_shape = tf.cast(new_shape, tf.int32)    
+            x = tf.transpose(x, [0, 2, 3, 1])
+            if interp == 'bicubic':
+                x = tf.image.resize_bicubic(x, new_shape)
+            elif interp == 'bilinear':
+                x = tf.image.resize_bilinear(x, new_shape)
+            else:
+                x = tf.image.resize_nearest_neighbor(x, new_shape)
+            x = tf.transpose(x, [0, 3, 1, 2])
+            x.set_shape((None,
+                        original_shape[1] if original_shape[1] is not None else None,
+                        int(original_shape[2] * height_factor) if original_shape[2] is not None else None,
+                        int(original_shape[3] * width_factor) if original_shape[3] is not None else None))
         else:
-            x = tf.image.resize_nearest_neighbor(x, new_shape)
-        x.set_shape((None,
-                    original_shape[1] * height_factor if original_shape[1] is not None else None,
-                    original_shape[2] * width_factor if original_shape[2] is not None else None,
-                    original_shape[3] if original_shape[3] is not None else None))
+            original_shape = x.get_shape().as_list()
+            new_shape = tf.cast(tf.shape(x)[1:3], tf.float32)    
+            new_shape *= tf.constant(np.array([height_factor, width_factor]).astype('float32'))
+            new_shape = tf.cast(new_shape, tf.int32)    
+            if interp == 'bicubic':
+                x = tf.image.resize_bicubic(x, new_shape)
+            elif interp == 'bilinear':
+                x = tf.image.resize_bilinear(x, new_shape)
+            else:
+                x = tf.image.resize_nearest_neighbor(x, new_shape)
+            x.set_shape((None,
+                        int(original_shape[1] * height_factor) if original_shape[1] is not None else None,
+                        int(original_shape[2] * width_factor) if original_shape[2] is not None else None,
+                        original_shape[3] if original_shape[3] is not None else None))
     return x 
+
 ####
-def crop_op(x, cropping, data_format='NCHW'):
+def crop_op(x, cropping, data_format='channels_first'):
     """
     Center crop image
     Args:
         cropping is the substracted portion
     """
-    original_shape = x.get_shape().as_list()
     crop_t = cropping[0] // 2
     crop_b = cropping[0] - crop_t
     crop_l = cropping[1] // 2
     crop_r = cropping[1] - crop_l
-    if data_format == 'NCHW':
+    if data_format == 'channels_first':
         x = x[:,:,crop_t:-crop_b,crop_l:-crop_r]
     else:
         x = x[:,crop_t:-crop_b,crop_l:-crop_r]
     return x       
 ####
+
 def categorical_crossentropy(output, target):
     """
         categorical cross-entropy, accept probabilities not logit
@@ -124,7 +154,7 @@ def dice_loss(output, target, loss_type='sorensen', axis=None, smooth=1e-3):
 def colorize(value, vmin=None, vmax=None, cmap=None):
     """
     Arguments:
-      - value: input tensor, NHWC
+      - value: input tensor, NHWC ('channels_last')
       - vmin: the minimum value of the range used for normalization.
         (Default: value minimum)
       - vmax: the maximum value of the range used for normalization.
@@ -138,7 +168,7 @@ def colorize(value, vmin=None, vmax=None, cmap=None):
     tf.summary.image('output', output_color)
     ```
     
-    Returns a 3D tensor of shape [height, width, 3].
+    Returns a 3D tensor of shape [height, width, 3], uint8.
     """
 
     # normalize
@@ -163,7 +193,7 @@ def colorize(value, vmin=None, vmax=None, cmap=None):
     colors = colormap(np.arange(256))[:, :3]
     colors = tf.constant(colors, dtype=tf.float32)
     value = tf.gather(colors, indices)
-
+    value = tf.cast(value * 255, tf.uint8)
     return value
 ####
 def make_image(x, cy, cx, scale_y, scale_x):
@@ -192,25 +222,4 @@ def make_image(x, cy, cx, scale_y, scale_x):
     x = tf.reshape(x,(1,cy*iy,cx*ix,1))
     x = resize_op(x, scale_y, scale_x)
     return tf.cast(x, tf.uint8)
-####
-def get_gradient_xy(l, x_ch, y_ch):
-    """
-    Central difference to approximate the gradient
-    Use kernel -1 -1 0 1 1 for x-direction (shape [1, 5, 1, 1])
-    and y-direction (shape [5, 1, 1, 1])
-
-    Note: assuming equal contribution of distance wrt to pixel under
-    consideration. May be Sobel kernel weighting is better
-    """
-    mx = tf.constant([[-1, -1, 0, 1, 1]], dtype=tf.float32)
-    my = tf.constant([[-1], [-1], [0], [1], [1]], dtype=tf.float32)
-    mx = tf.reshape(mx, [1, 5, 1, 1])
-    my = tf.reshape(my, [5, 1, 1, 1])
-    # central difference to get gradient, ignore the boundary problem  
-    x = tf.expand_dims(l[...,x_ch], axis=-1)  
-    y = tf.expand_dims(l[...,y_ch], axis=-1)  
-    dx = tf.nn.conv2d(x, mx, strides=[1, 1, 1, 1], padding='SAME')
-    dy = tf.nn.conv2d(y, my, strides=[1, 1, 1, 1], padding='SAME')
-    output = tf.concat([dy, dx], axis=-1)
-    return output
 ####

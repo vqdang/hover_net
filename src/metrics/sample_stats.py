@@ -15,34 +15,25 @@ from stats_utils import *
 
 #####
 def compute_stat():
+    true   = cv2.imread('sample/true.png', cv2.IMREAD_GRAYSCALE)
+    pred_1 = cv2.imread('sample/pred_1.png', cv2.IMREAD_GRAYSCALE)
+    pred_2 = cv2.imread('sample/pred_2.png', cv2.IMREAD_GRAYSCALE)
 
-    dice_true   = cv2.imread('dice_true.png', cv2.IMREAD_GRAYSCALE)
-    dice_pred_1 = cv2.imread('dice_pred_1.png', cv2.IMREAD_GRAYSCALE)
-    dice_pred_2 = cv2.imread('dice_pred_2.png', cv2.IMREAD_GRAYSCALE)
-    print('DICE2 Sample: True vs Pred 1 ', get_dice_2(dice_true, dice_pred_1))        
-    print('DICE2 Sample: True vs Pred 2 ', get_dice_2(dice_true, dice_pred_2))        
+    true   = remap_label(true, by_size=False)
+    pred_1 = remap_label(pred_1, by_size=False)
+    pred_2 = remap_label(pred_2, by_size=False)
 
-    ##
-    aji_true = cv2.imread('aji_true.png', cv2.IMREAD_GRAYSCALE)
-    aji_pred = cv2.imread('aji_pred.png', cv2.IMREAD_GRAYSCALE)
+    pair_1_dice_2 = get_fast_dice_2(true, pred_1)
+    pair_2_dice_2 = get_fast_dice_2(true, pred_2)
+    pair_1_ajip = get_fast_aji_plus(true, pred_1)
+    pair_2_ajip = get_fast_aji_plus(true, pred_2)
+    pair_1_ajis = get_fast_aji(true, pred_1)
+    pair_2_ajis = get_fast_aji(true, pred_2)
+    pair_1_pq = get_fast_pq(true, pred_1)[0][-1]
+    pair_2_pq = get_fast_pq(true, pred_2)[0][-1]
+    print('True vs Pred 1: DICE 2: %0.4f AJI: %0.4f AJI+: %0.4f PQ: %0.4f' % (pair_1_dice_2, pair_1_ajis, pair_1_ajip, pair_1_pq))        
+    print('True vs Pred 2: DICE 2: %0.4f AJI: %0.4f AJI+: %0.4f PQ: %0.4f' % (pair_2_dice_2, pair_2_ajis, pair_2_ajip, pair_2_pq))   
 
-    aji_true_1 = np.copy(aji_true)
-    aji_true_2 = np.copy(aji_true)
-
-    aji_true_1[aji_true_1 ==  76] = 1
-    aji_true_1[aji_true_1 == 149] = 2
-    aji_true_1[aji_true_1 == 225] = 3
-
-    aji_true_2[aji_true_2 ==  76] = 2
-    aji_true_2[aji_true_2 == 149] = 3
-    aji_true_2[aji_true_2 == 225] = 1
-
-    aji_pred[aji_pred ==  76] = 1
-    aji_pred[aji_pred == 149] = 2
-
-    print('AJI Sample: True 1 vs Pred ', get_aji(aji_true_1, aji_pred))        
-    print('AJI Sample: True 2 vs Pred ', get_aji(aji_true_2, aji_pred))        
-    
-##
+# ##
 if __name__ == '__main__':
     compute_stat()

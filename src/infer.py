@@ -13,8 +13,50 @@ from tensorpack.tfutils.sessinit import get_model_loader
 
 from config import Config
 from misc.utils import rm_n_mkdir
-from model.graph import Model_NP_DIST, Model_NP_XY
 
+import json
+import operator
+
+import time
+
+####
+def get_best_chkpts(path, metric_name, comparator='>'):
+    """
+    Return the best checkpoint according to some criteria.
+    Note that it will only return valid path, so any checkpoint that has been
+    removed wont be returned (i.e moving to next one that satisfies the criteria
+    such as second best etc.)
+
+    Args:
+        path: directory contains all checkpoints, including the "stats.json" file
+    """
+    stat_file = path + '/stats.json'
+    ops = {
+            '>': operator.gt,
+            '<': operator.lt,
+          }
+
+    op_func = ops[comparator]
+    with open(stat_file) as f:
+        info = json.load(f)
+    
+    if comparator == '>':
+        best_value  = -float("inf")
+    else:
+        best_value  = +float("inf")
+
+    best_chkpt = None
+    for epoch_stat in info:
+        epoch_value = epoch_stat[metric_name]
+        if op_func(epoch_value, best_value):
+            chkpt_path = "%s/model-%d.index" % (path, epoch_stat['global_step'])
+            if os.path.isfile(chkpt_path):
+                selected_stat = epoch_stat
+                best_value  = epoch_value
+                best_chkpt = chkpt_path
+    return best_chkpt, selected_stat
+
+####
 class Inferer(Config):
 
     def __gen_prediction(self, x, predictor):
@@ -60,11 +102,11 @@ class Inferer(Config):
                 sub_patches.append(win)
 
         pred_map = deque()
-        while len(sub_patches) > self.infer_batch_size:
-            mini_batch  = sub_patches[:self.infer_batch_size]
-            sub_patches = sub_patches[self.infer_batch_size:]
+        while len(sub_patches) > self.inf_batch_size:
+            mini_batch  = sub_patches[:self.inf_batch_size]
+            sub_patches = sub_patches[self.inf_batch_size:]
             mini_output = predictor(mini_batch)[0]
-            mini_output = np.split(mini_output, self.infer_batch_size, axis=0)
+            mini_output = np.split(mini_output, self.inf_batch_size, axis=0)
             pred_map.extend(mini_output)
         if len(sub_patches) != 0:
             mini_output = predictor(sub_patches)[0]
@@ -78,48 +120,61 @@ class Inferer(Config):
         #### Assemble back into full image
         pred_map = np.squeeze(np.array(pred_map))
         pred_map = np.reshape(pred_map, (nr_step_h, nr_step_w) + pred_map.shape[1:])
-        pred_map = np.transpose(pred_map, [0, 2, 1, 3, 4])
+        pred_map = np.transpose(pred_map, [0, 2, 1, 3, 4]) if ch != 1 else \
+                        np.transpose(pred_map, [0, 2, 1, 3])
         pred_map = np.reshape(pred_map, (pred_map.shape[0] * pred_map.shape[1], 
                                          pred_map.shape[2] * pred_map.shape[3], ch))
-        pred_map = pred_map[:im_h,:im_w] # just crop back to original size
+        pred_map = np.squeeze(pred_map[:im_h,:im_w]) # just crop back to original size
 
         return pred_map
 
     ####
     def run(self):
-        model_path = self.inf_model_path
 
-        MODEL_MAKER = Model_NP_XY if self.model_mode == 'np+xy' else Model_NP_DIST
+        if self.inf_auto_find_chkpt:
+            print('-----Auto Selecting Checkpoint Basing On "%s" Through "%s" Comparison' % \
+                        (self.inf_auto_metric, self.inf_auto_comparator))
+            model_path, stat = get_best_chkpts(self.save_dir, self.inf_auto_metric, self.inf_auto_comparator)
+            print('Selecting: %s' % model_path)
+            print('Having Following Statistics:')
+            for key, value in stat.items():
+                print('\t%s: %s' % (key, value))
+        else:
+            model_path = self.inf_model_path
 
+        model_constructor = self.get_model()
         pred_config = PredictConfig(
-            model        = MODEL_MAKER(),
+            model        = model_constructor(),
             session_init = get_model_loader(model_path),
             input_names  = self.eval_inf_input_tensor_names,
             output_names = self.eval_inf_output_tensor_names)
         predictor = OfflinePredictor(pred_config)
 
-        for norm_target in self.inf_norm_codes:
-            norm_dir = '%s/%s/' % (self.inf_norm_root_dir, norm_target)
-            norm_save_dir = '%s/%s/' % (self.inf_output_dir, norm_target)
+        for data_dir_set in self.inf_data_list:
+            data_root_dir = data_dir_set[0]
+            data_out_code = data_dir_set[1]
 
-            # TODO: cache list to check later norm dir has same number of files
-            file_list = glob.glob('%s/*%s' % (norm_dir, self.inf_imgs_ext))
-            file_list.sort() # ensure same order
+            for subdir in data_dir_set[2:]:
+                data_dir = '%s/%s/' % (data_root_dir, subdir)
+                save_dir = '%s/%s/%s' % (self.inf_output_dir, data_out_code, subdir)
 
-            rm_n_mkdir(norm_save_dir)       
-            for filename in file_list:
-                filename = os.path.basename(filename)
-                basename = filename.split('.')[0]
-                print(basename, norm_target, end=' ', flush=True)
+                file_list = glob.glob('%s/*%s' % (data_dir, self.inf_imgs_ext))
+                file_list.sort() # ensure same order
 
-                ##
-                img = cv2.imread(norm_dir + filename)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                    
-                ##
-                pred_map = self.__gen_prediction(img, predictor)
-                sio.savemat('%s/%s.mat' % (norm_save_dir, basename), {'result':[pred_map]})
-                print('FINISH')
+                rm_n_mkdir(save_dir)       
+                for filename in file_list:
+                    filename = os.path.basename(filename)
+                    basename = filename.split('.')[0]
+                    print(data_dir, basename, end=' ', flush=True)
+
+                    ##
+                    img = cv2.imread(data_dir + filename)
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                        
+                    ##
+                    pred_map = self.__gen_prediction(img, predictor)
+                    sio.savemat('%s/%s.mat' % (save_dir, basename), {'result':[pred_map]})
+                    print('FINISH')
 
 ####
 if __name__ == '__main__':

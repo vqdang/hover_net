@@ -94,17 +94,17 @@ def decoder(name, i):
             u2 = upsample2x('rz', u3)
             u2_sum = tf.add_n([u2, i[-3]])
 
-            u2 = Conv2D('conva', u2_sum, 128, 5, strides=1, padding=pad)
-            u2 = dense_blk('dense', u2, [128, 32], [1, 5], 4, split=4, padding=pad)
+            u2x = Conv2D('conva', u2_sum, 128, 5, strides=1, padding=pad)
+            u2 = dense_blk('dense', u2x, [128, 32], [1, 5], 4, split=4, padding=pad)
             u2 = Conv2D('convf', u2, 256, 1, strides=1)   
         ####
         with tf.variable_scope('u1'):          
             u1 = upsample2x('rz', u2)
             u1_sum = tf.add_n([u1, i[-4]])
 
-            u1 = u1_sum # for legacy
+            u1 = Conv2D('conva', u1_sum, 64, 5, strides=1, padding='same')
 
-    return u1
+    return [u3, u2x, u1]
 
 ####
 class Model(ModelDesc, Config):
@@ -115,35 +115,48 @@ class Model(ModelDesc, Config):
         self.data_format = 'NCHW'
 
     def _get_inputs(self):
-        if self.model_mode == 'np+xy':
-            return [InputDesc(tf.float32, [None] + self.train_input_shape + [3], 'images'),
-                    InputDesc(tf.float32, [None] + self.train_mask_shape  + [3], 'truemap-coded')]
-        else:
-            return [InputDesc(tf.float32, [None] + self.train_input_shape + [3], 'images'),
-                    InputDesc(tf.float32, [None] + self.train_mask_shape  + [2], 'truemap-coded')]
-          
+        return [InputDesc(tf.float32, [None] + self.train_input_shape + [3], 'images'),
+                InputDesc(tf.float32, [None] + self.train_mask_shape  + [None], 'truemap-coded')]
+    
+    # for node to receive manual info such as learning rate.
+    def add_manual_variable(self, name, init_value, summary=True):
+        var = tf.get_variable(name, initializer=init_value, trainable=False)
+        if summary:
+            tf.summary.scalar(name + '-summary', var)
+        return
+
     def _get_optimizer(self):
-        lr = tf.get_variable('learning_rate', initializer=self.init_lr, trainable=False)
-        tf.summary.scalar('learning_rate-summary', lr)
-        opt = self.optim(learning_rate=lr)
+        with tf.variable_scope("", reuse=True):
+            lr = tf.get_variable('learning_rate')
+        opt = self.optimizer(learning_rate=lr)
         return opt
 
 ####
-class Model_NP_XY(Model):
+class Model_NP_HV(Model):
     def _build_graph(self, inputs):
         
         images, truemap_coded = inputs
-
         orig_imgs = images
 
-        o_true_np = truemap_coded[...,0]
-        o_true_np = tf.cast(o_true_np, tf.int32)
-        o_true_np = tf.identity(o_true_np, name='truemap-np')
-        o_one_np  = tf.one_hot(o_true_np, 2, axis=-1)
-        o_true_np = tf.expand_dims(o_true_np, axis=-1)
+        if hasattr(self, 'type_classification') and self.type_classification:
+            true_type = truemap_coded[...,1]
+            true_type = tf.cast(true_type, tf.int32)
+            true_type = tf.identity(true_type, name='truemap-type')
+            one_type  = tf.one_hot(true_type, 5, axis=-1)
+            true_type = tf.expand_dims(true_type, axis=-1)
 
-        o_true_xy = truemap_coded[...,1:]
-        o_true_xy = tf.identity(o_true_xy, name='truemap-xy')
+            true_np = tf.cast(true_type > 0, tf.int32) # ? sanity this
+            true_np = tf.identity(true_np, name='truemap-np')
+            one_np  = tf.one_hot(tf.squeeze(true_np), 2, axis=-1)
+        else:
+            true_np = truemap_coded[...,0]
+            true_np = tf.cast(true_np, tf.int32)
+            true_np = tf.identity(true_np, name='truemap-np')
+            one_np  = tf.one_hot(true_np, 2, axis=-1)
+            true_np = tf.expand_dims(true_np, axis=-1)
+
+        true_hv = truemap_coded[...,-2:]
+        true_hv = tf.identity(true_hv, name='truemap-hv')
 
         ####
         with argscope(Conv2D, activation=tf.identity, use_bias=False, # K.he initializer
@@ -159,75 +172,125 @@ class Model_NP_XY(Model):
             d[1] = crop_op(d[1], (72, 72))
 
             ####
-            o_np = decoder('np', d)
-            o_np = BNReLU('preact_out_np', o_np)
+            np_feat = decoder('np', d)
+            np = BNReLU('preact_out_np', np_feat[-1])
 
-            o_xy = decoder('xy', d)
-            o_xy = BNReLU('preact_out_xy', o_xy)
+            hv_feat = decoder('hv', d)
+            hv = BNReLU('preact_out_hv', hv_feat[-1])
 
-            ####
-            o_logi_np = Conv2D('conv_out_np', o_np, 2, 1, use_bias=True, activation=tf.identity)
-            o_logi_np = tf.transpose(o_logi_np, [0, 2, 3, 1])
-            o_soft_np = tf.nn.softmax(o_logi_np, axis=-1)
-            o_prob_np = tf.identity(o_soft_np[...,1], name='predmap-prob-np')
-            o_prob_np = tf.expand_dims(o_prob_np, axis=-1)
-            o_pred_np = tf.argmax(o_soft_np, axis=-1, name='predmap-np')
-            o_pred_np = tf.expand_dims(tf.cast(o_pred_np, tf.float32), axis=-1)
+            if self.type_classification:
+                tp_feat = decoder('tp', d)
+                tp = BNReLU('preact_out_tp', tp_feat[-1])
 
-            o_logi_xy = Conv2D('conv_out_xy', o_xy, 2, 1, use_bias=True, activation=tf.identity)
-            o_logi_xy = tf.transpose(o_logi_xy, [0, 2, 3, 1])
-            o_prob_xy = tf.identity(o_logi_xy, name='predmap-prob-xy')
-            o_pred_xy = tf.identity(o_logi_xy, name='predmap-xy')
+                # Nuclei Type Pixels (TP)
+                logi_class = Conv2D('conv_out_tp', tp, 5, 1, use_bias=True, activation=tf.identity)
+                logi_class = tf.transpose(logi_class, [0, 2, 3, 1])
+                soft_class = tf.nn.softmax(logi_class, axis=-1)
 
+            #### Nuclei Pixels (NP)
+            logi_np = Conv2D('conv_out_np', np, 2, 1, use_bias=True, activation=tf.identity)
+            logi_np = tf.transpose(logi_np, [0, 2, 3, 1])
+            soft_np = tf.nn.softmax(logi_np, axis=-1)
+            prob_np = tf.identity(soft_np[...,1], name='predmap-prob-np')
+            prob_np = tf.expand_dims(prob_np, axis=-1)
+
+            #### Horizontal-Vertival (HV)
+            logi_hv = Conv2D('conv_out_hv', hv, 2, 1, use_bias=True, activation=tf.identity)
+            logi_hv = tf.transpose(logi_hv, [0, 2, 3, 1])
+            prob_hv = tf.identity(logi_hv, name='predmap-prob-hv')
+            pred_hv = tf.identity(logi_hv, name='predmap-hv')
+    
+            # * channel ordering: type-map, segmentation map
             # encoded so that inference can extract all output at once
-            predmap_coded = tf.concat([o_prob_np, o_pred_xy], axis=-1, name='predmap-coded')
+            if self.type_classification:
+                predmap_coded = tf.concat([soft_class, prob_np, pred_hv], axis=-1, name='predmap-coded')
+            else:
+                predmap_coded = tf.concat([prob_np, pred_hv], axis=-1, name='predmap-coded')
         ####
+        def get_gradient_hv(l, h_ch, v_ch):
+            """
+            Central difference to approximate the gradient by using Sobel kernel of size 5x5
+            """
+            def get_sobel_kernel(size):
+                assert size % 2 == 1, 'Must be odd, get size=%d' % size
+
+                h_range = np.arange(-size//2+1, size//2+1, dtype=np.float32)
+                v_range = np.arange(-size//2+1, size//2+1, dtype=np.float32)
+                h, v = np.meshgrid(h_range, v_range)
+                kernel_h = h / (h * h + v * v + 1.0e-15)
+                kernel_v = v / (h * h + v * v + 1.0e-15)
+                return kernel_h, kernel_v            
+
+            mh, mv = get_sobel_kernel(5)
+            mh = tf.constant(mh, dtype=tf.float32)
+            mv = tf.constant(mv, dtype=tf.float32)
+
+            mh = tf.reshape(mh, [5, 5, 1, 1])
+            mv = tf.reshape(mv, [5, 5, 1, 1])
+            
+            # central difference to get gradient, ignore the boundary problem  
+            h = tf.expand_dims(l[...,h_ch], axis=-1)  
+            v = tf.expand_dims(l[...,v_ch], axis=-1)  
+            dh = tf.nn.conv2d(h, mh, strides=[1, 1, 1, 1], padding='SAME')
+            dv = tf.nn.conv2d(v, mv, strides=[1, 1, 1, 1], padding='SAME')
+            output = tf.concat([dh, dv], axis=-1)
+            return output
+        def loss_mse(true, pred, name=None):
+            ### regression loss
+            loss = pred - true
+            loss = tf.reduce_mean(loss * loss, name=name)
+            return loss
+        def loss_msge(true, pred, focus, name=None):
+            focus = tf.stack([focus, focus], axis=-1)
+            pred_grad = get_gradient_hv(pred, 1, 0)
+            true_grad = get_gradient_hv(true, 1, 0) 
+            loss = pred_grad - true_grad
+            loss = focus * (loss * loss)
+            # artificial reduce_mean with focus region
+            loss = tf.reduce_sum(loss) / (tf.reduce_sum(focus) + 1.0e-8)
+            loss = tf.identity(loss, name=name)
+            return loss
 
         ####
         if get_current_tower_context().is_training:
             #---- LOSS ----#
-            ### XY regression loss
-            loss_mse = o_pred_xy - o_true_xy
-            loss_mse = loss_mse * loss_mse
-            loss_mse = tf.reduce_mean(loss_mse, name='loss-mse')
-            add_moving_summary(loss_mse)
+            loss = 0
+            for term, weight in self.loss_term.items():
+                if term == 'mse':
+                    term_loss = loss_mse(true_hv, pred_hv, name='loss-mse')
+                elif term == 'msge':
+                    focus = truemap_coded[...,0]
+                    term_loss = loss_msge(true_hv, pred_hv, focus, name='loss-msge')
+                elif term == 'bce':
+                    term_loss = categorical_crossentropy(soft_np, one_np)
+                    term_loss = tf.reduce_mean(term_loss, name='loss-bce')
+                elif 'dice' in self.loss_term:
+                    term_loss = dice_loss(soft_np[...,0], one_np[...,0]) \
+                              + dice_loss(soft_np[...,1], one_np[...,1])
+                    term_loss = tf.identity(term_loss, name='loss-dice')
+                else:
+                    assert False, 'Not support loss term: %s' % term
+                add_moving_summary(term_loss)
+                loss += term_loss * weight
 
-            loss_xy = loss_mse
-            if 'msge' in self.loss_term:
-                nuclear = truemap_coded[...,0]
-                nuclear = tf.stack([nuclear, nuclear], axis=-1)
-                pred_grad = get_gradient_xy(o_pred_xy, 1, 0)
-                true_grad = get_gradient_xy(o_true_xy, 1, 0) 
-                loss_msge = pred_grad - true_grad
-                loss_msge = nuclear * (loss_msge * loss_msge)
-                # artificial reduce_mean with focus region
-                loss_msge = tf.reduce_sum(loss_msge)
-                loss_msge = loss_msge / tf.reduce_sum(nuclear) 
-                loss_msge = tf.identity(loss_msge, name='loss-msge')
-                add_moving_summary(loss_msge)
+            if self.type_classification:
+                term_loss = categorical_crossentropy(soft_class, one_type)
+                term_loss = tf.reduce_mean(term_loss, name='loss-xentropy-class')
+                add_moving_summary(term_loss)
+                loss = loss + term_loss
 
-                loss_xy = 2 * loss_mse + loss_msge
-                
-            loss_xy = tf.identity(loss_xy, name='overall-xy')
-
-            ### Nuclei Blob classification loss
-            loss_bce = categorical_crossentropy(o_soft_np, o_one_np)
-            loss_bce = tf.reduce_mean(loss_bce, name='loss-bce')
-            add_moving_summary(loss_bce)
-
-            loss_np = loss_bce
-            if 'dice' in self.loss_term:
-                loss_dice = dice_loss(o_prob_np, o_true_np)
-                loss_dice = tf.identity(loss_dice, name='loss-dice')
-                add_moving_summary(loss_dice)
-
-                loss_np = loss_bce + loss_dice
-
-            loss_np = tf.identity(loss_np, name='overall-np')
+                term_loss = dice_loss(soft_class[...,0], one_type[...,0]) \
+                          + dice_loss(soft_class[...,1], one_type[...,1]) \
+                          + dice_loss(soft_class[...,2], one_type[...,2]) \
+                          + dice_loss(soft_class[...,3], one_type[...,3]) \
+                          + dice_loss(soft_class[...,4], one_type[...,4]) 
+                term_loss = tf.identity(term_loss, name='loss-dice-class')
+                add_moving_summary(term_loss)
+                loss = loss + term_loss
 
             ### combine the loss into single cost function
-            self.cost = tf.identity(loss_xy + loss_np, name='overall-loss')            
-            add_moving_summary(self.cost, loss_xy, loss_np)
+            self.cost = tf.identity(loss, name='overall-loss')            
+            add_moving_summary(self.cost)
             ####
 
             add_param_summary(('.*/W', ['histogram']))   # monitor W
@@ -238,24 +301,31 @@ class Model_NP_XY(Model):
 
             orig_imgs = crop_op(orig_imgs, (190, 190), "NHWC")
 
-            o_pred = colorize(o_prob_np[...,0], cmap='jet')
-            o_true = colorize(o_true_np[...,0], cmap='jet')
-            o_pred = tf.cast(o_pred * 255, tf.uint8)
-            o_true = tf.cast(o_true * 255, tf.uint8)
+            pred_np = colorize(prob_np[...,0], cmap='jet')
+            true_np = colorize(true_np[...,0], cmap='jet')
+            
+            pred_h = colorize(prob_hv[...,0], vmin=-1, vmax=1, cmap='jet')
+            pred_v = colorize(prob_hv[...,1], vmin=-1, vmax=1, cmap='jet')
+            true_h = colorize(true_hv[...,0], vmin=-1, vmax=1, cmap='jet')
+            true_v = colorize(true_hv[...,1], vmin=-1, vmax=1, cmap='jet')
 
-            pred_x = colorize(o_prob_xy[...,0], vmin=-1, vmax=1, cmap='jet')
-            pred_y = colorize(o_prob_xy[...,1], vmin=-1, vmax=1, cmap='jet')
-            true_x = colorize(o_true_xy[...,0], vmin=-1, vmax=1, cmap='jet')
-            true_y = colorize(o_true_xy[...,1], vmin=-1, vmax=1, cmap='jet')
-            pred_x = tf.cast(pred_x * 255, tf.uint8)
-            pred_y = tf.cast(pred_y * 255, tf.uint8)
-            true_x = tf.cast(true_x * 255, tf.uint8)
-            true_y = tf.cast(true_y * 255, tf.uint8)
+            if self.type_classification:
+                viz = tf.concat([orig_imgs, 
+                                pred_h, pred_v, pred_np, 
+                                true_h, true_v, true_np], 2)
+            else:
+                pred_type = tf.transpose(soft_class, (0, 1, 3, 2))
+                pred_type = tf.reshape(pred_type, [-1, 80, 80 * 5])
+                true_type = tf.cast(true_type[...,0] / self.nr_classes, tf.float32)
+                true_type = colorize(true_type, vmin=0, vmax=1, cmap='jet')
+                pred_type = colorize(pred_type, vmin=0, vmax=1, cmap='jet')
 
-            viz = tf.concat([orig_imgs, 
-                            pred_x, pred_y, o_pred, 
-                            true_x, true_y, o_true], 2)
+                viz = tf.concat([orig_imgs, 
+                                pred_h, pred_v, pred_np, pred_type, 
+                                true_h, true_v, true_np, true_type,], 2)
 
+            viz = tf.concat([viz[0], viz[-1]], axis=0)
+            viz = tf.expand_dims(viz, axis=0)
             tf.summary.image('output', viz, max_outputs=1)
 
         return
@@ -268,14 +338,14 @@ class Model_NP_DIST(Model):
 
         orig_imgs = images
 
-        o_true_np = truemap_coded[...,0]
-        o_true_np = tf.cast(o_true_np, tf.int32)
-        o_true_np = tf.identity(o_true_np, name='truemap-np')
-        o_one_np  = tf.one_hot(o_true_np, 2, axis=-1)
-        o_true_np = tf.expand_dims(o_true_np, axis=-1)
+        true_np = truemap_coded[...,0]
+        true_np = tf.cast(true_np, tf.int32)
+        true_np = tf.identity(true_np, name='truemap-np')
+        one_np  = tf.one_hot(true_np, 2, axis=-1)
+        true_np = tf.expand_dims(true_np, axis=-1)
 
-        o_true_dist = truemap_coded[...,1:]
-        o_true_dist = tf.identity(o_true_dist, name='truemap-dist')
+        true_dist = truemap_coded[...,1:]
+        true_dist = tf.identity(true_dist, name='truemap-dist')
 
         ####
         with argscope(Conv2D, activation=tf.identity, use_bias=False, # K.he initializer
@@ -291,42 +361,42 @@ class Model_NP_DIST(Model):
             d[1] = crop_op(d[1], (72, 72))
 
             ####
-            o_np = decoder('np', d)
-            o_np = BNReLU('preact_out_np', o_np)
+            np_feat = decoder('np', d)
+            np = BNReLU('preact_out_np', np_feat[-1])
 
-            o_dist = decoder('dst', d)
-            o_dist = BNReLU('preact_out_dist', o_dist)
-
-            ####
-            o_logi_np = Conv2D('conv_out_np', o_np, 2, 1, use_bias=True, activation=tf.identity)
-            o_logi_np = tf.transpose(o_logi_np, [0, 2, 3, 1])
-            o_soft_np = tf.nn.softmax(o_logi_np, axis=-1)
-            o_prob_np = tf.identity(o_soft_np[...,1], name='predmap-prob-np')
-            o_prob_np = tf.expand_dims(o_prob_np, axis=-1)
-            o_pred_np = tf.argmax(o_soft_np, axis=-1, name='predmap-np')
-            o_pred_np = tf.expand_dims(tf.cast(o_pred_np, tf.float32), axis=-1)
+            dist_feat = decoder('dst', d)
+            dist = BNReLU('preact_out_dist', dist_feat[-1])
 
             ####
-            o_logi_dist = Conv2D('conv_out_dist', o_dist, 1, 1, use_bias=True, activation=tf.identity)
-            o_logi_dist = tf.transpose(o_logi_dist, [0, 2, 3, 1])
-            o_prob_dist = tf.identity(o_logi_dist, name='predmap-prob-dist')
-            o_pred_dist = tf.identity(o_logi_dist, name='predmap-dist')
+            logi_np = Conv2D('conv_out_np', np, 2, 1, use_bias=True, activation=tf.identity)
+            logi_np = tf.transpose(logi_np, [0, 2, 3, 1])
+            soft_np = tf.nn.softmax(logi_np, axis=-1)
+            prob_np = tf.identity(soft_np[...,1], name='predmap-prob-np')
+            prob_np = tf.expand_dims(prob_np, axis=-1)
+            pred_np = tf.argmax(soft_np, axis=-1, name='predmap-np')
+            pred_np = tf.expand_dims(tf.cast(pred_np, tf.float32), axis=-1)
+
+            ####
+            logi_dist = Conv2D('conv_out_dist', dist, 1, 1, use_bias=True, activation=tf.identity)
+            logi_dist = tf.transpose(logi_dist, [0, 2, 3, 1])
+            prob_dist = tf.identity(logi_dist, name='predmap-prob-dist')
+            pred_dist = tf.identity(logi_dist, name='predmap-dist')
 
             # encoded so that inference can extract all output at once
-            predmap_coded = tf.concat([o_prob_np, o_pred_dist], axis=-1, name='predmap-coded')
+            predmap_coded = tf.concat([prob_np, pred_dist], axis=-1, name='predmap-coded')
         ####
 
         ####
         if get_current_tower_context().is_training:
             ######## LOSS
             ### Distance regression loss
-            loss_mse = o_pred_dist - o_true_dist
+            loss_mse = pred_dist - true_dist
             loss_mse = loss_mse * loss_mse
             loss_mse = tf.reduce_mean(loss_mse, name='loss-mse')
             add_moving_summary(loss_mse)   
 
             ### Nuclei Blob classification loss
-            loss_bce = categorical_crossentropy(o_soft_np, o_one_np)
+            loss_bce = categorical_crossentropy(soft_np, one_np)
             loss_bce = tf.reduce_mean(loss_bce, name='loss-bce')
             add_moving_summary(loss_bce)
 
@@ -343,19 +413,15 @@ class Model_NP_DIST(Model):
 
             orig_imgs = crop_op(orig_imgs, (190, 190), "NHWC")
 
-            o_pred_np = colorize(o_prob_np[...,0], cmap='jet')
-            o_true_np = colorize(o_true_np[...,0], cmap='jet')
-            o_pred_np = tf.cast(o_pred_np * 255, tf.uint8)
-            o_true_np = tf.cast(o_true_np * 255, tf.uint8)
+            pred_np = colorize(prob_np[...,0], cmap='jet')
+            true_np = colorize(true_np[...,0], cmap='jet')
 
-            o_pred_dist = colorize(o_prob_dist[...,0], cmap='jet')
-            o_true_dist = colorize(o_true_dist[...,0], cmap='jet')
-            o_pred_dist = tf.cast(o_pred_dist * 255, tf.uint8)
-            o_true_dist = tf.cast(o_true_dist * 255, tf.uint8)
+            pred_dist = colorize(prob_dist[...,0], cmap='jet')
+            true_dist = colorize(true_dist[...,0], cmap='jet')
 
             viz = tf.concat([orig_imgs, 
-                            o_true_np, o_pred_np, 
-                            o_true_dist, o_pred_dist,], 2)
+                            true_np, pred_np, 
+                            true_dist, pred_dist,], 2)
 
             tf.summary.image('output', viz, max_outputs=1)
 

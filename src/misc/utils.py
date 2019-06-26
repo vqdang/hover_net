@@ -1,11 +1,9 @@
 
-import json
 import glob
-
-import operator
 import os
 import shutil
 
+import cv2
 import numpy as np
 
 
@@ -19,6 +17,10 @@ def bounding_box(img):
     cols = np.any(img, axis=0)
     rmin, rmax = np.where(rows)[0][[0, -1]]
     cmin, cmax = np.where(cols)[0][[0, -1]]
+    # due to python indexing, need to add 1 to max
+    # else accessing will be 1px in the box, not out 
+    rmax += 1
+    cmax += 1
     return [rmin, rmax, cmin, cmax]
 
 ####
@@ -54,3 +56,14 @@ def get_files(data_dir_list, data_ext):
 
     return data_files
 
+####
+def get_inst_centroid(inst_map):
+    inst_centroid_list = []
+    inst_id_list = list(np.unique(inst_map))
+    for inst_id in inst_id_list[1:]: # avoid 0 i.e background
+        mask = np.array(inst_map == inst_id, np.uint8)
+        inst_moment = cv2.moments(mask)
+        inst_centroid = [(inst_moment["m10"] / inst_moment["m00"]),
+                         (inst_moment["m01"] / inst_moment["m00"])]
+        inst_centroid_list.append(inst_centroid)
+    return np.array(inst_centroid_list)

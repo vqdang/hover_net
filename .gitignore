@@ -106,4 +106,9 @@ venv.bak/
 src/.vscode/settings.json
 
 #
+*.pickle
+*.mat
 src/output
+pretrained
+src/temp.py
+src/dataset_info.py

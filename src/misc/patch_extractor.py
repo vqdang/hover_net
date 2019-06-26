@@ -7,7 +7,6 @@ import numpy as np
 
 from .utils import cropping_center
 
-
 #####
 class PatchExtractor(object):
     """
@@ -51,7 +50,7 @@ class PatchExtractor(object):
             cv2.rectangle(x,ptx,pty,(255,0,0),2)  
             plt.imshow(x)
             plt.show(block=False)
-            time.sleep(1)
+            plt.pause(1)
             plt.close()
             self.counter += 1
         return win

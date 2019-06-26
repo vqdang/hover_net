@@ -42,6 +42,145 @@ class GenInstance(ImageAugmentor):
             current_max_id = np.amax(ann)
         return ann
 ####
+import matplotlib.pyplot as plt
+class GenInstanceUnetMap(GenInstance):
+    """
+    Input annotation must be of original shape.
+
+    Perform following operation:
+        1) Remove the 1px of boundary of each instance
+           to create illusionary separation between touching instances
+        2) Generate the weightmap from the result of 1)
+           according to the unet paper formula
+
+    Args:
+        wc (dict)        : Dictionary of weight classes.
+        w0 (int/float)   : Border weight parameter.
+        sigma (int/float): Border width parameter.
+    """
+    def __init__(self, wc=None, w0=10.0, sigma=5.0, crop_shape=None):
+        super(GenInstanceUnetMap, self).__init__()
+        self.crop_shape = crop_shape
+        self.wc = wc
+        self.w0 = w0
+        self.sigma = sigma
+
+    def _remove_1px_boundary(self, ann):
+        new_ann = np.zeros(ann.shape[:2], np.int32)
+        inst_list = list(np.unique(ann))
+        inst_list.remove(0) # 0 is background
+
+        k = np.array([[0, 1, 0],
+                      [1, 1, 1],
+                      [0, 1, 0]], np.uint8)
+
+        for idx, inst_id in enumerate(inst_list):
+            inst_map = np.array(ann == inst_id, np.uint8)
+            inst_map = cv2.erode(inst_map, k, iterations=1)
+            new_ann[inst_map > 0] = inst_id
+        return new_ann
+
+    def _get_weight_map(self, ann, inst_list):
+        if len(inst_list) <= 1: # 1 instance only
+            return np.zeros(ann.shape[:2])
+        stacked_inst_bgd_dst = np.zeros(ann.shape[:2] +(len(inst_list),))
+
+        for idx, inst_id in enumerate(inst_list):
+            inst_bgd_map = np.array(ann != inst_id , np.uint8)
+            inst_bgd_dst = distance_transform_edt(inst_bgd_map)
+            stacked_inst_bgd_dst[...,idx] = inst_bgd_dst
+
+        near1_dst = np.amin(stacked_inst_bgd_dst, axis=2)
+        near2_dst = np.expand_dims(near1_dst ,axis=2)
+        near2_dst = stacked_inst_bgd_dst - near2_dst
+        near2_dst[near2_dst == 0] = np.PINF # very large
+        near2_dst = np.amin(near2_dst, axis=2)
+        near2_dst[ann > 0] = 0 # the instances
+        near2_dst = near2_dst + near1_dst
+        # to fix pixel where near1 == near2
+        near2_eve = np.expand_dims(near1_dst ,axis=2)
+        # to avoide the warning of a / 0
+        near2_eve = (1.0 + stacked_inst_bgd_dst) / (1.0 + near2_eve)
+        near2_eve[near2_eve != 1] = 0
+        near2_eve = np.sum(near2_eve, axis=2)
+        near2_dst[near2_eve > 1] = near1_dst[near2_eve > 1]
+        #
+        pix_dst = near1_dst + near2_dst
+        pen_map = pix_dst / self.sigma
+        pen_map = self.w0 * np.exp(- pen_map**2 / 2)
+        pen_map[ann > 0] = 0 # inner instances zero
+        return pen_map
+
+    def _augment(self, img, _):
+        img = np.copy(img)
+        orig_ann = img[...,0] # instance ID map
+        fixed_ann = self._fix_mirror_padding(orig_ann)
+        # setting 1 boundary pix of each instance to background
+        fixed_ann = self._remove_1px_boundary(fixed_ann)
+
+        # cant do the shortcut because near2 also needs instances 
+        # outside of cropped portion
+        inst_list = list(np.unique(fixed_ann))
+        inst_list.remove(0) # 0 is background
+        wmap = self._get_weight_map(fixed_ann, inst_list)
+
+        if self.wc is None:             
+            wmap += 1 # uniform weight for all classes
+        else:
+            class_weights = np.zeros_like(fixed_ann.shape[:2])
+            for class_id, class_w in self.wc.items():
+                class_weights[fixed_ann == class_id] = class_w
+            wmap += class_weights
+
+        # fix other maps to align
+        img[fixed_ann == 0] = 0 
+        img = np.dstack([img, wmap])
+
+        return img
+
+####
+class GenInstanceContourMap(GenInstance):
+    # TODO: put the doc on for this
+    """
+    Input annotation must be of original shape.
+    """
+    def __init__(self, crop_shape=None):
+        super(GenInstanceContourMap, self).__init__()
+        self.crop_shape = crop_shape
+
+    def _augment(self, img, _):
+        img = np.copy(img)
+        orig_ann = img[...,0] # instance ID map
+        fixed_ann = self._fix_mirror_padding(orig_ann)
+            # re-cropping with fixed instance id map
+        crop_ann = cropping_center(fixed_ann, self.crop_shape)
+
+        # setting 1 boundary pix of each instance to background
+        contour_map = np.zeros(fixed_ann.shape[:2], np.uint8)
+
+        inst_list = list(np.unique(crop_ann))
+        inst_list.remove(0) # 0 is background
+
+        k_disk = np.array([
+            [0, 0, 0, 1, 0, 0, 0],
+            [0, 0, 1, 1, 1, 0, 0],
+            [0, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 1, 1],
+            [0, 1, 1, 1, 1, 1, 0],
+            [0, 0, 1, 1, 1, 0, 0],
+            [0, 0, 0, 1, 0, 0, 0],
+        ], np.uint8)
+
+        for inst_id in inst_list:
+            inst_map = np.array(fixed_ann == inst_id, np.uint8)
+            inner = cv2.erode(inst_map, k_disk, iterations=1)
+            outer = cv2.dilate(inst_map, k_disk, iterations=1)
+            contour_map += outer - inner
+        contour_map[contour_map > 0] = 1 # binarize
+        img = np.dstack([fixed_ann, contour_map])
+        return img
+
+####
 class GenInstanceXY(GenInstance):   
     """
         Input annotation must be of original shape.
@@ -120,18 +259,23 @@ class GenInstanceXY(GenInstance):
                               inst_box[2]:inst_box[3]]
             y_map_box[inst_map > 0] = inst_y[inst_map > 0]
 
-        orig_ann = orig_ann.astype('float32')
-        img = np.dstack([orig_ann, x_map, y_map])
+        img = img.astype('float32')
+        img = np.dstack([img, x_map, y_map])
 
         return img
 
 ####
 class GenInstanceDistance(GenInstance):   
     """
-        Input annotation must be of original shape.
-        The map is calculated only for instances within the crop portion
-        but basing on the original shape in original image
+    Input annotation must be of original shape.
+    The map is calculated only for instances within the crop portion
+    but basing on the original shape in original image
     """
+    def __init__(self, crop_shape=None, inst_norm=True):
+        super(GenInstanceDistance, self).__init__()
+        self.crop_shape = crop_shape
+        self.inst_norm = inst_norm
+
     def _augment(self, img, _):
         img = np.copy(img)
         orig_ann = img[...,0] # instance ID map
@@ -164,7 +308,11 @@ class GenInstanceDistance(GenInstance):
             # normalize distance to 0-1
             inst_dst = distance_transform_cdt(inst_map)
             inst_dst = inst_dst.astype('float32')
-            inst_dst = (inst_dst / np.amax(inst_dst)) 
+            if self.inst_norm:
+                max_value = np.amax(inst_dst)
+                if max_value <= 0: 
+                    continue # HACK: temporay patch for divide 0 i.e no nuclei (how?)
+                inst_dst = (inst_dst / np.amax(inst_dst)) 
 
             ####
             dst_map_box = orig_dst[inst_box[0]:inst_box[1],
@@ -172,8 +320,8 @@ class GenInstanceDistance(GenInstance):
             dst_map_box[inst_map > 0] = inst_dst[inst_map > 0]
 
         #
-        orig_ann = orig_ann.astype('float32')
-        img = np.dstack([orig_ann, orig_dst])
+        img = img.astype('float32')
+        img = np.dstack([img, orig_dst])
         
         return img
 

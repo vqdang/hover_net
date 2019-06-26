@@ -42,8 +42,9 @@ class DatasetSerial(RNGDataFlow):
             # split stacked channel into image and label
             img = data[...,:3] # RGB images
             ann = data[...,3:] # instance ID map
-           
-            img = img.astype('uint8')            
+            # TODO: assert to ensure correct dtype
+            
+            img = img.astype('uint8')     
             yield [img, ann]
 
 #### 
@@ -80,11 +81,16 @@ def visualize(datagen, batch_size, view_size=4):
     """
     def prep_imgs(img, ann):
         cmap = plt.get_cmap('viridis')
+        # cmap may randomly fails if of other types
+        ann = ann.astype('float32')
         ann_chs = np.dsplit(ann, ann.shape[-1])
         for i, ch in enumerate(ann_chs):
+            ch = np.squeeze(ch)
+            # normalize to -1 to 1 range else
+            # cmap may behave stupidly
+            ch = ch / (np.max(ch) - np.min(ch) + 1.0e-16)
             # take RGB from RGBA heat map
-            ch = cmap(np.squeeze(ch))
-            ann_chs[i] = ch[...,:3] 
+            ann_chs[i] = cmap(ch)[...,:3]
         img = img.astype('float32') / 255.0
         prepped_img = np.concatenate([img] + ann_chs, axis=1)
         return prepped_img

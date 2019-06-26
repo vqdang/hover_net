@@ -7,6 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
+from .utils import bounding_box
+
 ####
 def random_colors(N, bright=True):
     """
@@ -41,9 +43,16 @@ def visualize_instances(mask, canvas=None, color=None):
     for idx, inst_id in enumerate(insts_list):
         inst_color = color if color is not None else inst_colors[idx]
         inst_map = np.array(mask == inst_id, np.uint8)
-        contours = cv2.findContours(inst_map.copy(), 
-                                cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(canvas, contours[1], -1, inst_color, 2)
+        y1, y2, x1, x2  = bounding_box(inst_map)
+        y1 = y1 - 2 if y1 - 2 >= 0 else y1 
+        x1 = x1 - 2 if x1 - 2 >= 0 else x1 
+        x2 = x2 + 2 if x2 + 2 <= mask.shape[1] - 1 else x2 
+        y2 = y2 + 2 if y2 + 2 <= mask.shape[0] - 1 else y2 
+        inst_map_crop = inst_map[y1:y2, x1:x2]
+        inst_canvas_crop = canvas[y1:y2, x1:x2]
+        contours = cv2.findContours(inst_map_crop, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(inst_canvas_crop, contours[1], -1, inst_color, 2)
+        canvas[y1:y2, x1:x2] = inst_canvas_crop        
     return canvas
 
 ####
