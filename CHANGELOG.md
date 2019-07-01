@@ -19,6 +19,6 @@
 ### Initial release
 
 
-[Unreleased]: https://github.com/jesstelford/version-changelog/compare/v3.1.1...HEAD
-[2.0]: https://github.com/jesstelford/version-changelog/tree/v1.0.0
-[1.0]: https://github.com/jesstelford/version-changelog/tree/v1.0.0
+[Unreleased]: https://github.com/vqdang/hover_net/tree/master
+[2.0]: https://github.com/vqdang/hover_net/tree/master
+[1.0]: https://github.com/vqdang/hover_net/tree/1.0
