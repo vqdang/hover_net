@@ -45,7 +45,7 @@ def rm_n_mkdir(dir_path):
 ####
 def get_files(data_dir_list, data_ext):
     """
-    Given a list of directories containing data with extention 'date_ext',
+    Given a list of directories containing data with extention 'data_ext',
     generate a list of paths for all files within these directories
     """
 
