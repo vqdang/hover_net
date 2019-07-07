@@ -23,7 +23,7 @@ def run_nuclei_type_stat(pred_dir, true_dir, exhaustive=True):
                     --`inst_type`    : Nx1: type of each instance at each index
 
                     `inst_centroid` and `inst_type` must be aligned and each
-                    index must be corresponding to the same instance
+                    index must be associated to the same instance
 
         exhaustive : Flag to indicate whether GT is exhaustively labelled
                      for instance types
