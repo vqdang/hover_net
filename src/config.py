@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorpack import imgaug
 
 from loader.augs import (BinarizeLabel, GaussianBlur, GenInstanceDistance,
-                         GenInstanceXY, MedianBlur, GenInstanceUnetMap,
+                         GenInstanceHV, MedianBlur, GenInstanceUnetMap,
                          GenInstanceContourMap)
 
 #### 
@@ -155,7 +155,7 @@ class Config(object):
         if self.model_type == 'dist':
             label_augs = [GenInstanceDistance(crop_shape=output_shape, inst_norm=False)]
         if self.model_type == 'np_hv':
-            label_augs = [GenInstanceXY(crop_shape=output_shape)]
+            label_augs = [GenInstanceHV(crop_shape=output_shape)]
         if self.model_type == 'np_dist':
             label_augs = [GenInstanceDistance(crop_shape=output_shape, inst_norm=True)]
 
@@ -182,8 +182,8 @@ class Config(object):
             label_augs =[GenInstanceContourMap(crop_shape=output_shape)]
         if self.model_type == 'dist':
             label_augs = [GenInstanceDistance(crop_shape=output_shape, inst_norm=False)]
-        if self.model_type == 'np_xy':
-            label_augs = [GenInstanceXY(crop_shape=output_shape)]
+        if self.model_type == 'np_hv':
+            label_augs = [GenInstanceHV(crop_shape=output_shape)]
         if self.model_type == 'np_dist':
             label_augs = [GenInstanceDistance(crop_shape=output_shape, inst_norm=True)]
         label_augs.append(BinarizeLabel())
