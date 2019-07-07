@@ -49,9 +49,9 @@ class GenInstanceUnetMap(GenInstance):
 
     Perform following operation:
         1) Remove the 1px of boundary of each instance
-           to create illusionary separation between touching instances
-        2) Generate the weightmap from the result of 1)
-           according to the unet paper formula
+           to create separation between touching instances
+        2) Generate the weight map from the result of 1)
+           according to the unet paper equation.
 
     Args:
         wc (dict)        : Dictionary of weight classes.
