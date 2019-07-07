@@ -25,11 +25,11 @@ from metrics.stats_utils import remap_label
 
 # TODO: 
 # * due to the need of running this multiple times, should make 
-# * it less relying on the training config file
+# * it less reliant on the training config file
 
 ## ! WARNING: 
 ## check the prediction channels, wrong ordering will break the code !
-## the prediction channels ordering should match ones produced in augs.py
+## the prediction channels ordering should match the ones produced in augs.py
 
 cfg = Config()
 
