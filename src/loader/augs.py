@@ -140,9 +140,17 @@ class GenInstanceUnetMap(GenInstance):
 
 ####
 class GenInstanceContourMap(GenInstance):
-    # TODO: put the doc on for this
     """
     Input annotation must be of original shape.
+    
+    Perform following operation:
+        1) Dilate each instance by a kernel with 
+           a diameter of 7 pix.
+        2) Erode each instance by a kernel with 
+           a diameter of 7 pix.
+        3) Obtain the contour by subtracting the 
+           eroded instance from the dilated instance.
+    
     """
     def __init__(self, crop_shape=None):
         super(GenInstanceContourMap, self).__init__()
@@ -184,8 +192,13 @@ class GenInstanceContourMap(GenInstance):
 class GenInstanceHV(GenInstance):   
     """
         Input annotation must be of original shape.
+        
         The map is calculated only for instances within the crop portion
-        but basing on the original shape in original image
+        but based on the original shape in original image.
+    
+        Perform following operation:
+        Obtain the horizontal and vertical distance maps for each
+        nuclear instance.
     """
 
     def _augment(self, img, _):
@@ -268,8 +281,15 @@ class GenInstanceHV(GenInstance):
 class GenInstanceDistance(GenInstance):   
     """
     Input annotation must be of original shape.
+    
     The map is calculated only for instances within the crop portion
-    but basing on the original shape in original image
+    but based on the original shape in original image.
+    
+    Perform following operation:
+    Obtain the standard distance map of nuclear pixels to their closest
+    boundary.
+    Can be interpreted as the inverse distance map of nuclear pixels to 
+    the centroid. 
     """
     def __init__(self, crop_shape=None, inst_norm=True):
         super(GenInstanceDistance, self).__init__()
