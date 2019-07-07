@@ -181,7 +181,7 @@ class GenInstanceContourMap(GenInstance):
         return img
 
 ####
-class GenInstanceXY(GenInstance):   
+class GenInstanceHV(GenInstance):   
     """
         Input annotation must be of original shape.
         The map is calculated only for instances within the crop portion
