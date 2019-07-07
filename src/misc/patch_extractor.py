@@ -60,9 +60,9 @@ class PatchExtractor(object):
         Extracted patches without padding, only work in case win_size > step_size
         
         Note: to deal with the remaining portions which are at the boundary a.k.a
-        those which are not fitted when slide left->right, top->bottom), we flip 
+        those which do not fit when slide left->right, top->bottom), we flip 
         the sliding direction then extract 1 patch starting from right / bottom edge. 
-        There will be 1 additional patches extracted at the bottom-right corner
+        There will be 1 additional patch extracted at the bottom-right corner
 
         Args:
             x         : input image, should be of shape HWC
