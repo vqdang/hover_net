@@ -309,7 +309,7 @@ class Model_NP_HV(Model):
             true_h = colorize(true_hv[...,0], vmin=-1, vmax=1, cmap='jet')
             true_v = colorize(true_hv[...,1], vmin=-1, vmax=1, cmap='jet')
 
-            if self.type_classification:
+            if not self.type_classification:
                 viz = tf.concat([orig_imgs, 
                                 pred_h, pred_v, pred_np, 
                                 true_h, true_v, true_np], 2)
