@@ -173,7 +173,7 @@ class Model_NP_HV(Model):
 
             ####
             np_feat = decoder('np', d)
-            np = BNReLU('preact_out_np', np_feat[-1])
+            npx = BNReLU('preact_out_np', np_feat[-1])
 
             hv_feat = decoder('hv', d)
             hv = BNReLU('preact_out_hv', hv_feat[-1])
@@ -188,7 +188,7 @@ class Model_NP_HV(Model):
                 soft_class = tf.nn.softmax(logi_class, axis=-1)
 
             #### Nuclei Pixels (NP)
-            logi_np = Conv2D('conv_out_np', np, 2, 1, use_bias=True, activation=tf.identity)
+            logi_np = Conv2D('conv_out_np', npx, 2, 1, use_bias=True, activation=tf.identity)
             logi_np = tf.transpose(logi_np, [0, 2, 3, 1])
             soft_np = tf.nn.softmax(logi_np, axis=-1)
             prob_np = tf.identity(soft_np[...,1], name='predmap-prob-np')
