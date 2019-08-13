@@ -67,6 +67,10 @@ Cyan: miscellaneous
 * [Micro-Net](https://www.sciencedirect.com/science/article/abs/pii/S1361841518300628)
 * [DIST](https://ieeexplore.ieee.org/document/8438559)
 
+## Getting Started
+
+Install the required libraries before using this code. Please refer to `requirements.txt`
+
 ## Results
 
 All comparative results on the CoNSeP, Kumar and CPM-17 datasets can be found [here](https://drive.google.com/drive/folders/1WTkleeaE6ne8qxuYzptv2bKwMdZVBpzr?usp=sharing). 
