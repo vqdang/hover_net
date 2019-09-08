@@ -8,8 +8,12 @@ import numpy as np
 from misc.patch_extractor import PatchExtractor
 from misc.utils import rm_n_mkdir
 
+from config import Config
+
 ###########################################################################
 if __name__ == '__main__':
+    
+    cfg = Config()
 
     extract_type = 'mirror' # 'valid' for fcn8 segnet etc.
                             # 'mirror' for u-net etc.
@@ -48,15 +52,23 @@ if __name__ == '__main__':
 
         img = cv2.imread(img_dir + basename + img_ext)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) 
-
-        ann = np.load(ann_dir + basename + '.npy')
-        ann = ann.astype('int32')
-
-        # merge class for CoNSeP
-        ann_type = ann[...,1]
-        ann_type[(ann_type == 3) | (ann_type == 4)] = 3
-        ann_type[(ann_type == 5) | (ann_type == 6)] = 4
-        assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
+        
+        if cfg.type_classification:
+            ann_inst = ann[...,0]
+            ann_type = ann[...,1]
+            
+            # merge classes for CoNSeP (in paper we only utilise 3 nuclei classes and background)
+            ann_type[(ann_type == 3) | (ann_type == 4)] = 3
+            ann_type[(ann_type == 5) | (ann_type == 6)] = 4
+            assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
+            
+            ann = np.concatenate([ann_inst, ann_type], axis=-1)
+            ann = ann.astype('int32')
+        
+        else:
+            ann_inst = np.load(ann_dir + basename + '.npy')
+            ann_inst = ann.astype('int32')
+            ann = np.expand_dims(ann_inst, -1)
 
         img = np.concatenate([img, ann], axis=-1)
         sub_patches = xtractor.extract(img, extract_type)
