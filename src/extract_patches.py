@@ -58,6 +58,7 @@ if __name__ == '__main__':
             ann_type = ann[...,1]
             
             # merge classes for CoNSeP (in paper we only utilise 3 nuclei classes and background)
+            # If own dataset is used, then the below may need to be modified
             ann_type[(ann_type == 3) | (ann_type == 4)] = 3
             ann_type[(ann_type == 5) | (ann_type == 6)] = 4
             assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
@@ -66,10 +67,11 @@ if __name__ == '__main__':
             ann = ann.astype('int32')
         
         else:
+            # assumes that ann is WxH; if WxHx2 (class labels available) then extract first channel after loading
             ann_inst = np.load(ann_dir + basename + '.npy')
-            ann_inst = ann.astype('int32')
+            ann_inst = ann_inst.astype('int32')
             ann = np.expand_dims(ann_inst, -1)
-
+       
         img = np.concatenate([img, ann], axis=-1)
         sub_patches = xtractor.extract(img, extract_type)
         for idx, patch in enumerate(sub_patches):
