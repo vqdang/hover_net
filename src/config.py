@@ -19,8 +19,6 @@ class Config(object):
         self.seed = 10 
         mode = 'hover'
         self.model_type = 'np_hv'
-        
-        self.dataset_name = 'consep' # choose from cpm, kumar or consep  
 
         self.type_classification = False
         self.nr_types = 5  # denotes number of classes for nuclear type classification
