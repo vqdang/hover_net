@@ -33,8 +33,6 @@ Download the CoNSeP dataset as used in our paper from [this link](https://warwic
 
 If any part of this code is used, please give appropriate citation to our paper: <br />
 
-**Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Ayesha Azam, Yee Wah Tsang, Jin Tae Kwak, and Nasir Rajpoot. "HoVer-Net: Simultaneous Segmentation and Classification of Nuclei in Multi-Tissue Histology Images." arXiv preprint arXiv:1812.06499v4 (2019).** <br />
-
 BibTex entry: <br />
 ```
 @article{graham2019hover,
