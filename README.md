@@ -31,7 +31,7 @@ Download the CoNSeP dataset as used in our paper from [this link](https://warwic
 
 ## Citation
 
-If any part of this code is used, please give appropriate citation to our paper: <br />
+If any part of this code is used, please give appropriate citation to our paper. <br />
 
 BibTex entry: <br />
 ```
