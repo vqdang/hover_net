@@ -8,7 +8,7 @@ This is an extended version of our previous work: XY-Net. <br />
 
 ## Dataset
 
-Download the CoNSeP dataset as used in our paper from [this link].(https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/)
+Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/).
 
 ## Repository Structure
 
