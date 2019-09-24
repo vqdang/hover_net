@@ -4,11 +4,11 @@ A multiple branch network that performs nuclear instance segmentation and classi
 
 This is an extended version of our previous work: XY-Net. <br />
 
-[Link to paper](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub)
+[Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. 
 
 ## Dataset
 
-Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/)
+Download the CoNSeP dataset as used in our paper from [this link].(https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/)
 
 ## Repository Structure
 
