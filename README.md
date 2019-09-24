@@ -4,7 +4,11 @@ A multiple branch network that performs nuclear instance segmentation and classi
 
 This is an extended version of our previous work: XY-Net. <br />
 
-[Link to paper](https://arxiv.org/abs/1812.06499v4)
+[Link to paper](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub)
+
+## Dataset
+
+Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/)
 
 ## Repository Structure
 
@@ -34,10 +38,12 @@ If any part of this code is used, please give appropriate citation to our paper:
 BibTex entry: <br />
 ```
 @article{graham2019hover,
-  title={HoVer-Net: Simultaneous Segmentation and Classification of Nuclei in Multi-Tissue Histology Images},
-  author={Simon Graham, Quoc Dang Vu, Shan E Ahmed Raza, Ayesha Azam, Yee Wah Tsang, Jin Tae Kwak, Nasir Rajpoot},
-  journal={arXiv preprint arXiv:1812.06499v4},
-  year={2019}
+  title={Hover-net: Simultaneous segmentation and classification of nuclei in multi-tissue histology images},
+  author={Graham, Simon and Vu, Quoc Dang and Raza, Shan E Ahmed and Azam, Ayesha and Tsang, Yee Wah and Kwak, Jin Tae and Rajpoot, Nasir},
+  journal={Medical Image Analysis},
+  pages={101563},
+  year={2019},
+  publisher={Elsevier}
 }
 ```
 
