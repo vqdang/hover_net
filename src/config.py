@@ -20,7 +20,8 @@ class Config(object):
         mode = 'hover'
         self.model_type = 'np_hv'
 
-        self.type_classification = False
+        self.type_classification = False # whether to predict the nuclear type
+        # ! must use CoNSeP dataset, where nuclear type labels are available
         self.nr_types = 5  # denotes number of classes for nuclear type classification
         # ! some semantic segmentation network like micronet,
         # ! nr_types will replace nr_classes if type_classification=True
