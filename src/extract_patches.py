@@ -54,6 +54,7 @@ if __name__ == '__main__':
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) 
         
         if cfg.type_classification:
+            ann = np.load(ann_dir + basename + '.npy')
             ann_inst = ann[...,0]
             ann_type = ann[...,1]
             
@@ -61,10 +62,10 @@ if __name__ == '__main__':
             # If own dataset is used, then the below may need to be modified
             ann_type[(ann_type == 3) | (ann_type == 4)] = 3
             ann_type[(ann_type == 5) | (ann_type == 6)] = 4
-            assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
             
             ann = np.concatenate([ann_inst, ann_type], axis=-1)
             ann = ann.astype('int32')
+            assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
         
         else:
             # assumes that ann is WxH; if WxHx2 (class labels available) then extract first channel after loading
