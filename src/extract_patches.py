@@ -54,6 +54,7 @@ if __name__ == '__main__':
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) 
         
         if cfg.type_classification:
+            # assumes that ann is HxWx2 (nuclei class labels are available at index 1 of C) 
             ann = np.load(ann_dir + basename + '.npy')
             ann_inst = ann[...,0]
             ann_type = ann[...,1]
@@ -70,7 +71,7 @@ if __name__ == '__main__':
             ann = np.dstack([ann_inst, ann_type])
             ann = ann.astype('int32')             
         else:
-            # assumes that ann is WxH; if WxHx2 (class labels available) then extract first channel after loading
+            # assumes that ann is HxW
             ann_inst = np.load(ann_dir + basename + '.npy')
             ann_inst = ann_inst.astype('int32')
             ann = np.expand_dims(ann_inst, -1)
