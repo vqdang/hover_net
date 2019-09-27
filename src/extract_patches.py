@@ -63,8 +63,9 @@ if __name__ == '__main__':
             ann_type[(ann_type == 3) | (ann_type == 4)] = 3
             ann_type[(ann_type == 5) | (ann_type == 6)] = 4
             
-            ann = np.concatenate([ann_inst, ann_type], axis=-1)
+            ann = np.dstack([ann_inst, ann_type])
             ann = ann.astype('int32')
+            
             assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
         
         else:
