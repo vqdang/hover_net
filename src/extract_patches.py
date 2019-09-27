@@ -24,8 +24,8 @@ if __name__ == '__main__':
     # 536x536 - 268x268 - 84x84   unet, dist
     # 540x540 - 270x270 - 80x80   xy, hover
     # 504x504 - 252x252 - 252x252 micronet
-    step_size = [252, 252] # should match self.train_mask_shape (config.py) 
-    win_size  = [504, 504] # should be at least twice time larger than 
+    step_size = [80, 80] # should match self.train_mask_shape (config.py) 
+    win_size  = [540, 540] # should be at least twice time larger than 
                            # self.train_base_shape (config.py) to reduce 
                            # the padding effect during augmentation
 
