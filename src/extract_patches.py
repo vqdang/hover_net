@@ -62,12 +62,13 @@ if __name__ == '__main__':
             # If own dataset is used, then the below may need to be modified
             ann_type[(ann_type == 3) | (ann_type == 4)] = 3
             ann_type[(ann_type == 5) | (ann_type == 6) | (ann_type == 7)] = 4
-            
+
+            assert np.max(ann_type) <= cfg.nr_types-1, \
+                            "Only %d types of nuclei are defined for training"\
+                            "but there are %d types found in the input image." % (cfg.nr_types, np.max(ann_type)) 
+
             ann = np.dstack([ann_inst, ann_type])
-            ann = ann.astype('int32')
-            
-            assert np.max(ann[...,1]) <= 4, np.max(ann[...,1])
-        
+            ann = ann.astype('int32')             
         else:
             # assumes that ann is WxH; if WxHx2 (class labels available) then extract first channel after loading
             ann_inst = np.load(ann_dir + basename + '.npy')
