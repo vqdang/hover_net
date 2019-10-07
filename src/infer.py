@@ -150,25 +150,24 @@ class Inferer(Config):
             output_names = self.eval_inf_output_tensor_names)
         predictor = OfflinePredictor(pred_config)
 
-        for data_dir in self.inf_data_list:
-            save_dir = self.inf_output_dir
-            file_list = glob.glob('%s/*%s' % (data_dir, self.inf_imgs_ext))
-            file_list.sort() # ensure same order
+        save_dir = self.inf_output_dir
+        file_list = glob.glob('%s/*%s' % (self.inf_data_dir, self.inf_imgs_ext))
+        file_list.sort() # ensure same order
 
-            rm_n_mkdir(save_dir)       
-            for filename in file_list:
-                filename = os.path.basename(filename)
-                basename = filename.split('.')[0]
-                print(data_dir, basename, end=' ', flush=True)
+        rm_n_mkdir(save_dir)       
+        for filename in file_list:
+            filename = os.path.basename(filename)
+            basename = filename.split('.')[0]
+            print(data_dir, basename, end=' ', flush=True)
 
-                ##
-                img = cv2.imread(data_dir + filename)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                    
-                ##
-                pred_map = self.__gen_prediction(img, predictor)
-                sio.savemat('%s/%s.mat' % (save_dir, basename), {'result':[pred_map]})
-                print('FINISH')
+            ##
+            img = cv2.imread(data_dir + filename)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+            ##
+            pred_map = self.__gen_prediction(img, predictor)
+            sio.savemat('%s/%s.mat' % (save_dir, basename), {'result':[pred_map]})
+            print('FINISH')
 
 ####
 if __name__ == '__main__':
