@@ -85,11 +85,8 @@ class Config(object):
         # while [Nuclei Pixels][Additional] will be used for extracting instances
 
         self.inf_imgs_ext = '.png'
-        # comma separated list of directories can be used for inf_data_list
-        self.inf_data_list = [
-            ['../../../data/CoNSeP/test/Images/'],
-        ]
-        self.inf_output_dir    = 'output/%s/%s/' % (exp_id, model_id)
+        self.inf_data_dir = '../../../data/CoNSeP/test/Images/'
+        self.inf_output_dir = 'output/%s/%s/' % (exp_id, model_id)
 
         # for inference during evalutaion mode i.e run by infer.py
         self.eval_inf_input_tensor_names = ['images']
