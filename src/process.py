@@ -53,7 +53,7 @@ for filename in file_list:
     print(pred_dir, basename, end=' ', flush=True)
 
     ##
-    img = cv2.imread(self.inf_data_dir + basename + cfg.inf_imgs_ext)
+    img = cv2.imread(cfg.inf_data_dir + basename + cfg.inf_imgs_ext)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
     pred = sio.loadmat('%s/%s.mat' % (pred_dir, basename))
