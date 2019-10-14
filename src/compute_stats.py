@@ -204,7 +204,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.mode == 'instance':
-        run_nuclei_inst_stat(args.true_dir, args.pred_dir)
+        run_nuclei_inst_stat(args.pred_dir, args.true_dir)
     if args.mode == 'type':
-        run_nuclei_type_stat(args.true_dir, args.pred_dir)
+        run_nuclei_type_stat(args.pred_dir, args.true_dir)
 
