@@ -85,7 +85,7 @@ class Graph(ModelDesc, Config):
             ch = main_in.get_shape().as_list()[1] # NCHW
             with tf.variable_scope(name): # preserve the depth
                 a = Conv2DTranspose('up', main_in, ch, up_kernel, strides=up_strides, padding='same', use_bias=True, activation=tf.identity)
-                a = Conv2D('conv', a, self.nr_classes, 3, padding='valid', activation=tf.nn.relu)
+                a = Conv2D('conv', a, self.nr_types if self.type_classification else self.nr_classes, 3, padding='valid', activation=tf.nn.relu)
                 a = tf.layers.dropout(a, rate=0.5, seed=5, training=is_training)
             return a
 
