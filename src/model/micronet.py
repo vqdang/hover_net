@@ -53,7 +53,7 @@ class Graph(ModelDesc, Config):
             true = truemap_coded[...,0]            
         true = tf.cast(true, tf.int32)
         true = tf.identity(true, name='truemap')
-        one  = tf.one_hot(true, self.nr_classes, axis=-1)
+        one  = tf.one_hot(true, self.nr_types if self.type_classification else self.nr_classes, axis=-1)
         true = tf.expand_dims(true, axis=-1)
 
         def down_branch(name, main_in, aux_in, ch):
