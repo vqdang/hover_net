@@ -58,12 +58,8 @@ class StatCollector(Inferencer, Config):
 
         if self.type_classification: 
          
-            if self.model_type == 'np_hv':
-                pred_type = pred[...,:self.nr_types]
-                pred_inst = pred[...,self.nr_types:]
-            else: # semantic model where nr_type == nr_class
-                pred_type = pred[...,:self.nr_classes]
-                pred_inst = pred[...,self.nr_classes:]
+            pred_type = pred[...,:self.nr_types]
+            pred_inst = pred[...,self.nr_types:]
 
             true_inst = true
             true_type = true[...,1]
