@@ -142,7 +142,7 @@ class Model_NP_HV(Model):
             true_type = truemap_coded[...,1]
             true_type = tf.cast(true_type, tf.int32)
             true_type = tf.identity(true_type, name='truemap-type')
-            one_type  = tf.one_hot(true_type, 5, axis=-1)
+            one_type  = tf.one_hot(true_type, self.nr_types, axis=-1)
             true_type = tf.expand_dims(true_type, axis=-1)
 
             true_np = tf.cast(true_type > 0, tf.int32) # ? sanity this
@@ -183,7 +183,7 @@ class Model_NP_HV(Model):
                 tp = BNReLU('preact_out_tp', tp_feat[-1])
 
                 # Nuclei Type Pixels (TP)
-                logi_class = Conv2D('conv_out_tp', tp, 5, 1, use_bias=True, activation=tf.identity)
+                logi_class = Conv2D('conv_out_tp', tp, self.nr_types, 1, use_bias=True, activation=tf.identity)
                 logi_class = tf.transpose(logi_class, [0, 2, 3, 1])
                 soft_class = tf.nn.softmax(logi_class, axis=-1)
 
@@ -315,7 +315,7 @@ class Model_NP_HV(Model):
                                 true_h, true_v, true_np], 2)
             else:
                 pred_type = tf.transpose(soft_class, (0, 1, 3, 2))
-                pred_type = tf.reshape(pred_type, [-1, 80, 80 * 5])
+                pred_type = tf.reshape(pred_type, [-1, 80, 80 * self.nr_types])
                 true_type = tf.cast(true_type[...,0] / self.nr_classes, tf.float32)
                 true_type = colorize(true_type, vmin=0, vmax=1, cmap='jet')
                 pred_type = colorize(pred_type, vmin=0, vmax=1, cmap='jet')
