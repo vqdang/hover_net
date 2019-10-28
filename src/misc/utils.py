@@ -51,8 +51,9 @@ def get_files(data_dir_list, data_ext):
 
     data_files = []
     for sub_dir in data_dir_list:
-        files = glob.glob(sub_dir + '/*'+ data_ext)
-        data_files.extend(files)
+        files_list = glob.glob(sub_dir + '/*'+ data_ext)
+        files_list.sort() # ensure same order
+        data_files.extend(files_list)
 
     return data_files
 
