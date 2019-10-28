@@ -60,8 +60,8 @@ for filename in file_list:
     pred = np.squeeze(pred['result'])
 
     if hasattr(cfg, 'type_classification') and cfg.type_classification:
-        pred_inst = pred[...,5:]
-        pred_type = pred[...,:5]
+        pred_inst = pred[...,cfg.nr_types:]
+        pred_type = pred[...,:cfg.nr_types]
 
         pred_inst = np.squeeze(pred_inst)
         pred_type = np.argmax(pred_type, axis=-1)
