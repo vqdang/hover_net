@@ -47,7 +47,7 @@ def run_nuclei_type_stat(pred_dir, true_dir, exhaustive=True):
         true_inst_type = (true_info['inst_type']).astype('int32')
 
         if true_centroid.shape[0] != 0:
-                true_inst_type = true_inst_type[:,0]                
+            true_inst_type = true_inst_type[:,0]                
         else: # no instance at all
             true_centroid = np.array([[0, 0]])
             true_inst_type = np.array([0])
