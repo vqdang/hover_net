@@ -56,13 +56,15 @@ class StatCollector(Inferencer, Config):
         # have to get total number pixels for mean per pixel
         nr_pixels = np.size(true[...,:1])
 
-        if self.type_classification:            
-            pred_type = pred[...,:self.nr_classes]
-            pred_inst = pred[...,self.nr_classes:]
+        if self.type_classification: 
+         
+            pred_type = pred[...,:self.nr_types]
+            pred_inst = pred[...,self.nr_types:]
 
             true_inst = true
             true_type = true[...,1]
             true_np = (true_type > 0).astype('int32')
+           
         else:
             pred_inst = pred
             true_inst = true

@@ -31,15 +31,13 @@ if __name__ == '__main__':
 
     xtractor = PatchExtractor(win_size, step_size)
 
-    ###
+    ### Paths to data - these need to be modified according to where the original data is stored
     img_ext = '.png'
-    data_mode = 'valid'
-    img_dir = '../../../data/NUC_UHCW/No_SN/%s/' % data_mode 
-    ann_dir = '../../../data/NUC_UHCW/Labels_class/' 
+    img_dir = '../../../data/CoNSeP/train/Images/'
+    ann_dir = '../../../data/CoNSeP/train/Labels/' 
     ####
-    out_root_path = "../../../train/UHCW/%dx%d_%dx%d" % \
+    out_dir = "../../../CoNSeP/train/%dx%d_%dx%d" % \
                         (win_size[0], win_size[1], step_size[0], step_size[1])
-    out_dir = "%s/%s/%s/" % (out_root_path, data_mode, 'XXXX')
 
     file_list = glob.glob('%s/*%s' % (img_dir, img_ext))
     file_list.sort() 

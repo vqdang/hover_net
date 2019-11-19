@@ -41,7 +41,7 @@ def visualize_instances(mask, canvas=None, color=None):
     inst_colors = np.array(inst_colors) * 255
 
     for idx, inst_id in enumerate(insts_list):
-        inst_color = color if color is not None else inst_colors[idx]
+        inst_color = color[idx] if color is not None else inst_colors[idx]
         inst_map = np.array(mask == inst_id, np.uint8)
         y1, y2, x1, x2  = bounding_box(inst_map)
         y1 = y1 - 2 if y1 - 2 >= 0 else y1 

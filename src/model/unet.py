@@ -50,7 +50,7 @@ class Graph(ModelDesc, Config):
             true = truemap_coded[...,0]            
         true = tf.cast(true, tf.int32)
         true = tf.identity(true, name='truemap')
-        one  = tf.one_hot(true, self.nr_classes, axis=-1)
+        one  = tf.one_hot(true, self.nr_types if self.type_classification else self.nr_classes, axis=-1)
         true = tf.expand_dims(true, axis=-1)
 
         def encoder_blk(name, feat_in, num_feats, has_down=False):
@@ -133,7 +133,7 @@ class Graph(ModelDesc, Config):
             orig_imgs = crop_op(orig_imgs, (184, 184), "channels_last")
             tf.summary.image('input', orig_imgs, max_outputs=1)
     
-            pred = colorize(prob[...,0], cmap='jet')
+            pred = colorize(prob_np[...,0], cmap='jet')
             true = colorize(true[...,0], cmap='jet')
             pen_map = colorize(pen_map, cmap='jet')
 

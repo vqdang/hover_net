@@ -20,7 +20,7 @@ class Config(object):
         mode = 'hover'
         self.model_type = 'np_hv'
 
-        self.type_classification = False # whether to predict the nuclear type
+        self.type_classification = True # whether to predict the nuclear type
         # ! must use CoNSeP dataset, where nuclear type labels are available
         self.nr_types = 5  # denotes number of classes for nuclear type classification
         # ! some semantic segmentation network like micronet,
@@ -56,28 +56,27 @@ class Config(object):
         }
 
         self.data_ext = '.npy' 
-        # list of directories containing validation patches
-        self.train_dir = ['../../../train/Kumar_old_GT/%s/train/XXXX/'      % data_code_dict[self.model_type]]
-        self.valid_dir = ['../../../train/Kumar_old_GT/%s/valid_same/XXXX/' % data_code_dict[self.model_type], 
-                          '../../../train/Kumar_old_GT/%s/valid_diff/XXXX/' % data_code_dict[self.model_type]]
+        # list of directories containing validation patches. 
+        # For both train and valid directories, a comma separated list of directories can be used
+        self.train_dir = ['../../../CoNSeP/train/%s/'  % data_code_dict[self.model_type]]
+        self.valid_dir = ['../../../CoNSeP/valid/%s/' % data_code_dict[self.model_type]]
 
-        # nr of processes for parallel processing input
+        # number of processes for parallel processing input
         self.nr_procs_train = 8 
         self.nr_procs_valid = 4 
 
         self.input_norm  = True # normalize RGB to 0-1 range
 
         ####
-        #
-        exp_id = 'v1.0.0.1/UHCW/No_SN/'
+        exp_id = 'v1.0/'
         model_id = '%s' % self.model_type
         self.model_name = '%s/%s' % (exp_id, model_id)
         # loading chkpts in tensorflow, the path must not contain extra '/'
-        self.log_path = '/media/vqdang/Data_2/dang/output/NUC-SEG/collab/' # log root path
+        self.log_path = '/media/vqdang/logs/' # log root path - modify according to needs
         self.save_dir = '%s/%s' % (self.log_path, self.model_name) # log file destination
 
         #### Info for running inference
-        self.inf_auto_find_chkpt = True
+        self.inf_auto_find_chkpt = True 
         # path to checkpoints will be used for inference, replace accordingly
         self.inf_model_path  = self.save_dir + '/model-19640.index'
 
@@ -85,16 +84,11 @@ class Config(object):
         # where [Nuclei Type] will be used for getting the type of each instance
         # while [Nuclei Pixels][Additional] will be used for extracting instances
 
-        # TODO: encode the file extension for each folder?
-        # list of [[root_dir1, codeX, subdirA, subdirB], [root_dir2, codeY, subdirC, subdirD] etc.]
-        # code is used together with 'inf_output_dir' to make output dir for each set
-        self.inf_imgs_ext = '.tif'
-        self.inf_data_list = [
-            ['../../../data/NUC_Kumar/train-set/orig_split/', 'XXXX', 'valid_diff'],
-        ]
-        self.inf_output_dir    = 'output/%s/%s/' % (exp_id, model_id)
+        self.inf_imgs_ext = '.png'
+        self.inf_data_dir = '../../../data/CoNSeP/test/Images/'
+        self.inf_output_dir = 'output/%s/%s/' % (exp_id, model_id)
 
-        # for inference during evalutaion mode i.e run by inferer.py
+        # for inference during evalutaion mode i.e run by infer.py
         self.eval_inf_input_tensor_names = ['images']
         self.eval_inf_output_tensor_names = ['predmap-coded']
         # for inference during training mode i.e run by trainer.py

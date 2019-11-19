@@ -76,7 +76,7 @@ class Graph(ModelDesc, Config):
             true_type = truemap_coded[...,1]
             true_type = tf.cast(true_type, tf.int32)
             true_type = tf.identity(true_type, name='truemap-type')
-            one_type  = tf.one_hot(true_type, 5, axis=-1)
+            one_type  = tf.one_hot(true_type, self.nr_types, axis=-1)
             true_type = tf.expand_dims(true_type, axis=-1)
 
         true_dst = truemap_coded[...,-1]
@@ -116,7 +116,7 @@ class Graph(ModelDesc, Config):
             pred_dst = tf.identity(logi_dst, name='predmap-dst')
 
             if self.type_classification:
-                logi_type = Conv2D('conv_out_type', d0, 5, 1, activation=tf.identity)
+                logi_type = Conv2D('conv_out_type', d0, self.nr_types, 1, activation=tf.identity)
                 logi_type = tf.transpose(logi_type, [0, 2, 3, 1])
                 soft_type = tf.nn.softmax(logi_type, axis=-1)
                 # encoded so that inference can extract all output at once

@@ -26,7 +26,7 @@ Download the CoNSeP dataset as used in our paper from [this link](https://warwic
 
 ## HoVer-Net
 
-![](network.png)
+![](diagram.png)
 
 
 ## Citation
