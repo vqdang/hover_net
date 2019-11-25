@@ -220,6 +220,8 @@ class GenInstanceHV(GenInstance):
             inst_box = bounding_box(inst_map)
 
             # expand the box by 2px
+            # Because we first pad the ann at line 207, the bboxes
+            # will remain valid after expansion
             inst_box[0] -= 2
             inst_box[2] -= 2
             inst_box[1] += 2
