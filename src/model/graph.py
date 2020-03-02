@@ -209,7 +209,18 @@ class Model_NP_HV(Model):
         ####
         def get_gradient_hv(l, h_ch, v_ch):
             """
-            Central difference to approximate the gradient by using Sobel kernel of size 5x5
+            Calculate the horizontal partial differentiation for horizontal channel
+            and the vertical partial differentiation for vertical channel.
+
+            The partial differentiation is approximated by calculating the central differnce
+            which is obtained by using Sobel kernel of size 5x5. The boundary is zero-padded
+            when channel is convolved with the Sobel kernel.
+
+            Args:
+                l (tensor): tensor of shape NHWC with C should be 2 (1 channel for horizonal 
+                            and 1 channel for vertical)
+                h_ch(int) : index within C axis of `l` that corresponds to horizontal channel
+                v_ch(int) : index within C axis of `l` that corresponds to vertical channel
             """
             def get_sobel_kernel(size):
                 assert size % 2 == 1, 'Must be odd, get size=%d' % size
