@@ -183,7 +183,7 @@ class Trainer(Config):
         model = self.get_model()(**model_flags)
         ######
         callbacks=[
-                ModelSaver(max_to_keep=20), # TODO dynamic this
+                ModelSaver(max_to_keep=opt['nr_epochs']),
         ]
 
         for param_name, param_info in opt['manual_parameters'].items():
