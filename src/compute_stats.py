@@ -10,7 +10,7 @@ import pandas as pd
 
 from metrics.stats_utils import *
 
-def run_nuclei_type_stat(pred_dir, true_dir, exhaustive=True):
+def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True):
     """
     GT must be exhaustively annotated for instance location (detection)
 
@@ -24,6 +24,9 @@ def run_nuclei_type_stat(pred_dir, true_dir, exhaustive=True):
 
                     `inst_centroid` and `inst_type` must be aligned and each
                     index must be associated to the same instance
+
+        type_uid_list : list of id for nuclei type which the score should be calculated.
+                        Default to `None` means available nuclei type in GT.
 
         exhaustive : Flag to indicate whether GT is exhaustively labelled
                      for instance types
@@ -141,12 +144,18 @@ def run_nuclei_type_stat(pred_dir, true_dir, exhaustive=True):
     f1_d = 2 * tp_d / (2 * tp_d + w[0] * fp_d + w[1] * fn_d)
 
     w = [2, 2, 1, 1]
-    f1_type_1 = _f1_type(paired_true_type, paired_pred_type, unpaired_pred_type, unpaired_true_type, 1, w)
-    f1_type_2 = _f1_type(paired_true_type, paired_pred_type, unpaired_pred_type, unpaired_true_type, 2, w)
-    f1_type_3 = _f1_type(paired_true_type, paired_pred_type, unpaired_pred_type, unpaired_true_type, 3, w)
-    f1_type_4 = _f1_type(paired_true_type, paired_pred_type, unpaired_pred_type, unpaired_true_type, 4, w)
-    results = [f1_d, acc_type, f1_type_1, f1_type_2, f1_type_3, f1_type_4]
-    print(np.array(results))
+    
+    if type_uid_list is None:
+        type_uid_list = np.unique(true_inst_type_all).tolist()
+
+    results_list = [f1_d, acc_type]
+    for type_uid in type_uid_list:
+        f1_type = _f1_type(paired_true_type, paired_pred_type, 
+                        unpaired_pred_type, unpaired_true_type, type_uid, w)
+        results_list.append(f1_type)
+
+    np.set_printoptions(formatter={'float': '{: 0.5f}'.format})
+    print(np.array(results_list))
     return
 
 def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
@@ -188,6 +197,7 @@ def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
     ####
     metrics = np.array(metrics)
     metrics_avg = np.mean(metrics, axis=-1)
+    np.set_printoptions(formatter={'float': '{: 0.5f}'.format})
     print(metrics_avg)
     metrics_avg = list(metrics_avg)
     return metrics
