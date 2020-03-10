@@ -119,11 +119,13 @@ class StatCollector(Inferencer, Config):
 
         if self.type_classification:
             pred_type = np.argmax(pred_type, axis=-1)
-            # ! either automate this or set the nuclei type name by hand
-            stat_dict[self.prefix + '_dice_msc'] = _dice(true_type, pred_type, 1)
-            stat_dict[self.prefix + '_dice_inf'] = _dice(true_type, pred_type, 2)
-            stat_dict[self.prefix + '_dice_epi'] = _dice(true_type, pred_type, 3)
-            stat_dict[self.prefix + '_dice_fib'] = _dice(true_type, pred_type, 4)
+
+            type_dict = self.nuclei_type_dict
+            type_dice_list = []
+            for type_name, type_id in type_dict.items():
+                dice_val = _dice(true_type, pred_type, type_id)
+                type_dice_list.append(dice_val)
+                stat_dict['%s_dice_%s' % (self.prefix, type_name)] = dice_val
 
         return stat_dict
 ####

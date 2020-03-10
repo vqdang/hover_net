@@ -290,11 +290,10 @@ class Model_NP_HV(Model):
                 add_moving_summary(term_loss)
                 loss = loss + term_loss
 
-                term_loss = dice_loss(soft_class[...,0], one_type[...,0]) \
-                          + dice_loss(soft_class[...,1], one_type[...,1]) \
-                          + dice_loss(soft_class[...,2], one_type[...,2]) \
-                          + dice_loss(soft_class[...,3], one_type[...,3]) \
-                          + dice_loss(soft_class[...,4], one_type[...,4]) 
+                term_loss = 0
+                for type_id in range(self.nr_types):
+                    term_loss += dice_loss(soft_class[...,type_id], 
+                                           one_type[...,type_id])
                 term_loss = tf.identity(term_loss, name='loss-dice-class')
                 add_moving_summary(term_loss)
                 loss = loss + term_loss

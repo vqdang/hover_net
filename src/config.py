@@ -22,10 +22,23 @@ class Config(object):
 
         self.type_classification = True # whether to predict the nuclear type
         # ! must use CoNSeP dataset, where nuclear type labels are available
-        self.nr_types = 5  # denotes number of classes for nuclear type classification
+        # denotes number of classes for nuclear type classification, 
+        # plus the background class
+        self.nr_types = 5
         # ! some semantic segmentation network like micronet,
         # ! nr_types will replace nr_classes if type_classification=True
         self.nr_classes = 2 # Nuclei Pixels vs Background
+
+        # define your nuclei type name here, please ensure it contains
+        # same the amount as defined in `self.nr_types` . ID 0 is preserved
+        # for background so please don't use it as ID
+        self.nuclei_type_dict = {
+            'Miscellaneous': 1, # ! Please ensure the matching ID is unique
+            'Inflammatory' : 2,
+            'Epithelial'   : 3,
+            'Spindle'      : 4,
+        }
+        assert len(self.nuclei_type_dict.values()) == self.nr_types - 1
 
         #### Dynamically setting the config file into variable
         if mode == 'hover':
