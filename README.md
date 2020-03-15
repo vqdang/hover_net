@@ -2,7 +2,7 @@
 
 A multiple branch network that performs nuclear instance segmentation and classification within a single network. The network leverages the horizontal and vertical distances of nuclear pixels to their centres of mass to separate clustered cells. A dedicated up-sampling branch is used to classify the nuclear type for each segmented instance. <br />
 
-This is an extended version of our previous work: XY-Net. <br />
+This is an extended version of our previous work: XY-Net.  <br />
 
 [Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. 
 
