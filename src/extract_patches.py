@@ -53,9 +53,9 @@ if __name__ == '__main__':
         
         if cfg.type_classification:
             # assumes that ann is HxWx2 (nuclei class labels are available at index 1 of C) 
-            ann = np.load(ann_dir + basename + '.npy')
-            ann_inst = ann[...,0]
-            ann_type = ann[...,1]
+            ann = sio.loadmat(ann_dir + basename + '.mat')
+            ann_inst = ann['inst_map']
+            ann_type = ann['class_map']
             
             # merge classes for CoNSeP (in paper we only utilise 3 nuclei classes and background)
             # If own dataset is used, then the below may need to be modified
@@ -70,8 +70,8 @@ if __name__ == '__main__':
             ann = ann.astype('int32')             
         else:
             # assumes that ann is HxW
-            ann_inst = np.load(ann_dir + basename + '.npy')
-            ann_inst = ann_inst.astype('int32')
+            ann_inst = np.load(ann_dir + basename + '.mat')
+            ann_inst = (ann_inst['inst_map']).astype('int32')
             ann = np.expand_dims(ann_inst, -1)
        
         img = np.concatenate([img, ann], axis=-1)

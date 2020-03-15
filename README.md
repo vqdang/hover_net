@@ -8,7 +8,10 @@ This is an extended version of our previous work: XY-Net. <br />
 
 ## Dataset
 
-Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/).
+Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/). <br />
+Download the Kumar, CPM-15, CPM-17 and TNBC datsets from [this link](https://drive.google.com/open?id=1l55cv3DuY-f7-JotDN7N5nbNnjbLWchK).  <br />
+
+Ground truth files are in `.mat` format, refer to the README included with the datasets for further information. 
 
 ## Repository Structure
 
