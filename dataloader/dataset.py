@@ -11,18 +11,18 @@ class Kumar(object):
         self.desc = {
             'train'      : 
                 {
-                    'img' : ('.tif', 'dataset/NUC_HE_Kumar/train-set/orig_split/train/'),
-                    'ann' : ('.npy', 'dataset/NUC_HE_Kumar/train-set/anns_proc/imgs_all/')
+                    'img' : ('.tif', '../../../dataset/NUC_HE_Kumar/train-set/orig_split/train/'),
+                    'ann' : ('.npy', '../../../dataset/NUC_HE_Kumar/train-set/anns_proc/imgs_all/')
                 },
             'valid_same' : 
                 {
-                    'img' : ('.tif', 'dataset/NUC_HE_Kumar/train-set/orig_split/valid_same/'),
-                    'ann' : ('.npy', 'dataset/NUC_HE_Kumar/train-set/anns_proc/imgs_all/')
+                    'img' : ('.tif', '../../../dataset/NUC_HE_Kumar/train-set/orig_split/valid_same/'),
+                    'ann' : ('.npy', '../../../dataset/NUC_HE_Kumar/train-set/anns_proc/imgs_all/')
                 },
             'valid_diff' :
                 {
-                    'img' : ('.tif', 'dataset/NUC_HE_Kumar/train-set/orig_split/valid_diff/'),
-                    'ann' : ('.npy', 'dataset/NUC_HE_Kumar/train-set/anns_proc/imgs_all/')
+                    'img' : ('.tif', '../../../dataset/NUC_HE_Kumar/train-set/orig_split/valid_diff/'),
+                    'ann' : ('.npy', '../../../dataset/NUC_HE_Kumar/train-set/anns_proc/imgs_all/')
                 },
         }
 

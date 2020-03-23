@@ -1,27 +1,31 @@
-
+import matplotlib.pyplot as plt
+# * For visualizing thingy
+import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .utils import *
+from misc.utils import center_pad_to_shape
+from .utils import crop_to_shape, dice_loss, mse_loss, msge_loss, xentropy_loss
 
 ####
-def train_step(batch, run_info):
+def train_step(batch_data, run_info):
     # TODO: synchronize the attach protocol
     # use 'ema' to add for EMA calculation, must be scalar!
     result_dict = {'EMA' : {}} 
-
-    track_value = lambda name, value: result_dict['EMA'].update(name, value)
+    track_value = lambda name, value: result_dict['EMA'].update({name: value})
 
     ####
-    batch_data, batch_label = batch
-    batch_label = batch_label if len(batch_data) != 1 else batch_label[None]
-    
-    batch_data  = batch_data.float().to('cuda') # to NCHW
-    batch_data = batch_data.permute(0, 3, 1, 2)
+    imgs = batch_data['img']
+    true_np = batch_data['np_map']
+    true_hv = batch_data['hv_map']
+   
+    imgs = imgs.float().to('cuda') # to NCHW
+    imgs = imgs.permute(0, 3, 1, 2)
 
-    batch_label = batch_label.to('cuda')
-    true_np = batch_label[...,0]
-    true_hv = batch_label[...,1:2]
+    # HWC
+    true_np = torch.squeeze(true_np.long().to('cuda'))
+    true_hv = torch.squeeze(true_hv.float().to('cuda'))
+
     # true_tp = batch_label[...,2:]
 
     ####
@@ -31,7 +35,8 @@ def train_step(batch, run_info):
     model.train() 
     model.zero_grad() # not rnn so not accumulate
 
-    output_dict = model(batch_data)
+    output_dict = model(imgs)
+    output_dict = {k : v.permute(0, 2, 3 ,1) for k, v in output_dict.items()}
 
     pred_np = output_dict['np'] # should be logit value, not softmax output
     pred_hv = output_dict['hv']
@@ -42,68 +47,93 @@ def train_step(batch, run_info):
 
     # TODO: adding loss weighting mechanism
     # * For Nulcei vs Background Segmentation 
-    term_loss = F.cross_entropy(pred_np, true_np, reduction='mean')
-    track_value('loss_xentropy_np', term_loss)
+    # NP branch
+
+    # pred must be NCHW
+    term_loss = xentropy_loss(pred_np, true_np, reduction='mean')
+    track_value('np_xentropy_loss', term_loss.cpu().item())
     loss += term_loss
 
-    term_loss = dice_loss(pred_np[...,0], true_np[...,0]) \
-              + dice_loss(pred_np[...,1], true_np[...,1])
-    track_value('loss_dice_np', term_loss)
+    true_np_onehot = F.one_hot(true_np) # need to dynamic for type later
+    term_loss = dice_loss(prob_np[...,0], true_np_onehot[...,0]) \
+              + dice_loss(prob_np[...,1], true_np_onehot[...,1])
+    track_value('np_dice_loss', term_loss.cpu().item())
     loss += term_loss
     
-    # * For Nulcei vs Background Segmentation 
+    # HV branch
     term_loss = mse_loss(pred_hv, true_hv)
-    track_value('loss_mse_hv', term_loss)
+    track_value('hv_mse_loss', term_loss.cpu().item())
     loss += term_loss
 
-    focus_region = true_np[...,0]
-    term_loss = msge_loss(pred_hv, true_hv, focus_region)
-    track_value('loss_msge_hv', term_loss)
+    term_loss = msge_loss(pred_hv, true_hv, true_np)
+    track_value('hv_msge_loss', term_loss.cpu().item())
     loss += term_loss
 
-    # gradient update
+    track_value('overall_loss', loss.cpu().item())
+    # * gradient update
     loss.backward()
     optimizer.step()
     ####
 
-    # * For visualizing thingy
-    # orig_imgs = crop_op(orig_imgs, (190, 190), "NHWC")
+    # pick 2 random sample from the batch for visualization
+    sample_indices = torch.randint(0, true_np.shape[0], (2,))
 
-    pred_np = colorize(prob_np[...,0], cmap='jet')
-    true_np = colorize(true_np[...,0], cmap='jet')
-    pred_h = colorize(pred_hv[...,0], vmin=-1, vmax=1, cmap='jet')
-    pred_v = colorize(pred_hv[...,1], vmin=-1, vmax=1, cmap='jet')
-    true_h = colorize(true_hv[...,0], vmin=-1, vmax=1, cmap='jet')
-    true_v = colorize(true_hv[...,1], vmin=-1, vmax=1, cmap='jet')
+    imgs = (imgs[sample_indices]).byte() # to uint8
+    imgs = imgs.permute(0, 2, 3, 1).cpu().numpy()
 
-    viz = torch.cat([pred_h, pred_v, pred_np, 
-                     true_h, true_v, true_np], 2)
-    viz = viz.cpu().numpy()
+    pred_hv = pred_hv.detach()[sample_indices].cpu().numpy()
+    true_hv = true_hv[sample_indices].cpu().numpy()
 
-    import matplotlib.pyplot as plt
+    prob_np = pred_np.detach()[...,1:][sample_indices].cpu().numpy()
+    true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
 
+    # plt.imshow(viz)
+    # plt.savefig('dump.png', dpi=600)
+    # exit()
+
+    # * Its up to user to define the protocol to process the raw output per step!
+    result_dict['raw'] = { # protocol for contents exchange within `raw`
+        'img': imgs,
+        'np' : (true_np, prob_np),
+        'hv' : (true_hv, pred_hv)
+    }
     return result_dict
 
 ####
-def infer_step(batch, net):
-    net.eval() # infer mode
+def valid_step(batch_data, run_info):
 
-    # batch is NHWC
-    imgs = batch
-    imgs = imgs.permute(0, 3, 1, 2) # to NCHW
+    ####
+    imgs = batch_data['img']
+    true_np = batch_data['np_map']
+    true_hv = batch_data['hv_map']
+   
+    imgs = imgs.float().to('cuda') # to NCHW
+    imgs = imgs.permute(0, 3, 1, 2)
 
-    # push data to GPUs and convert to float32
-    imgs = imgs.to('cuda').float()
+    # HWC
+    true_np = torch.squeeze(true_np.long().to('cuda'))
+    true_hv = torch.squeeze(true_hv.float().to('cuda'))
+
+    ####
+    model = run_info['net']['desc']
+    model.eval() # infer mode
 
     # -----------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
-        output_dict = net(imgs) # forward
-        for output_name, output_value in output_dict.items():
-            if output_name == 'np':                
-                output_value = nn.functional.softmax(output_value, dim=1)
-            output_dict[output_name] = output_value.permute(0, 2, 3, 1) # to NHWC
-        output = torch.cat(list(output_dict.values()), -1)        
-        output = output.cpu().numpy() 
+        output_dict = model(imgs) # forward
+    output_dict = {k : v.permute(0, 2, 3 ,1) for k, v in output_dict.items()}
 
-    return output
+    pred_np = output_dict['np'] # should be logit value, not softmax output
+    pred_hv = output_dict['hv']
+    prob_np = F.softmax(pred_np, dim=-1)[...,1]
 
+    # * Its up to user to define the protocol to process the raw output per step!
+    result_dict = { # protocol for contents exchange within `raw`
+        'raw': {
+            'true_np' : true_np.cpu().numpy(),
+            'true_hv' : true_hv.cpu().numpy(),
+            'prob_np' : prob_np.cpu().numpy(),
+            'pred_hv' : pred_hv.cpu().numpy()
+        }
+    }
+    return result_dict

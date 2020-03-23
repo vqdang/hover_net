@@ -33,15 +33,13 @@ class Trainer(Config):
     ####
     def view_dataset(self, mode='train'):
         check_manual_seed(self.seed)
-        dataloader = self.get_datagen(1, mode, view=True)
-        for data in dataloader:
-            img_list, ann_list = data
-            img_list = img_list.numpy()
-            ann_list = ann_list.numpy()
-            TrainSerialLoader.view(img_list, ann_list)
+        dataloader = self.get_datagen(1, mode)
+        for batch_data in dataloader: # convert from Tensor to Numpy
+            batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
+            TrainSerialLoader.view(batch_data_np)
         return
     ####
-    def get_datagen(self, batch_size, run_mode, view=False, fold_idx=0):       
+    def get_datagen(self, batch_size, run_mode, nr_procs=0, fold_idx=0):       
         # TODO: flag for debug mode
 
         # ! Hard assumption on file type
@@ -57,8 +55,7 @@ class Trainer(Config):
         input_dataset = TrainSerialLoader(file_list, mode=run_mode, 
                                             **self.shape_info[run_mode])
 
-        nr_procs = getattr(self, 'nr_procs_%s' % run_mode)
-        nr_procs =  nr_procs if not view or not self.debug else 0
+        nr_procs =  nr_procs if not self.debug else 0
         dataloader = DataLoader(input_dataset, 
                         num_workers= nr_procs, 
                         batch_size = batch_size, 
@@ -66,7 +63,7 @@ class Trainer(Config):
                         drop_last  = run_mode=='train')
         return dataloader
     ####
-    def run_once(self, opt, run_engine_opt, log_dir, fold_idx=0):
+    def run_once(self, opt, run_engine_opt, log_dir, prev_log_dir=None, fold_idx=0):
         """
         Simply run the defined run_step of the related method 1 time
         """
@@ -75,8 +72,8 @@ class Trainer(Config):
 
         ####
         log_info = {}
-        if not self.debug:
-            shutil.rmtree(log_dir)
+        if self.logging:
+            # check_log_dir(log_dir)
             tfwriter = SummaryWriter(log_dir=log_dir)
             json_log_file = log_dir + '/stats.json'
             with open(json_log_file, 'w') as json_file:
@@ -85,6 +82,15 @@ class Trainer(Config):
                 'json_file' : json_log_file,
                 'tfwriter'  : tfwriter,
             }
+
+        # * depend on logging format so may be broken if logging format has been changed
+        def get_last_chkpt_path(prev_phase_dir, net_name):
+            stat_file_path = prev_phase_dir + '/stats.json'
+            with open(stat_file_path) as stat_file:
+                info = json.load(stat_file)
+            last_chkpts_path = "%s/%s_epoch=%s.tar" % (prev_phase_dir, 
+                                        net_name, max(info.keys()))
+            return last_chkpts_path
 
         ####
         # TODO: adding way to load preraining weight or resume the training
@@ -95,8 +101,25 @@ class Trainer(Config):
             assert inspect.isclass(net_info['desc']) \
                         or inspect.isfunction(net_info['desc']), \
                 "`desc` must be a Class or Function which instantiate NEW objects !!!"
-            net_desc = DataParallel(net_info['desc']()).to(device)
-            # print(net_desc.module.classifier.weight)
+            net_desc = net_info['desc']()
+
+            pretrained_path = net_info['pretrained']
+            if pretrained_path is not None:
+                if pretrained_path == -1:
+                    # * depend on logging format so may be broken if logging format has been changed
+                    pretrained_path = get_last_chkpt_path(prev_log_dir, net_name)
+                    net_state_dict = torch.load(pretrained_path)['desc']
+                else:
+                    net_state_dict = dict(np.load(pretrained_path))
+                    net_state_dict = {k : torch.Tensor(v) for k, v in net_state_dict.items()}
+                
+                colored_word = colored(net_name, color='red', attrs=['bold'])
+                print('Use pretrained path for %s: %s' % (colored_word, pretrained_path))
+
+                load_feedback = net_desc.load_state_dict(net_state_dict, strict=False)
+                # load_state_dict return (missing keys, unexpected keys)
+
+            net_desc = DataParallel(net_desc).to('cuda')
             # print(net_desc) # * dump network definition or not?
             optimizer, optimizer_args = net_info['optimizer']
             optimizer = optimizer(net_desc.parameters(), **optimizer_args)
@@ -114,9 +137,11 @@ class Trainer(Config):
         # * all engine shared the same network info declaration
         runner_dict = {}
         for runner_name, runner_opt in run_engine_opt.items():
+            # TODO: align naming protocol
             runner_dict[runner_name] = RunEngine(
                 dataloader=self.get_datagen(runner_opt['batch_size'], 
-                                    runner_name, fold_idx=fold_idx),
+                                    runner_name, nr_procs=runner_opt['nr_procs'],
+                                    fold_idx=fold_idx),
                 engine_name=runner_name,
                 run_step=runner_opt['run_step'],
                 run_info=net_run_info,
@@ -134,14 +159,13 @@ class Trainer(Config):
 
         # retrieve main runner
         main_runner = runner_dict['train']
-        main_runner.state.logging = self.debug
+        main_runner.state.logging = self.logging
         main_runner.state.log_dir = log_dir
         # finally start the run loop
         main_runner.run(opt['nr_epochs'])
         # print(net_desc.module.classifier.weight)
 
         print('\n')
-        print('########################################################')
         print('########################################################')
         print('########################################################')
         print('\n')
@@ -154,8 +178,12 @@ class Trainer(Config):
 
         phase_list = self.model_config['phase_list']
         engine_opt = self.model_config['run_engine']
-        for phase_info in phase_list:
-            self.run_once(phase_info, engine_opt, 'dump')
+
+        prev_save_path = None
+        for phase_idx, phase_info in enumerate(phase_list):
+            save_path = 'exp/dump/%02d' % (phase_idx)
+            self.run_once(phase_info, engine_opt, save_path, prev_log_dir=prev_save_path)
+            prev_save_path = save_path
     ####
 
 ####

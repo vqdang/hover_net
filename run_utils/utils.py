@@ -28,8 +28,8 @@ def check_manual_seed(seed):
 def check_log_dir(log_dir):
     # check if log dir exist
     if os.path.isdir(log_dir):
-        color_word = colored('WARNING', color='red', attrs=['bold', 'blink'])
-        print('%s: %s exist!' % (color_word, colored(log_dir, attrs=['underline'])))
+        colored_word = colored('WARNING', color='red', attrs=['bold', 'blink'])
+        print('%s: %s exist!' % (colored_word, colored(log_dir, attrs=['underline'])))
         while (True):
             print('Select Action: d (delete) / q (quit)', end='')
             key = input()
@@ -40,5 +40,5 @@ def check_log_dir(log_dir):
                 exit()
             else:
                 color_word = colored('ERR', color='red')
-                print('---[%s] Unrecognize Characters!' % color_word)
+                print('---[%s] Unrecognize Characters!' % colored_word)
     return

@@ -2,7 +2,7 @@ import math
 import numpy as np
 
 import torch
-import torch.functional as F
+import torch.nn.functional as F
 
 from matplotlib import cm
 
@@ -39,24 +39,15 @@ def crop_to_shape(x, y, data_format='NCHW'):
         crop_shape = (x_shape[1] - y_shape[1], 
                       x_shape[2] - y_shape[2])
     return crop_op(x, crop_shape, data_format)
-####
 
 ####
-def crop_op(x, cropping, data_format='channels_first'):
+def xentropy_loss(pred, true, **kwargs):
     """
-    Center crop image
-    Args:
-        cropping is the substracted portion
+    Assume NHWC
     """
-    crop_t = cropping[0] // 2
-    crop_b = cropping[0] - crop_t
-    crop_l = cropping[1] // 2
-    crop_r = cropping[1] - crop_l
-    if data_format == 'channels_first':
-        x = x[:,:,crop_t:-crop_b,crop_l:-crop_r]
-    else:
-        x = x[:,crop_t:-crop_b,crop_l:-crop_r]
-    return x       
+    pred = pred.permute(0, 3, 1, 2)
+    return F.cross_entropy(pred, true, **kwargs)
+
 ####
 def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
     """Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
@@ -127,65 +118,26 @@ def msge_loss(true, pred, focus):
         kernel_h, kernel_v = get_sobel_kernel(5)
         kernel_h = torch.tensor(kernel_h, requires_grad=False) # constant
         kernel_v = torch.tensor(kernel_v, requires_grad=False) # constant
-        kernel_h = torch.view(5, 5, 1, 1) # constant
-        kernel_v = torch.view(5, 5, 1, 1) # constant
+        kernel_h = kernel_h.view(1, 1, 5, 5).to('cuda') # constant
+        kernel_v = kernel_v.view(1, 1, 5, 5).to('cuda') # constant
 
-        h_ch = hv[:,1].unsqueeze(1) # Nx1xHxW
-        v_ch = hv[:,0].unsqueeze(1) # Nx1xHxW
-        dh_ch = F.conv2d(h_ch, self.kernel_h, padding=2)
-        dv_ch = F.conv2d(v_ch, self.kernel_v, padding=2)
+        h_ch = hv[...,1].unsqueeze(1) # Nx1xHxW
+        v_ch = hv[...,0].unsqueeze(1) # Nx1xHxW
+
+        # can only apply in NCHW mode
+        dh_ch = F.conv2d(h_ch, kernel_h, padding=2)
+        dv_ch = F.conv2d(v_ch, kernel_v, padding=2)
         dhv = torch.cat([dh_ch, dv_ch], dim=1)
+        dhv = dhv.permute(0, 2, 3, 1) # to NHWC
         return dhv
 
+    focus = focus[...,None] # assume input NHW
     focus = torch.cat([focus, focus], axis=-1)
     pred_grad = get_gradient_hv(pred)
     true_grad = get_gradient_hv(true) 
     loss = pred_grad - true_grad
-    loss = focus * (loss * loss)
-    # artificial reduce_mean with focus region
-    loss = loss / (focus.sum() + 1.0e-8)
+    loss = focus.float() * (loss * loss)
+    # artificial reduce_mean with focused region
+    loss = loss.sum() / (focus.sum() + 1.0e-8)
     return loss
 
-####
-def colorize(value, vmin=None, vmax=None, cmap=None):
-    """
-    Arguments:
-      - value: input tensor, NHWC ('channels_last')
-      - vmin: the minimum value of the range used for normalization.
-        (Default: value minimum)
-      - vmax: the maximum value of the range used for normalization.
-        (Default: value maximum)
-      - cmap: a valid cmap named for use with matplotlib's `get_cmap`.
-        (Default: 'gray')
-    Example usage:
-    ```
-    output = tf.random_uniform(shape=[256, 256, 1])
-    output_color = colorize(output, vmin=0.0, vmax=1.0, cmap='viridis')
-    tf.summary.image('output', output_color)
-    ```
-    
-    Returns a 3D tensor of shape [height, width, 3], uint8.
-    """
-
-    # normalize
-    if vmin is None: # TODO: untested
-        # min over dim 1 and 2
-        vmin = value.min(1).min(1)
-        vmin = vmin.view(-1, 1, 1)
-    if vmax is None: # TODO: untested
-        vmax = value.max(1).max(1)
-        vmax = vmin.view(-1, 1, 1)
-    value = (value - vmin) / (vmax - vmin) # vmin..vmax
-
-    # quantize
-    value = torch.round(value * 255)
-    indices = value.int32()
-
-    # gather
-    colormap = cm.get_cmap(cmap if cmap is not None else 'gray')
-    colors = colormap(np.arange(256))[:, :3]
-    colors = torch.from_numpy(colors).float()
-    value = torch.gather(colors, indices)
-    value = (value * 255).uint8()
-    return value
-####

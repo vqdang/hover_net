@@ -20,7 +20,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         self.mask_shape = mask_shape
         self.input_shape = input_shape
 
-        self.info_list = file_list
+        self.info_list = file_list[:8]
         augmentor = self.__augmentation__(mode)
         self.shape_augs = iaa.Sequential(augmentor[0]) 
         self.input_augs = iaa.Sequential(augmentor[1]) 
@@ -44,50 +44,66 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         if self.input_augs is not None:
             input_augs = self.input_augs.to_deterministic()
             img = input_augs.augment_image(img)
-
+        
+        feed_dict = {'img' : img}
         # * Specific on the flight processing for annotation label
         if ann.shape[-1] == 2: # Nuclei Segmentation + Type Classification
             inst_map, type_map = np.dsplit(ann, -1)
+            np_map = np.array(inst_map > 0, dtype='uint8')
             hv_map = gen_instance_hv_map(inst_map, self.mask_shape)
-            # binarize instance map
-            inst_map[inst_map > 0] = 1
+            # binarize instance map, ordering of operaton matters !
+            np_map = cropping_center(np_map, self.mask_shape)
+            hv_map = cropping_center(hv_map, self.mask_shape)
+            tp_map = cropping_center(type_map, self.mask_shape)
+            feed_dict['np_map'] = np_map[...,None] # HWC
+            feed_dict['hv_map'] = hv_map
+            feed_dict['tp_map'] = tp_map[...,None] # HWC
         else: # Nuclei Segmentation only
             inst_map = ann[...,0] # HW1 -> HW
+            np_map = np.array(inst_map > 0, dtype='uint8')
             hv_map = gen_instance_hv_map(inst_map, self.mask_shape)
-            # binarize instance map
-            inst_map[inst_map > 0] = 1
-        ann = cropping_center(ann, self.mask_shape)
+            np_map = cropping_center(np_map, self.mask_shape)
+            hv_map = cropping_center(hv_map, self.mask_shape)
+            feed_dict['np_map'] = np_map[...,None] # HWC
+            feed_dict['hv_map'] = hv_map
 
-        return img, ann
+        # print(img.shape, ann.shape)
+        return feed_dict
 
     @staticmethod
-    def view(img_list, ann_list):
-        def prep_imgs(img, ann):
-            shape = np.maximum(img.shape[:2], ann.shape[:2])
+    def view(batch_data):
+        def prep_sample(data):
+            shape_array = [np.array(v.shape[:2]) for v in data.values()]
+            shape = np.maximum(*shape_array)
 
             cmap = plt.get_cmap('viridis')
-            # cmap may randomly fails if of other types
-            ann = ann.astype('float32')
-            ann_chs = np.dsplit(ann, ann.shape[-1])
-            for i, ch in enumerate(ann_chs):
-                ch = np.squeeze(ch)
-                # normalize to -1 to 1 range else
-                # cmap may behave stupidly
-                ch = ch / (np.max(ch) - np.min(ch) + 1.0e-16)
+            def colorize(ch, vmin, vmax):
+                ch = np.squeeze(ch.astype('float32'))
+                ch = ch / (vmax - vmin + 1.0e-16)
                 # take RGB from RGBA heat map
-                ann_ch_cmap = cmap(ch)[...,:3] 
-                ann_ch_cmap = center_pad_to_shape(ann_ch_cmap, shape)
-                ann_chs[i]  = ann_ch_cmap
-            img = img.astype('float32') / 255.0
-            img = center_pad_to_shape(img, shape)
-            prepped_img = np.concatenate([img] + ann_chs, axis=1)
+                ch_cmap = (cmap(ch)[...,:3] * 255).astype('uint8')
+                ch_cmap = center_pad_to_shape(ch_cmap, shape)
+                return ch_cmap
+
+            viz_list = [] 
+            # cmap may randomly fails if of other types
+            viz_list.append(colorize(data['np_map'], 0, 1))
+            viz_list.append(colorize(data['hv_map'][...,0], -1, 1))
+            viz_list.append(colorize(data['hv_map'][...,1], -1, 1))
+            img = center_pad_to_shape(data['img'], shape)
+            prepped_img = np.concatenate([img] + viz_list, axis=1)
             return prepped_img
 
-        for idx in range (len(img_list)):
-            displayed_img = prep_imgs(img_list[idx], ann_list[idx])
-            plt.subplot(len(img_list), 1, idx+1)
-            plt.imshow(displayed_img)
-        plt.show()        
+        batch_size = list(batch_data.values())[0].shape[0]
+        for sample_idx in range(batch_size):
+            sample_data = {k : v[sample_idx] for k, v in batch_data.items()}
+            displayed_sample = prep_sample(sample_data)
+            plt.subplot(batch_size, 1, sample_idx+1)
+            plt.imshow(displayed_sample)
+        plt.savefig('dump.png', dpi=600)
+        plt.close()
+        exit()
+        # plt.show()        
         return
 
     def __augmentation__(self, mode):

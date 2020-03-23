@@ -6,7 +6,7 @@ import torch
 from scipy.stats import mode as major_value
 from sklearn.metrics import confusion_matrix
 
-from misc.utils import center_pad_to_shape
+from misc.utils import center_pad_to_shape, cropping_center
 
 ####
 class BaseCallbacks(object):
@@ -80,9 +80,9 @@ class CheckpointSaver(BaseCallbacks):
         return
 
 ####
-class AccumulateOutput(BaseCallbacks):
+class AccumulateRawOutput(BaseCallbacks):
     def run(self, state, event):
-        step_output = state.step_raw_output
+        step_output = state.step_output['raw']
         accumulated_output = state.epoch_accumulated_output
 
         for key, step_value in step_output.items():
@@ -93,51 +93,49 @@ class AccumulateOutput(BaseCallbacks):
         return
 
 ####
-class ProcessAccumulatedOutput(BaseCallbacks):
+class ProcessAccumulatedRawOutput(BaseCallbacks):
     def __init__(self, per_n_epoch=1):
-        super(ProcessAccumulatedOutput, self).__init__()
+        # TODO: allow dynamically attach specific procesing for `type`
+        super(ProcessAccumulatedRawOutput, self).__init__()
         self.per_n_epoch = per_n_epoch
 
     def run(self, state, event):
         current_epoch = state.curr_epoch
         # if current_epoch % self.per_n_epoch != 0: return
-        output = state.epoch_accumulated_output
+        output_dict = state.epoch_accumulated_output
 
-        prob = np.array(output['prob'])
-        true = np.array(output['true'])
-        # threshold then get accuracy
-        pred = np.argmax(prob, axis=-1)
-        acc = np.mean(pred == true)
+        track_dict = {'scalar' : {}} # TODO: add auto populate from main state track list
+        track_value = lambda name, value, vtype: track_dict[vtype].update({name: value})
 
-        # confusion matrix
-        # * assume labels within GT are continuous integer
-        conf_mat = confusion_matrix(true, pred, 
-                    labels=np.arange(np.max(true)+1))
-        #
-        state.tracked_step_output['scalar']['acc'] = acc
-        state.tracked_step_output['conf_mat']['conf_mat'] = conf_mat
-        # else:
-            # majority voting to get the final prediction
-        # pred = [] 
-        # prev_epoch_true = np.array(state.epoch_accumulated_output['true'])
-        # for epoch_output in state.run_accumulated_output:
-        #     epoch_prob = np.array(epoch_output['prob'])
-        #     epoch_pred = np.argmax(epoch_prob, axis=-1)
-        #     epoch_true = np.array(epoch_output['true'])
-        #     assert (epoch_true == prev_epoch_true).all()
-        #     pred.append(epoch_pred)
-        # pred = np.stack(pred, axis=-1)
-        # pred = major_value(pred, axis=-1)[0]
-        # true = np.array(state.epoch_accumulated_output['true'])
-        # acc = np.mean(pred == true)
+        # ! factor this out
+        def _dice(true, pred, label):
+            true = np.array(true == label, np.int32)            
+            pred = np.array(pred == label, np.int32)            
+            inter = (pred * true).sum()
+            total = (pred + true).sum()
+            return 2 * inter /  (total + 1.0e-8)
 
-        # confusion matrix
-        # # * assume labels within GT are continuous integer
-        # conf_mat = confusion_matrix(true, pred, 
-        #             labels=np.arange(np.max(true)+1))
-        # #
-        # state.tracked_step_output['scalar']['acc'] = acc
-        # state.tracked_step_output['conf_mat']['conf_mat'] = conf_mat
+        pred_np = np.array(output_dict['prob_np'])
+        true_np = np.array(output_dict['true_np'])
+        nr_pixels = np.size(true_np)
+        # * NP segmentation statistic
+        pred_np[pred_np >  0.5] = 1.0
+        pred_np[pred_np <= 0.5] = 0.0
+
+        acc_np = (pred_np == true_np).sum() / nr_pixels
+        dice_np = _dice(true_np, pred_np, 1)
+        track_value('np_acc' , acc_np, 'scalar')
+        track_value('np_dice', dice_np, 'scalar')
+
+        # * HV regression statistic
+        pred_hv = np.array(output_dict['pred_hv'])
+        true_hv = np.array(output_dict['true_hv'])
+        error = pred_hv - true_hv
+        mse = np.sum(error * error) / nr_pixels
+        track_value('hv_mse' , mse, 'scalar')
+
+        # update global shared states
+        state.tracked_step_output = track_dict
         return
 
 ####
@@ -151,8 +149,9 @@ class ScalarMovingAverage(BaseCallbacks):
         self.alpha = alpha
         self.tracking_dict = {}
 
-    def run(self, state, event):       
-        step_output = state.step_raw_output['EMA']
+    def run(self, state, event):    
+        # TODO: protocol for dynamic key retrieval for EMA   
+        step_output = state.step_output['EMA']
 
         for key, current_value in step_output.items():
             if key in self.tracking_dict:
@@ -166,6 +165,59 @@ class ScalarMovingAverage(BaseCallbacks):
                 self.tracking_dict[key] = new_ema_value
 
         state.tracked_step_output['scalar'] = self.tracking_dict
+        return
+####
+class VisualizeOutput(BaseCallbacks):
+    def __init__(self, per_n_epoch=1):
+        super(VisualizeOutput, self).__init__()
+        self.per_n_epoch = per_n_epoch
+
+    def run(self, state, event):
+        current_epoch = state.curr_epoch
+        raw_output = state.step_output['raw']
+
+        imgs = raw_output['img']
+        true_np, pred_np = raw_output['np']
+        true_hv, pred_hv = raw_output['hv']
+
+        aligned_shape = [list(imgs.shape), list(true_np.shape), list(pred_np.shape)]
+        aligned_shape = np.min(np.array(aligned_shape), axis=0)[1:3]
+
+        cmap = plt.get_cmap('jet')
+        def colorize(ch, vmin, vmax):
+            ch = np.squeeze(ch.astype('float32'))
+            ch = ch / (vmax - vmin + 1.0e-16)
+            # take RGB from RGBA heat map
+            ch_cmap = (cmap(ch)[...,:3] * 255).astype('uint8')
+            # ch_cmap = center_pad_to_shape(ch_cmap, aligned_shape)
+            return ch_cmap
+
+        viz_list = []
+        for idx in range(2):
+            # img = center_pad_to_shape(imgs[idx], aligned_shape)
+            img = cropping_center(imgs[idx], aligned_shape)
+
+            true_viz_list = [img] 
+            # cmap may randomly fails if of other types
+            true_viz_list.append(colorize(true_np[idx], 0, 1))
+            true_viz_list.append(colorize(true_hv[idx][...,0], -1, 1))
+            true_viz_list.append(colorize(true_hv[idx][...,1], -1, 1))
+            true_viz_list = np.concatenate(true_viz_list, axis=1)
+
+            pred_viz_list = [img] 
+            # cmap may randomly fails if of other types
+            pred_viz_list.append(colorize(pred_np[idx], 0, 1))
+            pred_viz_list.append(colorize(pred_hv[idx][...,0], -1, 1))
+            pred_viz_list.append(colorize(pred_hv[idx][...,1], -1, 1))
+            pred_viz_list = np.concatenate(pred_viz_list, axis=1)
+
+            viz_list.append(
+                np.concatenate([true_viz_list, pred_viz_list], axis=0)
+            )
+        viz_list = np.concatenate(viz_list, axis=0)
+        # plt.imshow(viz_list)
+        # plt.savefig('dumpx.png', dpi=600)
+        state.tracked_step_output['image']['output'] = viz_list
         return
 
 ####

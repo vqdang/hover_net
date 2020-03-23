@@ -20,7 +20,7 @@ class LoggingGradient(BaseCallbacks):
         Plots the gradients flowing through different layers in the net during training.
         "_pyplot_grad_flow(self.model.named_parameters())" to visualize the gradient flow
 
-        ! Very slow if triggered per steps because CPU <=> GPU
+        ! Very slow if triggered per steps because of CPU <=> GPU
         '''
         ave_grads = []
         max_grads= []
@@ -159,6 +159,8 @@ class LoggingEpochOutput(BaseCallbacks):
             if value[0] == 'scalar':
                 tfwriter.add_scalar(value_name, value[1], current_epoch)
             elif value[0] == 'image':
-                tfwriter.add_image(value_name, value[1], current_epoch)
+                tfwriter.add_image(value_name, value[1], current_epoch, 
+                                    dataformats='HWC')
+        # tfwriter.flush()
 
         return

@@ -41,7 +41,6 @@ class State(object):
         self.tracked_step_output = {
             'scalar' : {}, # type : {variable_name : variablee_value}
             'image'  : {},
-            'conf_mat' : {},
         }
         # TODO: find way to known which method bind/interact with which value
 
@@ -50,18 +49,16 @@ class State(object):
         # TODO: soft reset for pertain variable for N epochs
         self.run_accumulated_output = [] # of run until reseted
 
+        # holder for output returned after current runstep
         # * depend on the type of training i.e GAN, the updated accumulated may be different
-        self.step_raw_output  = None # holder for output returned after current runstep
+        self.step_output = None  
 
         self.global_state = None
         return
 
     def reset_variable(self):
-        self.tracked_step_output = {
-            'scalar' : {}, # type : {variable_name : variable_value}
-            'image'  : {},
-            'conf_mat' : {},
-        }
+        # type : {variable_name : variable_value}
+        self.tracked_step_output = {k : {} for k in self.tracked_step_output.keys()}
 
         # TODO: [CRITICAL] refactor this
         if self.curr_epoch % self.pertain_n_epoch_output == 0:
@@ -70,7 +67,7 @@ class State(object):
         self.epoch_accumulated_output = {}
 
         # * depend on the type of training i.e GAN, the updated accumulated may be different
-        self.step_raw_output  = None # holder for output returned after current runstep
+        self.step_output  = None # holder for output returned after current runstep
         return
 ####
 class RunEngine(object):
@@ -146,29 +143,31 @@ class RunEngine(object):
             pbar_format = 'Processing: |{bar}| '\
                           '{n_fmt}/{total_fmt}[{elapsed}<{remaining},{rate_fmt}]'
             if self.engine_name == 'train':
-                pbar_format += 'Batch_Loss = {postfix[1][Batch_Loss]:0.5f}|'\
-                               'EMA_Loss = {postfix[1][EMA_Loss]:0.5f}'
-                pbar = tqdm.tqdm(total=len(self.dataloader), leave=True,
-                            bar_format=pbar_format, ascii='#',
-                            postfix=['', dict(Batch_Loss=float('NaN'), 
-                                              EMA_Loss=float('NaN'))])
+                pbar_format += 'Batch = {postfix[1][Batch]:0.5f}|'\
+                               'EMA = {postfix[1][EMA]:0.5f}'
+                # * changing print char may break the bar so avoid it
+                pbar = tqdm.tqdm(total=len(self.dataloader), 
+                            leave=True, initial=0,
+                            bar_format=pbar_format, ascii=True,
+                            postfix=['', dict(Batch=float('NaN'), 
+                                              EMA=float('NaN'))])
             else:
                 pbar = tqdm.tqdm(total=len(self.dataloader), leave=True,
-                            bar_format=pbar_format, ascii='#')
+                            bar_format=pbar_format, ascii=True)
 
             for data_batch in self.dataloader:
                 self.__trigger_events(Events.STEP_STARTED)
 
                 step_output = self.run_step(data_batch, self.state.run_info)
-                self.state.step_raw_output = step_output
+                self.state.step_output = step_output
 
                 self.__trigger_events(Events.STEP_COMPLETED)
                 self.state.curr_global_step += 1
                 self.state.curr_epoch_step += 1
 
                 if self.engine_name == 'train':
-                    pbar.postfix[1]["Batch_Loss"] = step_output['EMA']['loss']
-                    pbar.postfix[1]["EMA_Loss"] = self.state.tracked_step_output['scalar']['loss']
+                    pbar.postfix[1]["Batch"] = step_output['EMA']['overall_loss']
+                    pbar.postfix[1]["EMA"] = self.state.tracked_step_output['scalar']['overall_loss']
                 pbar.update()
             pbar.close() # to flush out the bar before doing end of epoch reporting
             self.state.curr_epoch += 1

@@ -9,7 +9,8 @@ class Config(object):
     def __init__(self, ):
         self.seed = 10 
         
-        self.debug = True # turn on debug flag so that can trace some parallel processing problems easier
+        self.logging = True
+        self.debug = False # turn on debug flag so that can trace some parallel processing problems easier
         self.type_classification = False # whether to predict the nuclear type
         # ! must use CoNSeP dataset, where nuclear type labels are available
 
