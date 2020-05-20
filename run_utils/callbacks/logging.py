@@ -10,11 +10,13 @@ from .base import BaseCallbacks
 from .serialize import fig2data, serialize
 
 # TODO: logging for all printed info on the terminal
-####
+
+
 class LoggingGradient(BaseCallbacks):
     """
     Will log per each training step
     """
+
     def _pyplot_grad_flow(self, named_parameters):
         '''
         Plots the gradients flowing through different layers in the net during training.
@@ -23,18 +25,20 @@ class LoggingGradient(BaseCallbacks):
         ! Very slow if triggered per steps because of CPU <=> GPU
         '''
         ave_grads = []
-        max_grads= []
+        max_grads = []
         layers = []
         for n, p in named_parameters:
             if(p.requires_grad) and ("bias" not in n):
                 layers.append(n)
                 ave_grads.append(p.grad.abs().mean().cpu().item())
                 max_grads.append(p.grad.abs().max().cpu().item())
-        fig = plt.figure(figsize = (10,10))
-        plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
-        plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
-        plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k" )
-        plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+        fig = plt.figure(figsize=(10, 10))
+        plt.bar(np.arange(len(max_grads)), max_grads,
+                alpha=0.1, lw=1, color="c")
+        plt.bar(np.arange(len(max_grads)), ave_grads,
+                alpha=0.1, lw=1, color="b")
+        plt.hlines(0, 0, len(ave_grads)+1, lw=2, color="k")
+        plt.xticks(range(0, len(ave_grads), 1), layers, rotation="vertical")
         plt.xlim(left=0, right=len(ave_grads))
         # zoom in on the lower gradient regions
         plt.xlabel("Layers")
@@ -43,15 +47,16 @@ class LoggingGradient(BaseCallbacks):
         plt.grid(True)
         plt.legend([Line2D([0], [0], color="c", lw=4),
                     Line2D([0], [0], color="b", lw=4),
-                    Line2D([0], [0], color="k", lw=4)], 
-                    ['max-gradient', 'mean-gradient', 'zero-gradient'])
-        fig = np.transpose(fig2data(fig), axes=[2, 0, 1]) # HWC => CHW
+                    Line2D([0], [0], color="k", lw=4)],
+                   ['max-gradient', 'mean-gradient', 'zero-gradient'])
+        fig = np.transpose(fig2data(fig), axes=[2, 0, 1])  # HWC => CHW
         plt.close()
         return fig
 
     def run(self, state, event):
         # TODO: improve this
-        if not state.logging: return
+        if not state.logging:
+            return
         curr_step = state.curr_global_step
 
         # logging the grad of all trainable parameters
@@ -62,43 +67,46 @@ class LoggingGradient(BaseCallbacks):
 
             # get the grad of all trainable parameters
             param_name_list = []
-            param_value_list = [] # dont use dict because order may change
+            param_value_list = []  # dont use dict because order may change
             for param_name, param in netdesc.named_parameters():
                 if param.requires_grad and "bias" not in param_name:
                     # calculate in GPU
-                    param_grad = param.grad.abs().mean() 
+                    param_grad = param.grad.abs().mean()
                     # move to CPU
-                    param_grad = param_grad.cpu().item() 
+                    param_grad = param_grad.cpu().item()
                     param_name_list.append(param_name)
                     param_value_list.append(param_grad)
 
             gradsummary = np.array(list(param_value_list))
             # gradsummary = np.log(gradsummary)
             # encode each layer as an index so binning value = index
-            bin_values = np.array([float(i) for i in range(gradsummary.shape[0])]) 
+            bin_values = np.array([float(i)
+                                   for i in range(gradsummary.shape[0])])
             tfwriter.add_histogram_raw(
-                    tag="%s/grad_layer" % net_name, 
-                    min=np.min(gradsummary), 
-                    max=np.max(gradsummary), 
-                    num=gradsummary.shape[0],
-                    sum=gradsummary.sum(), 
-                    sum_squares=np.power(gradsummary, 2).sum(), 
-                    bucket_limits=bin_values,
-                    bucket_counts=gradsummary, 
-                    global_step=curr_step)
+                tag="%s/grad_layer" % net_name,
+                min=np.min(gradsummary),
+                max=np.max(gradsummary),
+                num=gradsummary.shape[0],
+                sum=gradsummary.sum(),
+                sum_squares=np.power(gradsummary, 2).sum(),
+                bucket_limits=bin_values,
+                bucket_counts=gradsummary,
+                global_step=curr_step)
         return
-
 ####
+
+
 class LoggingEpochOutput(BaseCallbacks):
     """
     Must declare save dir first in the shared global state of the
     attached engine
-    """        
+    """
+
     def __init__(self, per_n_epoch=1):
         super(LoggingEpochOutput, self).__init__()
         self.per_n_epoch = per_n_epoch
 
-    def run(self, state, event):        
+    def run(self, state, event):
 
         # only logging every n epochs also
         if state.curr_epoch % self.per_n_epoch != 0:
@@ -111,13 +119,15 @@ class LoggingEpochOutput(BaseCallbacks):
             current_epoch = str(state.curr_epoch)
 
         output = state.tracked_step_output
+
         def get_serializable_values(output_format):
             log_dict = {}
-            # get type and variable that is serializable 
+            # get type and variable that is serializable
             # to console or other logging format (json, tensorboard)
             for variable_type, variable_dict in output.items():
                 for value_name, value in variable_dict.items():
-                    value_name = '%s-%s' % (state.attached_engine_name, value_name)
+                    value_name = '%s-%s' % (state.attached_engine_name,
+                                            value_name)
                     new_format = serialize(value, variable_type, output_format)
                     if new_format is not None:
                         log_dict[value_name] = new_format
@@ -143,7 +153,7 @@ class LoggingEpochOutput(BaseCallbacks):
         if current_epoch in json_data:
             old_stat_dict = json_data[current_epoch]
             stat_dict.update(old_stat_dict)
-        current_epoch_dict = {current_epoch : stat_dict}
+        current_epoch_dict = {current_epoch: stat_dict}
         json_data.update(current_epoch_dict)
 
         # TODO: may corrupt
@@ -159,8 +169,8 @@ class LoggingEpochOutput(BaseCallbacks):
             if value[0] == 'scalar':
                 tfwriter.add_scalar(value_name, value[1], current_epoch)
             elif value[0] == 'image':
-                tfwriter.add_image(value_name, value[1], current_epoch, 
-                                    dataformats='HWC')
+                tfwriter.add_image(value_name, value[1], current_epoch,
+                                   dataformats='HWC')
         # tfwriter.flush()
 
         return

@@ -4,60 +4,75 @@ import math
 import random
 import colorsys
 import numpy as np
+import itertools
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
 from .utils import bounding_box
 
-####
-def random_colors(N, bright=True):
-    """
-    Generate random colors.
-    To get visually distinct colors, generate them in HSV space then
-    convert to RGB.
-    """
-    brightness = 1.0 if bright else 0.7
-    hsv = [(i / N, 1, brightness) for i in range(N)]
-    colors = list(map(lambda c: colorsys.hsv_to_rgb(*c), hsv))
-    random.shuffle(colors)
-    return colors
+from config import Config
+
 
 ####
-def visualize_instances(mask, canvas=None, color=None):
+def visualize_instances(input_image, pred_inst, pred_type=None, line_thickness=2):
     """
+    Overlays segmentation results on image as contours
+
     Args:
-        mask: array of NW
-    Return:
-        Image with the instance overlaid
+        input_image: input image
+        pred_inst: instance mask with unique value for every object
+        pred_type: type mask with unique value for every class
+        line_thickness: line thickness of contours
+
+    Returns:
+        overlay: output image with segmentation overlay as contours
     """
 
-    canvas = np.full(mask.shape + (3,), 200, dtype=np.uint8) \
-                if canvas is None else np.copy(canvas)
+    # get the dict of colours for each type of nucleus to use in the overlay
+    cfg = Config()
+    self.dataset_info = getattr(dataset, self.dataset_name)(self.type_classification)
+    colour_dict = self.dataset_info.class_colour
 
-    insts_list = list(np.unique(mask))
-    insts_list.remove(0) # remove background
+    overlay = np.copy((input_image).astype(np.uint8))
 
-    inst_colors = random_colors(len(insts_list))
-    inst_colors = np.array(inst_colors) * 255
+    if pred_type is not None:
+        type_list = list(np.unique(pred_type))  # get list of types
+        type_list.remove(0)  # remove background
+    else:
+        type_list = [1]
 
-    for idx, inst_id in enumerate(insts_list):
-        inst_color = color[idx] if color is not None else inst_colors[idx]
-        inst_map = np.array(mask == inst_id, np.uint8)
-        y1, y2, x1, x2  = bounding_box(inst_map)
-        y1 = y1 - 2 if y1 - 2 >= 0 else y1 
-        x1 = x1 - 2 if x1 - 2 >= 0 else x1 
-        x2 = x2 + 2 if x2 + 2 <= mask.shape[1] - 1 else x2 
-        y2 = y2 + 2 if y2 + 2 <= mask.shape[0] - 1 else y2 
-        inst_map_crop = inst_map[y1:y2, x1:x2]
-        inst_canvas_crop = canvas[y1:y2, x1:x2]
-        contours = cv2.findContours(inst_map_crop, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(inst_canvas_crop, contours[1], -1, inst_color, 2)
-        canvas[y1:y2, x1:x2] = inst_canvas_crop        
-    return canvas
+    for type_id in type_list:
+        if pred_type is not None:
+            label_map = (pred_type == type_id) * pred_inst
+        else:
+            label_map = pred_inst
+        inst_list = list(np.unique(label_map))  # get list of instances
+        inst_list.remove(0)  # remove background
+        contours = []
+        for inst_id in inst_list:
+            inst_map = np.array(
+                pred_inst == inst_id, np.uint8)  # get single object
+            y1, y2, x1, x2 = bounding_box(inst_map)
+            y1 = y1 - 2 if y1 - 2 >= 0 else y1
+            x1 = x1 - 2 if x1 - 2 >= 0 else x1
+            x2 = x2 + 2 if x2 + 2 <= pred_inst.shape[1] - 1 else x2
+            y2 = y2 + 2 if y2 + 2 <= pred_inst.shape[0] - 1 else y2
+            inst_map_crop = inst_map[y1:y2, x1:x2]
+            contours_crop = cv2.findContours(
+                inst_map_crop, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            index_correction = np.asarray([[[[x1, y1]]]])
+            for i in range(len(contours_crop[0])):
+                contours.append(
+                    list(np.asarray(contours_crop[0][i].astype('int32')) + index_correction))
+        contours = list(itertools.chain(*contours))
+        cv2.drawContours(overlay, np.asarray(contours), -1,
+                         colour_dict[type_id], line_thickness)
+    return overlay
+
 
 ####
 def gen_figure(imgs_list, titles, fig_inch, shape=None,
-                share_ax='all', show=False, colormap=plt.get_cmap('jet')):
+               share_ax='all', show=False, colormap=plt.get_cmap('jet')):
 
     num_img = len(imgs_list)
     if shape is None:
@@ -67,8 +82,8 @@ def gen_figure(imgs_list, titles, fig_inch, shape=None,
         nrows, ncols = shape
 
     # generate figure
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, 
-                        sharex=share_ax, sharey=share_ax)
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols,
+                             sharex=share_ax, sharey=share_ax)
     axes = [axes] if nrows == 1 else axes
 
     # not very elegant
@@ -77,20 +92,19 @@ def gen_figure(imgs_list, titles, fig_inch, shape=None,
         for cell in ax:
             cell.set_title(titles[idx])
             cell.imshow(imgs_list[idx], cmap=colormap)
-            cell.tick_params(axis='both', 
-                            which='both', 
-                            bottom='off', 
-                            top='off', 
-                            labelbottom='off', 
-                            right='off', 
-                            left='off', 
-                            labelleft='off')
+            cell.tick_params(axis='both',
+                             which='both',
+                             bottom='off',
+                             top='off',
+                             labelbottom='off',
+                             right='off',
+                             left='off',
+                             labelleft='off')
             idx += 1
             if idx == len(titles):
                 break
         if idx == len(titles):
             break
- 
+
     fig.tight_layout()
     return fig
-####

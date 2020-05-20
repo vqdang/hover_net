@@ -1,10 +1,22 @@
+"""trainer.py
+
+Main HoVer-Net training script.
+
+Usage:
+  trainer.py [--gpu=<id>] [--view=<dset>]
+  trainer.py (-h | --help)
+  trainer.py --version
+
+Options:
+  -h --help       Show this string.
+  --version       Show version.
+  --gpu=<id>      Comma separated GPU list.  
+  --view=<dset>   Visualise images after augmentation. Choose 'train' or 'valid'.
+"""
 
 
+from docopt import docopt
 import matplotlib
-# * syn where to set this
-# must use 'Agg' to plot out onto image
-# matplotlib.use('Agg') 
-
 import glob
 import inspect
 import importlib
@@ -20,16 +32,23 @@ from run_utils.utils import *
 from run_utils.engine import RunEngine
 
 from config import Config
+import dataset
 
 from tensorboardX import SummaryWriter
 from dataloader.loader import TrainSerialLoader
 
+
 ####
 class Trainer(Config):
+    """
+    Either used to view the dataset or
+    to initialise the main training loop. 
+    """
     def __init__(self):
-        super(Trainer, self).__init__()
-        # TODO add error checking here
+        super().__init__()
         self.model_config = self.model_config_file.__getattribute__('train_config')
+        self.dataset_info = getattr(dataset, self.dataset_name)(self.type_classification)
+
     ####
     def view_dataset(self, mode='train'):
         check_manual_seed(self.seed)
@@ -38,13 +57,17 @@ class Trainer(Config):
             batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
             TrainSerialLoader.view(batch_data_np)
         return
+
     ####
     def get_datagen(self, batch_size, run_mode, nr_procs=0, fold_idx=0):       
         # TODO: flag for debug mode
 
         # ! Hard assumption on file type
         file_list = []
-        data_dir_list = getattr(self, '%s_dir_list' % run_mode)
+        if run_mode == 'train':
+            data_dir_list = self.dataset_info.train_dir_list
+        else:
+            data_dir_list = self.dataset_info.valid_dir_list
         for dir_path in data_dir_list:
             file_list.extend(glob.glob('%s/*.npy' % dir_path))
         file_list.sort() # to always ensure same input ordering
@@ -62,15 +85,15 @@ class Trainer(Config):
                         shuffle    = run_mode=='train', 
                         drop_last  = run_mode=='train')
         return dataloader
+
     ####
     def run_once(self, opt, run_engine_opt, log_dir, prev_log_dir=None, fold_idx=0):
         """
-        Simply run the defined run_step of the related method 1 time
+        Simply run the defined run_step of the related method once
         """
-        device = 'cuda'
+
         check_manual_seed(self.seed)
 
-        ####
         log_info = {}
         if self.logging:
             # check_log_dir(log_dir)
@@ -83,7 +106,7 @@ class Trainer(Config):
                 'tfwriter'  : tfwriter,
             }
 
-        # * depend on logging format so may be broken if logging format has been changed
+        ####
         def get_last_chkpt_path(prev_phase_dir, net_name):
             stat_file_path = prev_phase_dir + '/stats.json'
             with open(stat_file_path) as stat_file:
@@ -93,8 +116,7 @@ class Trainer(Config):
                                         net_name, max(epoch_list))
             return last_chkpts_path
 
-        ####
-        # TODO: adding way to load preraining weight or resume the training
+        # TODO: adding way to load pretrained weight or resume the training
         # parsing the network and optimizer information
         net_run_info = {}
         net_info_opt = opt['run_info']
@@ -162,15 +184,15 @@ class Trainer(Config):
         main_runner = runner_dict['train']
         main_runner.state.logging = self.logging
         main_runner.state.log_dir = log_dir
-        # finally start the run loop
+        # start the run loop 
         main_runner.run(opt['nr_epochs'])
-        # print(net_desc.module.classifier.weight)
 
         print('\n')
         print('########################################################')
         print('########################################################')
         print('\n')
         return
+    
     ####
     def run(self):
         """
@@ -182,29 +204,27 @@ class Trainer(Config):
 
         prev_save_path = None
         for phase_idx, phase_info in enumerate(phase_list):
-            save_path = 'exp/dumpx/%02d' % (phase_idx)
-            # if phase_idx == 0: 
-            #     prev_save_path = save_path
-            #     continue
+            save_path = self.log_dir + '/%02d' % (phase_idx)
             self.run_once(phase_info, engine_opt, save_path, prev_log_dir=prev_save_path)
             prev_save_path = save_path
-    ####
+
 
 ####
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--gpu', nargs='?', default="0,1", type=str,
-                                help='comma separated list of GPU(s) to use.')
-    parser.add_argument('--view', help='view dataset', action='store_true')
-    args = parser.parse_args()      
-
-    # ! fix this !!!!
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+    args = docopt(__doc__, version='HoVer-Net v1.0')
+    print(args)
     trainer = Trainer()
-    # trainer.view_dataset()
-    trainer.run()
-    # if args.view:
-    #     trainer.view_dataset()
-    #     exit()
-    # else:
-    #     trainer.run()
+
+    if args['--view'] and args['--gpu']:
+        raise Exception(
+            'Supply only one of --view and --gpu.')
+
+    if args['--view']:
+        if args['--view'] != 'train' and args['--view'] != 'valid':
+            raise Exception(
+                'Use "train" or "valid" for --view.')
+        trainer.view_dataset(args['--view'])
+    else:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
+        nr_gpus = len(args['--gpu'].split(','))
+        trainer.run()

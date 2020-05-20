@@ -146,7 +146,6 @@ class PatchExtractor(object):
         return
 #####
 
-###########################################################################
 
 if __name__ == '__main__':
     # toy example for debug

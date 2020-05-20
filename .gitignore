@@ -1,4 +1,11 @@
 .vscode
 *__pycache__
+
+# directories
 dataset
+logs
 exp
+
+# checkpoint paths
+*.npz
+
