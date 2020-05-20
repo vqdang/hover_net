@@ -11,7 +11,11 @@ from termcolor import colored
 ####
 def check_manual_seed(seed):
     """ 
-    If manual seed is not specified, choose a random one and communicate it to the user.
+    If manual seed is not specified, choose a 
+    random one and communicate it to the user.
+
+    Args:
+        seed: seed to check
     """
 
     seed = seed or random.randint(1, 10000)
@@ -24,12 +28,20 @@ def check_manual_seed(seed):
     print('Using manual seed: {seed}'.format(seed=seed))
     return
 
+
 ####
 def check_log_dir(log_dir):
-    # check if log dir exist
+    """
+    Check if log directory exists
+
+    Args:
+        log_dir: path to logs
+    """
+
     if os.path.isdir(log_dir):
         colored_word = colored('WARNING', color='red', attrs=['bold', 'blink'])
-        print('%s: %s exist!' % (colored_word, colored(log_dir, attrs=['underline'])))
+        print('%s: %s exist!' %
+              (colored_word, colored(log_dir, attrs=['underline'])))
         while (True):
             print('Select Action: d (delete) / q (quit)', end='')
             key = input()

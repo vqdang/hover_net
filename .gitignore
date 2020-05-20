@@ -1,3 +1,10 @@
 .vscode
 *__pycache__
+
+# directories
 dataset
+logs
+
+# checkpoint paths
+*.npz
+
