@@ -90,10 +90,10 @@ class DenseBlock(Net):
 
 ####
 class ResidualBlock(Net):   
-    def __init__(self, in_ch, unit_ksize, unit_ch, unit_count, stride=1):
+    def __init__(self, in_ch, unit_ksize, unit_ch, unit_count, stride=1, freeze=False):
         super(ResidualBlock, self).__init__()
         assert len(unit_ksize) == len(unit_ch), 'Unbalance Unit Info'
-
+        self.not_freeze = not freeze
         self.nr_unit = unit_count
         self.in_ch = in_ch
         self.unit_ch = unit_ch
@@ -149,7 +149,8 @@ class ResidualBlock(Net):
        
         for idx in range(0, len(self.units)):
             new_feat = prev_feat
-            new_feat = self.units[idx](new_feat)
+            with torch.set_grad_enabled(self.not_freeze):
+                new_feat = self.units[idx](new_feat)
             prev_feat = new_feat + shortcut
             shortcut = prev_feat
         feat = self.blk_bna(prev_feat)
@@ -182,7 +183,7 @@ class UpSample2x(nn.Module):
 class NetDesc(Net):
     def __init__(self, input_ch, nr_types=None, freeze=False):
         super(NetDesc, self).__init__()
-        self.freeze = freeze
+        self.not_freeze = not freeze
 
         self.conv0 = nn.Sequential(
             OrderedDict([
@@ -192,10 +193,10 @@ class NetDesc(Net):
             ('relu', nn.ReLU(inplace=True)),
         ]))
 
-        self.d0 = ResidualBlock(  64, [1, 3, 1], [ 64,  64,  256], 3, stride=1)
-        self.d1 = ResidualBlock( 256, [1, 3, 1], [128, 128,  512], 4, stride=2)
-        self.d2 = ResidualBlock( 512, [1, 3, 1], [256, 256, 1024], 6, stride=2)
-        self.d3 = ResidualBlock(1024, [1, 3, 1], [512, 512, 2048], 3, stride=2)
+        self.d0 = ResidualBlock(  64, [1, 3, 1], [ 64,  64,  256], 3, stride=1, freeze=freeze)
+        self.d1 = ResidualBlock( 256, [1, 3, 1], [128, 128,  512], 4, stride=2, freeze=freeze)
+        self.d2 = ResidualBlock( 512, [1, 3, 1], [256, 256, 1024], 6, stride=2, freeze=freeze)
+        self.d3 = ResidualBlock(1024, [1, 3, 1], [512, 512, 2048], 3, stride=2, freeze=freeze)
 
         self.conv_bot = nn.Conv2d(2048, 1024, 1, stride=1, padding=0, bias=False)
 
@@ -211,8 +212,7 @@ class NetDesc(Net):
                 ('convf', nn.Conv2d(256, 256, 1, stride=1, padding=0, bias=False)),
             ]))
             u1 = nn.Sequential(OrderedDict([
-                ('conva_pad', TFSamepaddingLayer(ksize=5, stride=1)),
-                ('conva', nn.Conv2d(256, 64, 5, stride=1, padding=0, bias=False)),
+                ('conva', nn.Conv2d(256, 64, 5, stride=1, padding=2, bias=False)),
             ]))
 
             u0 = nn.Sequential(OrderedDict([
@@ -253,20 +253,14 @@ class NetDesc(Net):
 
         imgs = imgs / 255.0 # to 0-1 range to match XY
 
-        def encoder_forward(imgs):
-            d0 = self.conv0(imgs)
-            d0 = self.d0(d0)
+        d0 = self.conv0(imgs)
+        d0 = self.d0(d0)
+        with torch.set_grad_enabled(self.not_freeze):
             d1 = self.d1(d0)
             d2 = self.d2(d1)
             d3 = self.d3(d2)
-            d3 = self.conv_bot(d3)
-            return [d0, d1, d2, d3]
-
-        if self.freeze:
-            with torch.no_grad():
-                d = encoder_forward(imgs)
-        else:
-            d = encoder_forward(imgs)
+        d3 = self.conv_bot(d3)
+        d = [d0, d1, d2, d3]
 
         # TODO: switch to `crop_to_shape` ? 
         d[0] = crop_op(d[0], [184, 184])

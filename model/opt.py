@@ -26,11 +26,11 @@ train_config = {
                         optim.Adam,
                         { # should match keyword for parameters within the optimizer
                             'lr'    : 1.0e-4, # initial learning rate,
-                            'betas' : (0.5, 0.999)
+                            'betas' : (0.9, 0.999)
                         },
                     ],
                     # learning rate scheduler
-                    'lr_scheduler' : lambda x : optim.lr_scheduler.StepLR(x, 60),
+                    'lr_scheduler' : lambda x : optim.lr_scheduler.StepLR(x, 25),
 
                     # path to load, -1 to auto load checkpoint from previous phase, 
                     # None to start from scratch
@@ -38,8 +38,7 @@ train_config = {
                 },
             },
 
-            'nr_epochs' : 5, 
-            # 'nr_epochs' : 1, 
+            'nr_epochs' : 50, 
         },
 
         {
@@ -55,7 +54,7 @@ train_config = {
                         },
                     ],
                     # learning rate scheduler
-                    'lr_scheduler' : lambda x : optim.lr_scheduler.StepLR(x, 60),
+                    'lr_scheduler' : lambda x : optim.lr_scheduler.StepLR(x, 25),
 
                     # path to load, -1 to auto load checkpoint from previous phase, 
                     # None to start from scratch
@@ -63,7 +62,7 @@ train_config = {
                 },
             },
 
-            'nr_epochs' : 5, 
+            'nr_epochs' : 50, 
         }
     ],
 
@@ -76,9 +75,9 @@ train_config = {
         'train' : {   
             # TODO: align here, file path or what? what about CV?
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 0, # number of threads for dataloader
+            'nr_procs'   : 16, # number of threads for dataloader
 
-            'batch_size' : 4,
+            'batch_size' : 8,
             'run_step'   : train_step, # TODO: function name or function variable ?
             'reset_per_run' : False,
 
@@ -100,9 +99,9 @@ train_config = {
         },       
         'valid' : {
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 0, # number of threads for dataloader
+            'nr_procs'   : 8, # number of threads for dataloader
 
-            'batch_size' : 4,
+            'batch_size' : 16,
             'run_step'   : valid_step,
             'reset_per_run' : True, # * to stop aggregating output etc. from last run
             

@@ -41,15 +41,21 @@ def crop_to_shape(x, y, data_format='NCHW'):
     return crop_op(x, crop_shape, data_format)
 
 ####
-def xentropy_loss(pred, true, **kwargs):
+def xentropy_loss(pred, true, reduction='mean'):
     """
-    Assume NHWC
+    Assume NHWC, reduction is either 'mean' or 'sum' 
     """
-    pred = pred.permute(0, 3, 1, 2)
-    return F.cross_entropy(pred, true, **kwargs)
+    epsilon = 10e-8
+    # scale preds so that the class probs of each sample sum to 1
+    pred = pred / torch.sum(pred, -1, keepdim=True)
+    # manual computation of crossentropy
+    pred = torch.clamp(pred, epsilon, 1.0 - epsilon)
+    loss = -torch.sum((true * torch.log(pred)), -1, keepdim=True)
+    loss = loss.mean() if reduction == 'mean' else loss.sum()
+    return loss
 
 ####
-def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
+def dice_loss(pred, true, loss_type='sorensen', smooth=1e-8):
     """Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
     of two batch of data, usually be used for binary image segmentation
     i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
@@ -60,7 +66,7 @@ def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
     target : Tensor
         The target distribution, format the same with `output`.
     loss_type : str
-        ``jaccard`` or ``sorensen``, default is ``jaccard``.
+        ``jaccard`` or ``sorensen``, default is ``sorensen``.
     smooth : float
         This small value will be added to the numerator and denominator.
             - If both output and target are empty, it makes sure dice is 1.
@@ -72,16 +78,16 @@ def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
     ---------
     >>> dice_loss = dice_coe(outputs, y_)
     """
-    target = torch.squeeze(target.float())
-    output = torch.squeeze(output.float())
+    true = torch.squeeze(true.float())
+    pred = torch.squeeze(pred.float())
 
-    inse = (output * target).sum()
+    inse = (pred * true).sum()
     if loss_type == 'jaccard':
-        l = (output * output).sum()
-        r = (target * target).sum()
+        l = (pred * pred).sum()
+        r = (true * true).sum()
     elif loss_type == 'sorensen':
-        l = output.sum()
-        r = target.sum()
+        l = pred.sum()
+        r = true.sum()
     else:
         raise Exception("Unknown loss_type")
     # already flatten
@@ -90,16 +96,16 @@ def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
     return dice
 
 ####
-def mse_loss(true, pred):
+def mse_loss(pred, true):
     ### regression loss
     loss = pred - true
-    loss = (loss * loss).sum()
+    loss = (loss * loss).mean()
     return loss
 
 ####
-def msge_loss(true, pred, focus):
+def msge_loss(pred, true, focus):
     '''
-    Assume channel 0 is Vertical and channel 1 is Horizontal
+    Assume channel 1 is Vertical and channel 0 is Horizontal
     '''
     ####
     def get_sobel_kernel(size):
@@ -121,22 +127,32 @@ def msge_loss(true, pred, focus):
         kernel_h = kernel_h.view(1, 1, 5, 5).to('cuda') # constant
         kernel_v = kernel_v.view(1, 1, 5, 5).to('cuda') # constant
 
-        h_ch = hv[...,1].unsqueeze(1) # Nx1xHxW
-        v_ch = hv[...,0].unsqueeze(1) # Nx1xHxW
+        h_ch = hv[...,0].unsqueeze(1) # Nx1xHxW
+        v_ch = hv[...,1].unsqueeze(1) # Nx1xHxW
 
         # can only apply in NCHW mode
-        dh_ch = F.conv2d(h_ch, kernel_h, padding=2)
-        dv_ch = F.conv2d(v_ch, kernel_v, padding=2)
-        dhv = torch.cat([dh_ch, dv_ch], dim=1)
+        h_dv_ch = F.conv2d(h_ch, kernel_v, padding=2)
+        v_dh_ch = F.conv2d(v_ch, kernel_h, padding=2)
+        dhv = torch.cat([h_dv_ch, v_dh_ch], dim=1)
         dhv = dhv.permute(0, 2, 3, 1) # to NHWC
+
+        # import matplotlib.pyplot as plt
+        # plt.imshow(h_ch[0,0].detach().cpu().numpy(), cmap='jet')
+        # plt.savefig('dump_h.png', dpi=600)
+        # plt.imshow(v_ch[0,0].detach().cpu().numpy(), cmap='jet')
+        # plt.savefig('dump_v.png', dpi=600)
+        # plt.imshow(dh_ch[0,0].detach().cpu().numpy(), cmap='jet')
+        # plt.savefig('dump_dh.png', dpi=600)
+        # plt.imshow(dv_ch[0,0].detach().cpu().numpy(), cmap='jet')
+        # plt.savefig('dump_dv.png', dpi=600)
         return dhv
 
-    focus = focus[...,None] # assume input NHW
+    focus = (focus[...,None]).float() # assume input NHW
     focus = torch.cat([focus, focus], axis=-1)
-    pred_grad = get_gradient_hv(pred)
     true_grad = get_gradient_hv(true) 
+    pred_grad = get_gradient_hv(pred)
     loss = pred_grad - true_grad
-    loss = focus.float() * (loss * loss)
+    loss = focus * (loss * loss)
     # artificial reduce_mean with focused region
     loss = loss.sum() / (focus.sum() + 1.0e-8)
     return loss

@@ -122,6 +122,7 @@ class ProcessAccumulatedRawOutput(BaseCallbacks):
         pred_np[pred_np >  0.5] = 1.0
         pred_np[pred_np <= 0.5] = 0.0
 
+        # TODO: something sketchy here
         acc_np = (pred_np == true_np).sum() / nr_pixels
         dice_np = _dice(true_np, pred_np, 1)
         track_value('np_acc' , acc_np, 'scalar')
@@ -133,6 +134,38 @@ class ProcessAccumulatedRawOutput(BaseCallbacks):
         error = pred_hv - true_hv
         mse = np.sum(error * error) / nr_pixels
         track_value('hv_mse' , mse, 'scalar')
+
+        idx = np.random.randint(0, true_np.shape[0])
+        plt.subplot(2,3,1)
+        plt.imshow(true_np[idx], cmap='jet')
+        plt.subplot(2,3,2)
+        plt.imshow(true_hv[idx,...,0], cmap='jet')
+        plt.subplot(2,3,3)
+        plt.imshow(true_hv[idx,...,1], cmap='jet')
+        plt.subplot(2,3,4)
+        plt.imshow(pred_np[idx], cmap='jet')
+        plt.subplot(2,3,5)
+        plt.imshow(pred_hv[idx,...,0], cmap='jet')
+        plt.subplot(2,3,6)
+        plt.imshow(pred_hv[idx,...,1], cmap='jet')
+        plt.savefig('dumpx.png', dpi=600)
+        plt.close()
+
+        idx = np.random.randint(0, true_np.shape[0])
+        plt.subplot(2,3,1)
+        plt.imshow(true_np[idx], cmap='jet')
+        plt.subplot(2,3,2)
+        plt.imshow(true_hv[idx,...,0], cmap='jet')
+        plt.subplot(2,3,3)
+        plt.imshow(true_hv[idx,...,1], cmap='jet')
+        plt.subplot(2,3,4)
+        plt.imshow(pred_np[idx], cmap='jet')
+        plt.subplot(2,3,5)
+        plt.imshow(pred_hv[idx,...,0], cmap='jet')
+        plt.subplot(2,3,6)
+        plt.imshow(pred_hv[idx,...,1], cmap='jet')
+        plt.savefig('dumpy.png', dpi=600)
+        plt.close()
 
         # update global shared states
         state.tracked_step_output = track_dict
@@ -186,7 +219,7 @@ class VisualizeOutput(BaseCallbacks):
         cmap = plt.get_cmap('jet')
         def colorize(ch, vmin, vmax):
             ch = np.squeeze(ch.astype('float32'))
-            ch = ch / (vmax - vmin + 1.0e-16)
+            ch = (ch - vmin) / (vmax - vmin + 1.0e-16)
             # take RGB from RGBA heat map
             ch_cmap = (cmap(ch)[...,:3] * 255).astype('uint8')
             # ch_cmap = center_pad_to_shape(ch_cmap, aligned_shape)

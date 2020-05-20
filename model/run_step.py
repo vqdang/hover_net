@@ -48,13 +48,11 @@ def train_step(batch_data, run_info):
     # TODO: adding loss weighting mechanism
     # * For Nulcei vs Background Segmentation 
     # NP branch
-
-    # pred must be NCHW
-    term_loss = xentropy_loss(pred_np, true_np, reduction='mean')
+    true_np_onehot = (F.one_hot(true_np, num_classes=2)).float()
+    term_loss = xentropy_loss(prob_np, true_np_onehot, reduction='mean')
     track_value('np_xentropy_loss', term_loss.cpu().item())
     loss += term_loss
 
-    true_np_onehot = F.one_hot(true_np) # need to dynamic for type later
     term_loss = dice_loss(prob_np[...,0], true_np_onehot[...,0]) \
               + dice_loss(prob_np[...,1], true_np_onehot[...,1])
     track_value('np_dice_loss', term_loss.cpu().item())
@@ -63,7 +61,7 @@ def train_step(batch_data, run_info):
     # HV branch
     term_loss = mse_loss(pred_hv, true_hv)
     track_value('hv_mse_loss', term_loss.cpu().item())
-    loss += term_loss
+    loss += 2 * term_loss
 
     term_loss = msge_loss(pred_hv, true_hv, true_np)
     track_value('hv_msge_loss', term_loss.cpu().item())
@@ -71,8 +69,12 @@ def train_step(batch_data, run_info):
 
     track_value('overall_loss', loss.cpu().item())
     # * gradient update
+
+    # torch.set_printoptions(precision=10)
+    # print(model.module.d0.units[-1].conv2.weight[0,0])
     loss.backward()
     optimizer.step()
+    # print(model.module.d0.units[-1].conv2.weight[0,0])
     ####
 
     # pick 2 random sample from the batch for visualization
@@ -84,7 +86,7 @@ def train_step(batch_data, run_info):
     pred_hv = pred_hv.detach()[sample_indices].cpu().numpy()
     true_hv = true_hv[sample_indices].cpu().numpy()
 
-    prob_np = pred_np.detach()[...,1:][sample_indices].cpu().numpy()
+    prob_np = prob_np.detach()[...,1:][sample_indices].cpu().numpy()
     true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
 
     # plt.imshow(viz)

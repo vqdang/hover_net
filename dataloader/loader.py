@@ -20,7 +20,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         self.mask_shape = mask_shape
         self.input_shape = input_shape
 
-        self.info_list = file_list[:8]
+        self.info_list = file_list
         augmentor = self.__augmentation__(mode)
         self.shape_augs = iaa.Sequential(augmentor[0]) 
         self.input_augs = iaa.Sequential(augmentor[1]) 
@@ -109,12 +109,6 @@ class TrainSerialLoader(torch.utils.data.Dataset):
     def __augmentation__(self, mode):
         if mode == 'train':
             shape_augs = [
-                iaa.PadToFixedSize(
-                    1800, 1800, 
-                    pad_cval=255,
-                    position='center',
-                    deterministic=True, 
-                ),
                 # * order = ``0`` -> ``cv2.INTER_NEAREST``
                 # * order = ``1`` -> ``cv2.INTER_LINEAR``
                 # * order = ``2`` -> ``cv2.INTER_CUBIC``
@@ -149,9 +143,9 @@ class TrainSerialLoader(torch.utils.data.Dataset):
                             iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
                             ]),
                 iaa.Sequential([
-                    iaa.Add((-26, 26)),
-                    iaa.AddToHueAndSaturation((-20, 20)),
-                    iaa.LinearContrast((0.75, 1.25), per_channel=1.0),
+                    iaa.Add((-16, 16)),
+                    iaa.AddToHueAndSaturation((-10, 10)),
+                    iaa.LinearContrast((0.85, 1.15), per_channel=1.0),
                 ], random_order=True),
             ]   
         elif mode == 'valid':

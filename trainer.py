@@ -88,8 +88,9 @@ class Trainer(Config):
             stat_file_path = prev_phase_dir + '/stats.json'
             with open(stat_file_path) as stat_file:
                 info = json.load(stat_file)
-            last_chkpts_path = "%s/%s_epoch=%s.tar" % (prev_phase_dir, 
-                                        net_name, max(info.keys()))
+            epoch_list = [int(v) for v in info.keys()]
+            last_chkpts_path = "%s/%s_epoch=%d.tar" % (prev_phase_dir, 
+                                        net_name, max(epoch_list))
             return last_chkpts_path
 
         ####
@@ -181,7 +182,10 @@ class Trainer(Config):
 
         prev_save_path = None
         for phase_idx, phase_info in enumerate(phase_list):
-            save_path = 'exp/dump/%02d' % (phase_idx)
+            save_path = 'exp/dumpx/%02d' % (phase_idx)
+            # if phase_idx == 0: 
+            #     prev_save_path = save_path
+            #     continue
             self.run_once(phase_info, engine_opt, save_path, prev_log_dir=prev_save_path)
             prev_save_path = save_path
     ####
@@ -195,7 +199,7 @@ if __name__ == '__main__':
     args = parser.parse_args()      
 
     # ! fix this !!!!
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
     trainer = Trainer()
     # trainer.view_dataset()
     trainer.run()

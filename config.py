@@ -24,8 +24,9 @@ class Config(object):
 
         # list of directories containing validation patches. 
         # For both train and valid directories, a comma separated list of directories can be used
-        self.train_dir_list = ['dataset/train//Kumar/train/540x540_80x80/']
-        self.valid_dir_list = ['dataset/train//Kumar/train/540x540_80x80/']
+        self.train_dir_list = ['dataset/train/Kumar/train/540x540_80x80/']
+        self.valid_dir_list = ['dataset/train/Kumar/valid_diff/540x540_80x80/',
+                               'dataset/train/Kumar/valid_same/540x540_80x80/']
 
         self.shape_info = {
             'train' : {
