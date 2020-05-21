@@ -6,6 +6,16 @@ This is an extended version of our previous work: XY-Net.  <br />
 
 [Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. 
 
+**NEWS:** We have now released an inference version of HoVer-Net with WSI-processing capability trained on ~200,000 nuclei. For further information, click [here](https://github.com/simongraham/hovernet_inference).
+
+## Set Up Environment
+
+```
+conda create --name hovernet python=3.6
+conda activate hovernet
+pip install -r requirements.txt
+```
+
 ## Dataset
 
 Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/). <br />
