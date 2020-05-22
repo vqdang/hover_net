@@ -126,6 +126,9 @@ class Trainer(Config):
                 "`desc` must be a Class or Function which instantiate NEW objects !!!"
             net_desc = net_info['desc']()
 
+            # TODO: customize print-out for each run ?
+            # summary_string(net_desc, (3, 270, 270), device='cpu')
+
             pretrained_path = net_info['pretrained']
             if pretrained_path is not None:
                 if pretrained_path == -1:
