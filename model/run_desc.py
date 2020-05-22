@@ -74,6 +74,27 @@ def train_step(batch_data, run_info):
     loss.backward()
 
     ##### * print code for checking grad flow
+    if model.module.freeze: # `module` to detach from DataParallel wrapper
+        assert model.module.d3.units[0].conv1.weight.grad == None
+        assert model.module.d2.units[0].conv1.weight.grad == None
+        assert model.module.d1.units[0].conv1.weight.grad == None
+        assert model.module.d0.units[0].conv1.weight.grad == None
+        assert model.module.d0.blk_bna.bn.weight.grad != None
+        assert model.module.conv0.conv.weight.grad != None
+        # checking grad magnitude
+        d0_blk_bna_grad = model.module.d0.blk_bna.bn.weight.grad
+        d0_blk_bna_grad = torch.abs(d0_blk_bna_grad).mean().cpu().item()
+        assert d0_blk_bna_grad > 1.0e-3, '%f' % d0_blk_bna_grad
+        # checking grad magnitude
+        conv0_grad = model.module.conv0.conv.weight.grad
+        conv0_grad = torch.abs(conv0_grad).mean().cpu().item()
+        assert d0_blk_bna_grad > 1.0e-3, '%f' % d0_blk_bna_grad
+    else:
+        assert model.module.d3.units[0].conv1.weight.grad != None
+        assert model.module.d2.units[0].conv1.weight.grad != None
+        assert model.module.d1.units[0].conv1.weight.grad != None
+        assert model.module.d0.units[0].conv1.weight.grad != None
+    #####
 
     optimizer.step()
     ####
