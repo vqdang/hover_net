@@ -4,7 +4,7 @@ from run_utils.callbacks.base import *
 from run_utils.callbacks.logging import *
 from run_utils.engine import Events
 
-from .run_step import train_step, valid_step
+from .run_desc import train_step, valid_step, viz_train_step_output
 
 from model.net_desc import HoVerNet
 
@@ -91,7 +91,7 @@ train_config = {
                 Events.EPOCH_COMPLETED: [
                     TrackLr(),
                     CheckpointSaver(),
-                    VisualizeOutput(),
+                    VisualizeOutput(viz_train_step_output),
                     LoggingEpochOutput(),
                     TriggerEngine('valid'),
                     ScheduleLr(),
