@@ -129,7 +129,7 @@ class ResidualBlock(Net):
         self.units = nn.ModuleList()
         for idx in range(unit_count):
             unit_layer = [
-                ('preact_bn', nn.BatchNorm2d(unit_in_ch, eps=1e-5)),
+                ('preact_bn'  , nn.BatchNorm2d(unit_in_ch, eps=1e-5)),
                 ('preact_relu', nn.ReLU(inplace=True)),
 
                 ('conv1', nn.Conv2d(unit_in_ch, unit_ch[0], unit_ksize[0],
@@ -208,7 +208,6 @@ class UpSample2x(nn.Module):
         ret = ret.permute(0, 1, 2, 4, 3, 5)
         ret = ret.reshape((-1, input_shape[1], input_shape[2] * 2, input_shape[3] * 2))
         return ret
-
 
 ####
 class HoVerNet(Net):

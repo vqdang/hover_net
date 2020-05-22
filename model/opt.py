@@ -8,8 +8,6 @@ from .run_desc import train_step, valid_step, viz_train_step_output
 
 from model.net_desc import HoVerNet
 
-from model.net_desc import HoVerNet
-
 
 # TODO: training config only ?
 # TODO: switch all to function name String for all option

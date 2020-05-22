@@ -72,7 +72,6 @@ def xentropy_loss(pred, true, reduction='mean'):
     return loss
 
 
-
 ####
 def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
     """ TODO: modify docstring in line with others
