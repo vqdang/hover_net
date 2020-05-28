@@ -216,63 +216,18 @@ class ScalarMovingAverage(BaseCallbacks):
         state.tracked_step_output['scalar'] = self.tracking_dict
         return
 ####
-
-
 class VisualizeOutput(BaseCallbacks):
-    def __init__(self, per_n_epoch=1):
-        super().__init__()
+    def __init__(self, proc_func, per_n_epoch=1):
+        """
+        TODO: option to dump viz per epoch or per n step
+        """
+        super(VisualizeOutput, self).__init__()
         self.per_n_epoch = per_n_epoch
+        self.proc_func = proc_func
 
     def run(self, state, event):
         current_epoch = state.curr_epoch
         raw_output = state.step_output['raw']
-
-        imgs = raw_output['img']
-        true_np, pred_np = raw_output['np']
-        true_hv, pred_hv = raw_output['hv']
-
-        aligned_shape = [list(imgs.shape), list(
-            true_np.shape), list(pred_np.shape)]
-        aligned_shape = np.min(np.array(aligned_shape), axis=0)[1:3]
-
-        cmap = plt.get_cmap('jet')
-
-        def colorize(ch, vmin, vmax):
-            ch = np.squeeze(ch.astype('float32'))
-            ch = (ch - vmin) / (vmax - vmin + 1.0e-16)
-            # take RGB from RGBA heat map
-            ch_cmap = (cmap(ch)[..., :3] * 255).astype('uint8')
-            # ch_cmap = center_pad_to_shape(ch_cmap, aligned_shape)
-            return ch_cmap
-
-        viz_list = []
-        for idx in range(2):
-            # img = center_pad_to_shape(imgs[idx], aligned_shape)
-            img = cropping_center(imgs[idx], aligned_shape)
-
-            true_viz_list = [img]
-            # cmap may randomly fails if of other types
-            true_viz_list.append(colorize(true_np[idx], 0, 1))
-            # map to [0,2] for better visualisation.
-            # Note, [-1,1] is used for training.
-            true_viz_list.append(colorize(true_hv[idx][..., 0] + 1, 0, 2))
-            true_viz_list.append(colorize(true_hv[idx][..., 1] + 1, 0, 2))
-            true_viz_list = np.concatenate(true_viz_list, axis=1)
-
-            pred_viz_list = [img]
-            # cmap may randomly fails if of other types
-            pred_viz_list.append(colorize(pred_np[idx], 0, 1))
-            # map to [0,2] for better visualisation.
-            # Note, [-1,1] is used for training.
-            pred_viz_list.append(colorize(pred_hv[idx][..., 0] + 1, 0, 2))
-            pred_viz_list.append(colorize(pred_hv[idx][..., 1] + 1, 0, 2))
-            pred_viz_list = np.concatenate(pred_viz_list, axis=1)
-
-            viz_list.append(
-                np.concatenate([true_viz_list, pred_viz_list], axis=0)
-            )
-        viz_list = np.concatenate(viz_list, axis=0)
-        # plt.imshow(viz_list)
-        # plt.savefig('dumpx.png', dpi=600)
-        state.tracked_step_output['image']['output'] = viz_list
+        viz_image = self.proc_func(raw_output)
+        state.tracked_step_output['image']['output'] = viz_image
         return
