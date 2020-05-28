@@ -130,6 +130,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
                 A.HorizontalFlip(p=.5),
                 A.ElasticTransform(alpha_affine=0, alpha=35,
                                    sigma=5, interpolation=cv2.INTER_NEAREST),
+                A.CenterCrop(self.input_shape[0], self.input_shape[1])
             ])
 
             augment_img = A.Compose([
@@ -151,9 +152,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
                 A.OneOf([A.MedianBlur(blur_limit=3),
                          A.GaussianBlur(blur_limit=3),
                          A.GaussNoise(var_limit=0.05*255)
-                         ]),
-
-                A.CenterCrop(self.input_shape[0], self.input_shape[1])
+                         ])
             ])
 
         else:

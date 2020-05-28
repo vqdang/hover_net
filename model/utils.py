@@ -73,7 +73,7 @@ def xentropy_loss(pred, true, reduction='mean'):
 
 
 ####
-def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
+def dice_loss(pred, true, loss_type='sorensen', smooth=1e-3):
     """ TODO: modify docstring in line with others
     Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
     of two batch of data, usually be used for binary image segmentation

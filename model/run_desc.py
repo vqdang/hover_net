@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 
@@ -23,8 +24,6 @@ def train_step(batch_data, run_info):
     # HWC
     true_np = torch.squeeze(true_np.long().to('cuda'))
     true_hv = torch.squeeze(true_hv.float().to('cuda'))
-
-    # true_tp = batch_label[...,2:]
 
     ####
     model     = run_info['net']['desc']
@@ -73,12 +72,13 @@ def train_step(batch_data, run_info):
 
     ##### * print code for checking grad flow
     if model.module.freeze: # `module` to detach from DataParallel wrapper
-        assert model.module.d3.units[0].conv1.weight.grad == None
-        assert model.module.d2.units[0].conv1.weight.grad == None
-        assert model.module.d1.units[0].conv1.weight.grad == None
-        assert model.module.d0.units[0].conv1.weight.grad == None
-        assert model.module.d0.blk_bna.bn.weight.grad != None
-        assert model.module.conv0.conv.weight.grad != None
+        epsilon = 1.0e-15
+        assert torch.abs(model.module.d3.units[0].conv1.weight.grad).sum() < epsilon
+        assert torch.abs(model.module.d2.units[0].conv1.weight.grad).sum() < epsilon
+        assert torch.abs(model.module.d1.units[0].conv1.weight.grad).sum() < epsilon
+        assert torch.abs(model.module.d0.units[0].conv1.weight.grad).sum() < epsilon
+        assert torch.abs(model.module.d0.blk_bna.bn.weight.grad).sum() > epsilon
+        assert torch.abs(model.module.conv0.conv.weight.grad).sum() > epsilon
         # checking grad magnitude
         d0_blk_bna_grad = model.module.d0.blk_bna.bn.weight.grad
         d0_blk_bna_grad = torch.abs(d0_blk_bna_grad).mean().cpu().item()
@@ -88,10 +88,10 @@ def train_step(batch_data, run_info):
         conv0_grad = torch.abs(conv0_grad).mean().cpu().item()
         assert d0_blk_bna_grad > 1.0e-3, '%f' % d0_blk_bna_grad
     else:
-        assert model.module.d3.units[0].conv1.weight.grad != None
-        assert model.module.d2.units[0].conv1.weight.grad != None
-        assert model.module.d1.units[0].conv1.weight.grad != None
-        assert model.module.d0.units[0].conv1.weight.grad != None
+        assert torch.abs(model.module.d3.units[0].conv1.weight.grad).sum() > epsilon
+        assert torch.abs(model.module.d2.units[0].conv1.weight.grad).sum() > epsilon
+        assert torch.abs(model.module.d1.units[0].conv1.weight.grad).sum() > epsilon
+        assert torch.abs(model.module.d0.units[0].conv1.weight.grad).sum() > epsilon
     #####
 
     optimizer.step()
@@ -108,10 +108,6 @@ def train_step(batch_data, run_info):
 
     prob_np = prob_np.detach()[...,1:][sample_indices].cpu().numpy()
     true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
-
-    # plt.imshow(viz)
-    # plt.savefig('dump.png', dpi=600)
-    # exit()
 
     # * Its up to user to define the protocol to process the raw output per step!
     result_dict['raw'] = { # protocol for contents exchange within `raw`
@@ -140,7 +136,7 @@ def valid_step(batch_data, run_info):
     model = run_info['net']['desc']
     model.eval() # infer mode
 
-    # -----------------------------------------------------------
+    # --------------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
         output_dict = model(imgs) # forward
     output_dict = {k : v.permute(0, 2, 3 ,1) for k, v in output_dict.items()}
