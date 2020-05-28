@@ -24,16 +24,38 @@ Below are the main directories in the repository:
 - `misc/`: utils that are
 - `model/`: model definition, along with the main run step and hyperparameter settings  
 - `postproc/`: post processing utils 
-- `run_utils/`:VV defines the train/validation loop and callbacks 
+- `run_utils/`: defines the train/validation loop and callbacks 
 
 Below are the main executable scripts in the repository:
 
-- `config.py` 
+- `config.py`: configuration file
+- `trainer.py`: main training script
+- `dataset.py`: defines the dataset classes 
+- `extract_patches.py`: extracts patches from original images
+- `compute_stats.py`: main metric computation script
 
 
 ## HoVer-Net
 
 ![](docs/diagram.png)
+
+## Training
+
+Usage: <br />
+```
+  python trainer.py [--gpu=<id>] [--view=<dset>]
+  python trainer.py (-h | --help)
+  python trainer.py --version
+```
+
+Options:
+```
+  -h --help       Show this string.
+  --version       Show version.
+  --gpu=<id>      Comma separated GPU list.  
+  --view=<dset>   Visualise images after augmentation. Choose 'train' or 'valid'.
+```
+
 
 ## Citation
 

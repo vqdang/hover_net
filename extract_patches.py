@@ -30,6 +30,7 @@ dataset_name = 'Kumar'   # Name of dataset - use Kumar, CPM17 or CoNSeP. Pulls d
 extract_type = 'mirror'  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
 
 
+#-------------------------------------------------------------------------------------
 if __name__ == '__main__':
 
     if type_classification and (dataset_name == 'Kumar' or dataset_name == 'CPM17'):

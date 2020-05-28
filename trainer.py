@@ -91,7 +91,6 @@ class Trainer(Config):
         """
         Simply run the defined run_step of the related method once
         """
-
         check_manual_seed(self.seed)
 
         log_info = {}
@@ -199,9 +198,8 @@ class Trainer(Config):
     ####
     def run(self):
         """
-        Define multi-stage run or cross-valid or whatever in here
+        Define multi-stage run or cross-validation or whatever in here
         """
-
         phase_list = self.model_config['phase_list']
         engine_opt = self.model_config['run_engine']
 

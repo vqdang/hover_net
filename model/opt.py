@@ -63,7 +63,7 @@ train_config = {
                 },
             },
 
-            'nr_epochs': 20,
+            'nr_epochs': 50,
         }
     ],
 

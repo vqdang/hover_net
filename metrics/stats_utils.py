@@ -5,7 +5,9 @@ from scipy.optimize import linear_sum_assignment
 import cv2
 import matplotlib.pyplot as plt
 
-#####--------------------------Optimized for Speed
+
+
+#--------------------------Optimised for Speed
 def get_fast_aji(true, pred):
     """
     AJI version distributed by MoNuSeg, has no permutation problem but suffered from 
@@ -50,7 +52,7 @@ def get_fast_aji(true, pred):
             inter = (t_mask * p_mask).sum()
             pairwise_inter[true_id-1, pred_id-1] = inter
             pairwise_union[true_id-1, pred_id-1] = total - inter
-    #
+    
     pairwise_iou = pairwise_inter / (pairwise_union + 1.0e-6)
     # pair of pred that give highest iou for each true, dont care 
     # about reusing pred instance multiple times
@@ -62,7 +64,7 @@ def get_fast_aji(true, pred):
     # print(paired_true.shape, paired_pred.shape)
     overall_inter = (pairwise_inter[paired_true, paired_pred]).sum()
     overall_union = (pairwise_union[paired_true, paired_pred]).sum()
-    #
+    
     paired_true = (list(paired_true + 1)) # index to instance ID
     paired_pred = (list(paired_pred + 1))
     # add all unpaired GT and Prediction into the union
@@ -72,9 +74,11 @@ def get_fast_aji(true, pred):
         overall_union += true_masks[true_id].sum()
     for pred_id in unpaired_pred:
         overall_union += pred_masks[pred_id].sum()
-    #
+    
     aji_score = overall_inter / overall_union
     return aji_score
+
+
 #####
 def get_fast_aji_plus(true, pred):
     """
@@ -148,6 +152,8 @@ def get_fast_aji_plus(true, pred):
     #
     aji_score = overall_inter / overall_union
     return aji_score
+
+
 #####
 def get_fast_pq(true, pred, match_iou=0.5):
     """
@@ -248,6 +254,7 @@ def get_fast_pq(true, pred, match_iou=0.5):
 
     return [dq, sq, dq * sq], [paired_true, paired_pred, unpaired_true, unpaired_pred]
 
+
 #####
 def get_fast_dice_2(true, pred):
     """
@@ -288,12 +295,12 @@ def get_fast_dice_2(true, pred):
             overall_inter += inter
 
     return 2 * overall_inter / overall_total
-#####
+
 
 #####--------------------------As pseudocode
 def get_dice_1(true, pred):
     """
-        Traditional dice
+    Traditional dice
     """
     # cast to binary 1st
     true = np.copy(true)
@@ -324,6 +331,8 @@ def get_dice_2(true, pred):
                 total_intersect += intersect.sum()
                 total_markup += (t_mask.sum() + p_mask.sum())
     return 2 * total_intersect / total_markup
+
+
 #####
 def remap_label(pred, by_size=False):
     """
@@ -355,6 +364,8 @@ def remap_label(pred, by_size=False):
     for idx, inst_id in enumerate(pred_id):
         new_pred[pred == inst_id] = idx + 1    
     return new_pred
+
+    
 #####
 def pair_coordinates(setA, setB, radius):
     """

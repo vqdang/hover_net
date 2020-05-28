@@ -27,7 +27,6 @@ class TrackLr(BaseCallbacks):
     """
     Add learning rate to tracking
     """
-
     def __init__(self, per_n_epoch=1, per_n_step=None):
         super().__init__()
         self.per_n_epoch = per_n_epoch
@@ -44,10 +43,9 @@ class TrackLr(BaseCallbacks):
 
 ####
 class ScheduleLr(BaseCallbacks):
-    '''
+    """
     Trigger all scheduler
-    '''
-
+    """
     def __init__(self):
         super().__init__()
 
@@ -81,7 +79,6 @@ class CheckpointSaver(BaseCallbacks):
     Must declare save dir first in the shared global state of the
     attached engine
     """
-
     def run(self, state, event):
         if not state.logging:
             return
@@ -163,7 +160,6 @@ class ScalarMovingAverage(BaseCallbacks):
     Calculate the running average for all scalar output of 
     each runstep of the attached RunEngine
     """
-
     def __init__(self, alpha=0.95):
         super().__init__()
         self.alpha = alpha
@@ -191,10 +187,8 @@ class ScalarMovingAverage(BaseCallbacks):
 ####
 class VisualizeOutput(BaseCallbacks):
     def __init__(self, proc_func, per_n_epoch=1):
-        """
-        TODO: option to dump viz per epoch or per n step
-        """
-        super(VisualizeOutput, self).__init__()
+        super().__init__()
+        # TODO: option to dump viz per epoch or per n step
         self.per_n_epoch = per_n_epoch
         self.proc_func = proc_func
 

@@ -7,6 +7,7 @@ import numpy as np
 
 from .utils import cropping_center
 
+
 #####
 class PatchExtractor(object):
     """
@@ -71,7 +72,6 @@ class PatchExtractor(object):
         Return:
             a list of sub patches, each patch is same dtype as x
         """
-
         im_h = x.shape[0] 
         im_w = x.shape[1]
 
@@ -120,7 +120,6 @@ class PatchExtractor(object):
         Return:
             a list of sub patches, each patch is same dtype as x
         """
-
         diff_h = self.win_size[0] - self.step_size[0]
         padt = diff_h // 2
         padb = diff_h - padt
@@ -144,8 +143,9 @@ class PatchExtractor(object):
         else:
             assert False, 'Unknown Patch Type [%s]' % patch_type
         return
-#####
 
+
+#----------------------------------------------------------------------------
 
 if __name__ == '__main__':
     # toy example for debug

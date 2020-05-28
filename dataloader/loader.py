@@ -29,7 +29,6 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         mask_shape: shape of the output [h,w] - defined in config.py
         mode: 'train' or 'valid'
     """
-
     def __init__(self, file_list, input_shape=None, mask_shape=None, mode='train'):
         assert input_shape is not None and mask_shape is not None
         self.mask_shape = mask_shape
@@ -120,7 +119,6 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         """
         Augmentation pipeline. For more information on how this can be modified, refer to:
         https://albumentations.readthedocs.io/en/latest/api/augmentations.html#module-albumentations.augmentations.transforms
-
         """
         if mode == 'train':
             augment_img_mask = A.Compose([

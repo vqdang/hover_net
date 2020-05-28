@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 # matplotlib.use('Agg')
 
 
+####
 def fig2data(fig):
     """
     Convert a Matplotlib figure to a 4D numpy array with RGBA channels and return it
@@ -29,9 +30,9 @@ def fig2data(fig):
     # Roll the ALPHA channel to have it in RGBA mode
     buf = np.roll(buf, 3, axis=2)
     return buf
+
+
 ####
-
-
 class _Scalar(object):
     @staticmethod
     def to_console(value):
@@ -44,9 +45,8 @@ class _Scalar(object):
     @staticmethod
     def to_tensorboard(value):
         return 'scalar', value
+
 ####
-
-
 class _ConfusionMatrix(object):
     @staticmethod
     def to_console(value):
@@ -78,9 +78,8 @@ class _ConfusionMatrix(object):
         img = np.transpose(fig2data(fig), axes=[2, 0, 1])  # HWC => CHW
         plt.close()
         return 'image', img
+
 ####
-
-
 class _Image(object):
     @staticmethod
     def to_console(value):
@@ -96,7 +95,6 @@ class _Image(object):
     def to_tensorboard(value):
         # TODO: add method
         return 'image', value
-####
 
 
 __converter_dict = {
@@ -106,6 +104,7 @@ __converter_dict = {
 }
 
 
+####
 def serialize(value, input_format, output_format):
     converter = __converter_dict[input_format]
     if output_format == 'console':
