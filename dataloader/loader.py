@@ -135,16 +135,16 @@ class TrainSerialLoader(torch.utils.data.Dataset):
                 # different ordering will give different results (not commutative)
                 A.OneOf([
                     A.Compose([
-                        A.HueSaturationValue(hue_shift_limit=(-25, 0),
-                                             sat_shift_limit=0, val_shift_limit=0, p=1),
+                        A.HueSaturationValue(hue_shift_limit=25,
+                                             sat_shift_limit=20, val_shift_limit=0, p=1),
                         A.RandomBrightnessContrast(
-                            brightness_limit=0.3, contrast_limit=0.4, p=1)
+                            brightness_limit=0.2, contrast_limit=0.2, p=1)
                     ]),
                     A.Compose([
                         A.RandomBrightnessContrast(
-                            brightness_limit=0.3, contrast_limit=0.4, p=1),
-                        A.HueSaturationValue(hue_shift_limit=(-25, 0),
-                                             sat_shift_limit=0, val_shift_limit=0, p=1)
+                            brightness_limit=0.2, contrast_limit=0.2, p=1),
+                        A.HueSaturationValue(hue_shift_limit=25,
+                                             sat_shift_limit=20, val_shift_limit=0, p=1)
                     ])
                 ]),
                 A.OneOf([A.MedianBlur(blur_limit=3),
