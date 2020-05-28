@@ -4,7 +4,7 @@ A multiple branch network that performs nuclear instance segmentation and classi
 
 [Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. <br />
 
-This is the official PyTorch implementation of HoVer-Net. If you intend on using the model with weights trained on the datasets as used in the above paper, then please refer to the [original repository](https://github.com/vqdang/hover_net). 
+This is the official PyTorch implementation of HoVer-Net. If you intend on using the model with weights trained on the datasets used in the above paper, please refer to the [original repository](https://github.com/vqdang/hover_net). 
 
 ## Set Up Environment
 
@@ -14,26 +14,22 @@ conda activate hovernet
 pip install -r requirements.txt
 ```
 
-## Dataset
-
-Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/). <br />
-Download the Kumar, CPM-15, CPM-17 and TNBC datsets from [this link](https://drive.google.com/open?id=1l55cv3DuY-f7-JotDN7N5nbNnjbLWchK).  <br />
-
-Ground truth files are in `.mat` format, refer to the README included with the datasets for further information. 
-
 ## Repository Structure
 
-- `src/` contains executable files used to run the model. Further information on running the code can be found in the corresponding directory.
-- `loader/`contains scripts for data loading and self implemented augmentation functions.
-- `metrics/`contains evaluation code. 
-- `misc/`contains util scripts. 
-- `model/` contains scripts that define the architecture of the segmentation models. 
-- `opt/` contains scripts that define the model hyperparameters. 
-- `postproc/` contains post processing utils. 
-- `config.py` is the configuration file. Paths need to be changed accordingly.
-- `train.py` and `infer.py` are the training and inference scripts respectively.
-- `process.py` is the post processing script for obtaining the final instances. 
-- `extract_patches.py` is the patch extraction script. 
+Below are the main directories in the repository: 
+
+- `dataloader/`: the data loader and augmentation pipeline
+- `docs/`: figures/GIFs used in the repo
+- `metrics/`: scripts for metric calculation
+- `misc/`: utils that are
+- `model/`: model definition, along with the main run step and hyperparameter settings  
+- `postproc/`: post processing utils 
+- `run_utils/`:VV defines the train/validation loop and callbacks 
+
+Below are the main executable scripts in the repository:
+
+- `config.py` 
+
 
 ## HoVer-Net
 
@@ -58,7 +54,7 @@ BibTex entry: <br />
 ## Overlaid Segmentation and Classification Prediction
 
 <p float="left">
-  <img src="/docs/seg.gif" alt="Segmentation" width="870" />
+  <img src="docs/seg.gif" alt="Segmentation" width="870" />
 </p>
 
 The colour of the nuclear boundary denotes the type of nucleus. <br />
@@ -66,6 +62,13 @@ Blue: epithelial<br />
 Red: inflammatory <br />
 Green: spindle-shaped <br />
 Cyan: miscellaneous
+
+## Datasets
+
+Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/sci/dcs/research/tia/data/hovernet/). <br />
+Download the Kumar, CPM-15, CPM-17 and TNBC datsets from [this link](https://drive.google.com/open?id=1l55cv3DuY-f7-JotDN7N5nbNnjbLWchK).  <br />
+
+Ground truth files are in `.mat` format, refer to the README included with the datasets for further information. 
 
 ## Authors
 
