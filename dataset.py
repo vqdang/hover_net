@@ -27,10 +27,10 @@ class Kumar(object):
         }
 
         self.train_dir_list = [
-            self.data_root + '/Kumar/patches/train/']
+            self.data_root + '/train/Kumar/train/540x540_80x80/']
         self.valid_dir_list = [
-            self.data_root + '/Kumar/patches/valid_same/',
-            self.data_root + '/Kumar/patches/valid_diff/'
+            self.data_root + '/train/Kumar/valid_same/540x540_80x80/',
+            self.data_root + '/train/Kumar/valid_diff/540x540_80x80/'
             ]
 
         # used for determining the colour of contours in overlay
