@@ -146,6 +146,7 @@ class ProcessAccumulatedRawOutput(BaseCallbacks):
         state.tracked_step_output = track_dict
         return
 
+
 ####
 class VisualizeOutput(BaseCallbacks):
     def __init__(self, proc_func, per_n_epoch=1):
