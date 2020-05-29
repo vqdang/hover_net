@@ -1,13 +1,12 @@
 import torch.optim as optim
 
+from model.net_desc import HoVerNet
 from run_utils.callbacks.base import *
 from run_utils.callbacks.logging import *
 from run_utils.engine import Events
 
-from .run_desc import train_step, valid_step, viz_train_step_output
-
-from model.net_desc import HoVerNet
-
+from .run_desc import (proc_valid_step_output, train_step, valid_step,
+                       viz_train_step_output)
 
 # TODO: training config only ?
 # TODO: switch all to function name String for all option
@@ -35,7 +34,7 @@ train_config = {
 
                     # path to load, -1 to auto load checkpoint from previous phase,
                     # None to start from scratch
-                    'pretrained': 'ImageNet-ResNet50-Preact-Pytorch.npz',
+                    'pretrained': '../pretrained/ImageNet-ResNet50-Preact-Pytorch.npz',
                 },
             },
 
@@ -78,7 +77,7 @@ train_config = {
             'dataset'    : '', # whats about compound dataset ?
             'nr_procs'   : 16, # number of threads for dataloader
 
-            'batch_size' : 8,
+            'batch_size' : 16,
             'run_step'   : train_step, # TODO: function name or function variable ?
             'reset_per_run' : False,
 
@@ -100,7 +99,7 @@ train_config = {
         },       
         'valid' : {
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 8, # number of threads for dataloader
+            'nr_procs'   : 16, # number of threads for dataloader
 
             'batch_size' : 16,
             'run_step'   : valid_step,
@@ -112,7 +111,7 @@ train_config = {
                     AccumulateRawOutput(),
                 ],
                 Events.EPOCH_COMPLETED: [
-                    ProcessAccumulatedRawOutput(),
+                    ProcessAccumulatedRawOutput(proc_valid_step_output),
                     LoggingEpochOutput(),
                 ]
             },

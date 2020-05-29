@@ -19,12 +19,12 @@ def train_step(batch_data, run_info):
     true_np = batch_data['np_map']
     true_hv = batch_data['hv_map']
    
-    imgs = imgs.float().to('cuda') # to NCHW
+    imgs = imgs.to('cuda').type(torch.float32) # to NCHW
     imgs = imgs.permute(0, 3, 1, 2).contiguous()
 
     # HWC
-    true_np = torch.squeeze(true_np.long().to('cuda'))
-    true_hv = torch.squeeze(true_hv.float().to('cuda'))
+    true_np = torch.squeeze(true_np).to('cuda').type(torch.int64)
+    true_hv = torch.squeeze(true_hv).to('cuda').type(torch.float32)
 
     # true_tp = batch_label[...,2:]
 
@@ -72,30 +72,6 @@ def train_step(batch_data, run_info):
 
     # torch.set_printoptions(precision=10)
     loss.backward()
-
-    ##### * print code for checking grad flow
-    if model.module.freeze: # `module` to detach from DataParallel wrapper
-        assert model.module.d3.units[0].conv1.weight.grad == None
-        assert model.module.d2.units[0].conv1.weight.grad == None
-        assert model.module.d1.units[0].conv1.weight.grad == None
-        assert model.module.d0.units[0].conv1.weight.grad == None
-        assert model.module.d0.blk_bna.bn.weight.grad != None
-        assert model.module.conv0.conv.weight.grad != None
-        # checking grad magnitude
-        d0_blk_bna_grad = model.module.d0.blk_bna.bn.weight.grad
-        d0_blk_bna_grad = torch.abs(d0_blk_bna_grad).mean().cpu().item()
-        assert d0_blk_bna_grad > 1.0e-3, '%f' % d0_blk_bna_grad
-        # checking grad magnitude
-        conv0_grad = model.module.conv0.conv.weight.grad
-        conv0_grad = torch.abs(conv0_grad).mean().cpu().item()
-        assert d0_blk_bna_grad > 1.0e-3, '%f' % d0_blk_bna_grad
-    else:
-        assert model.module.d3.units[0].conv1.weight.grad != None
-        assert model.module.d2.units[0].conv1.weight.grad != None
-        assert model.module.d1.units[0].conv1.weight.grad != None
-        assert model.module.d0.units[0].conv1.weight.grad != None
-    #####
-
     optimizer.step()
     ####
 
@@ -110,10 +86,6 @@ def train_step(batch_data, run_info):
 
     prob_np = prob_np.detach()[...,1:][sample_indices].cpu().numpy()
     true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
-
-    # plt.imshow(viz)
-    # plt.savefig('dump.png', dpi=600)
-    # exit()
 
     # * Its up to user to define the protocol to process the raw output per step!
     result_dict['raw'] = { # protocol for contents exchange within `raw`
@@ -131,12 +103,12 @@ def valid_step(batch_data, run_info):
     true_np = batch_data['np_map']
     true_hv = batch_data['hv_map']
    
-    imgs = imgs.float().to('cuda') # to NCHW
+    imgs = imgs.to('cuda').type(torch.float32) # to NCHW
     imgs = imgs.permute(0, 3, 1, 2)
 
     # HWC
-    true_np = torch.squeeze(true_np.long().to('cuda'))
-    true_hv = torch.squeeze(true_hv.float().to('cuda'))
+    true_np = torch.squeeze(true_np).to('cuda').type(torch.int64)
+    true_hv = torch.squeeze(true_hv).to('cuda').type(torch.float32)
 
     ####
     model = run_info['net']['desc']
@@ -217,3 +189,71 @@ def viz_train_step_output(raw_data):
     # plt.imshow(viz_list)
     # plt.savefig('dump.png', dpi=600)
     return viz_list
+
+####
+def proc_valid_step_output(raw_data):
+    # TODO: add auto populate from main state track list
+    track_dict = {'scalar': {}}
+    def track_value(name, value, vtype): return track_dict[vtype].update(
+        {name: value})
+
+    # ! factor this out
+    def _dice(true, pred, label):
+        true = np.array(true == label, np.int32)
+        pred = np.array(pred == label, np.int32)
+        inter = (pred * true).sum()
+        total = (pred + true).sum()
+        return 2 * inter / (total + 1.0e-8)
+
+    pred_np = np.array(raw_data['prob_np'])
+    true_np = np.array(raw_data['true_np'])
+    nr_pixels = np.size(true_np)
+    # * NP segmentation statistic
+    pred_np[pred_np > 0.5] = 1.0
+    pred_np[pred_np <= 0.5] = 0.0
+
+    # TODO: something sketchy here
+    acc_np = (pred_np == true_np).sum() / nr_pixels
+    dice_np = _dice(true_np, pred_np, 1)
+    track_value('np_acc', acc_np, 'scalar')
+    track_value('np_dice', dice_np, 'scalar')
+
+    # * HV regression statistic
+    pred_hv = np.array(raw_data['pred_hv'])
+    true_hv = np.array(raw_data['true_hv'])
+    error = pred_hv - true_hv
+    mse = np.sum(error * error) / nr_pixels
+    track_value('hv_mse', mse, 'scalar')
+
+    # idx = np.random.randint(0, true_np.shape[0])
+    # plt.subplot(2,3,1)
+    # plt.imshow(true_np[idx], cmap='jet')
+    # plt.subplot(2,3,2)
+    # plt.imshow(true_hv[idx,...,0], cmap='jet')
+    # plt.subplot(2,3,3)
+    # plt.imshow(true_hv[idx,...,1], cmap='jet')
+    # plt.subplot(2,3,4)
+    # plt.imshow(pred_np[idx], cmap='jet')
+    # plt.subplot(2,3,5)
+    # plt.imshow(pred_hv[idx,...,0], cmap='jet')
+    # plt.subplot(2,3,6)
+    # plt.imshow(pred_hv[idx,...,1], cmap='jet')
+    # plt.savefig('dumpx.png', dpi=600)
+    # plt.close()
+
+    # idx = np.random.randint(0, true_np.shape[0])
+    # plt.subplot(2,3,1)
+    # plt.imshow(true_np[idx], cmap='jet')
+    # plt.subplot(2,3,2)
+    # plt.imshow(true_hv[idx,...,0], cmap='jet')
+    # plt.subplot(2,3,3)
+    # plt.imshow(true_hv[idx,...,1], cmap='jet')
+    # plt.subplot(2,3,4)
+    # plt.imshow(pred_np[idx], cmap='jet')
+    # plt.subplot(2,3,5)
+    # plt.imshow(pred_hv[idx,...,0], cmap='jet')
+    # plt.subplot(2,3,6)
+    # plt.imshow(pred_hv[idx,...,1], cmap='jet')
+    # plt.savefig('dumpy.png', dpi=600)
+    # plt.close()
+    return track_dict

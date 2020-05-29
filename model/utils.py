@@ -73,42 +73,13 @@ def xentropy_loss(pred, true, reduction='mean'):
 
 
 ####
-def dice_loss(output, target, loss_type='sorensen', smooth=1e-3):
-    """ TODO: modify docstring in line with others
-    Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
-    of two batch of data, usually be used for binary image segmentation
-    i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
-    Parameters
-    -----------
-    output : Tensor
-        A distribution with shape: [batch_size, ....], (any dimensions).
-    target : Tensor
-        The target distribution, format the same with `output`.
-    loss_type : str
-        ``jaccard`` or ``sorensen``, default is ``sorensen``.
-    smooth : float
-        This small value will be added to the numerator and denominator.
-            - If both output and target are empty, it makes sure dice is 1.
-            - If either output or target are empty (all pixels are background), 
-              dice = ```smooth/(small_value + smooth)``, then if smooth is very small, 
-              dice close to 0 (even the image values lower than the threshold), 
-              so in this case, higher smooth can have a higher dice.
-    Examples
-    ---------
-    >>> dice_loss = dice_coe(outputs, y_)
+def dice_loss(pred, true, smooth=1e-3):
     """
-    true = torch.squeeze(true.float())
-    pred = torch.squeeze(pred.float())
-
+    `pred` and `true` must be of torch.float32
+    """
     inse = (pred * true).sum()
-    if loss_type == 'jaccard':
-        l = (pred * pred).sum()
-        r = (true * true).sum()
-    elif loss_type == 'sorensen':
-        l = pred.sum()
-        r = true.sum()
-    else:
-        raise Exception("Unknown loss_type")
+    l = pred.sum()
+    r = true.sum()
     # already flatten
     dice = 1.0 - (2. * inse + smooth) / (l + r + smooth)
     ##

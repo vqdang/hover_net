@@ -9,6 +9,7 @@ from sklearn.metrics import confusion_matrix
 from misc.utils import center_pad_to_shape, cropping_center
 
 
+####
 class BaseCallbacks(object):
     def __init__(self):
         self.engine_trigger = False
@@ -18,9 +19,8 @@ class BaseCallbacks(object):
 
     def run(self, state, event):
         pass
+
 ####
-
-
 class TrackLr(BaseCallbacks):
     """
     Add learning rate to tracking
@@ -38,9 +38,8 @@ class TrackLr(BaseCallbacks):
             lr = net_info['optimizer'].param_groups[0]['lr']
             state.tracked_step_output['scalar']['lr-%s' % net_name] = lr
         return
+
 ####
-
-
 class ScheduleLr(BaseCallbacks):
     '''
     Trigger all scheduler
@@ -55,9 +54,8 @@ class ScheduleLr(BaseCallbacks):
         for net_name, net_info in run_info.items():
             net_info['lr_scheduler'].step()
         return
+
 ####
-
-
 class TriggerEngine(BaseCallbacks):
     def __init__(self, triggered_engine_name, nr_epoch=1):
         self.engine_trigger = True
@@ -70,9 +68,8 @@ class TriggerEngine(BaseCallbacks):
                                   nr_epoch=self.nr_epoch,
                                   shared_state=state)
         return
+
 ####
-
-
 class CheckpointSaver(BaseCallbacks):
     """
     Must declare save dir first in the shared global state of the
@@ -88,9 +85,8 @@ class CheckpointSaver(BaseCallbacks):
             torch.save(net_checkpoint, '%s/%s_epoch=%d.tar' %
                        (state.log_dir, net_name, state.curr_epoch))
         return
+
 ####
-
-
 class AccumulateRawOutput(BaseCallbacks):
     def run(self, state, event):
         step_output = state.step_output['raw']
@@ -102,91 +98,8 @@ class AccumulateRawOutput(BaseCallbacks):
             else:
                 accumulated_output[key] = list(step_value)
         return
+
 ####
-
-
-class ProcessAccumulatedRawOutput(BaseCallbacks):
-    def __init__(self, per_n_epoch=1):
-        # TODO: allow dynamically attach specific procesing for `type`
-        super().__init__()
-        self.per_n_epoch = per_n_epoch
-
-    def run(self, state, event):
-        current_epoch = state.curr_epoch
-        # if current_epoch % self.per_n_epoch != 0: return
-        output_dict = state.epoch_accumulated_output
-
-        # TODO: add auto populate from main state track list
-        track_dict = {'scalar': {}}
-        def track_value(name, value, vtype): return track_dict[vtype].update(
-            {name: value})
-
-        # ! factor this out
-        def _dice(true, pred, label):
-            true = np.array(true == label, np.int32)
-            pred = np.array(pred == label, np.int32)
-            inter = (pred * true).sum()
-            total = (pred + true).sum()
-            return 2 * inter / (total + 1.0e-8)
-
-        pred_np = np.array(output_dict['prob_np'])
-        true_np = np.array(output_dict['true_np'])
-        nr_pixels = np.size(true_np)
-        # * NP segmentation statistic
-        pred_np[pred_np > 0.5] = 1.0
-        pred_np[pred_np <= 0.5] = 0.0
-
-        # TODO: something sketchy here
-        acc_np = (pred_np == true_np).sum() / nr_pixels
-        dice_np = _dice(true_np, pred_np, 1)
-        track_value('np_acc', acc_np, 'scalar')
-        track_value('np_dice', dice_np, 'scalar')
-
-        # * HV regression statistic
-        pred_hv = np.array(output_dict['pred_hv'])
-        true_hv = np.array(output_dict['true_hv'])
-        error = pred_hv - true_hv
-        mse = np.sum(error * error) / nr_pixels
-        track_value('hv_mse', mse, 'scalar')
-
-        idx = np.random.randint(0, true_np.shape[0])
-        plt.subplot(2,3,1)
-        plt.imshow(true_np[idx], cmap='jet')
-        plt.subplot(2,3,2)
-        plt.imshow(true_hv[idx,...,0], cmap='jet')
-        plt.subplot(2,3,3)
-        plt.imshow(true_hv[idx,...,1], cmap='jet')
-        plt.subplot(2,3,4)
-        plt.imshow(pred_np[idx], cmap='jet')
-        plt.subplot(2,3,5)
-        plt.imshow(pred_hv[idx,...,0], cmap='jet')
-        plt.subplot(2,3,6)
-        plt.imshow(pred_hv[idx,...,1], cmap='jet')
-        plt.savefig('dumpx.png', dpi=600)
-        plt.close()
-
-        idx = np.random.randint(0, true_np.shape[0])
-        plt.subplot(2,3,1)
-        plt.imshow(true_np[idx], cmap='jet')
-        plt.subplot(2,3,2)
-        plt.imshow(true_hv[idx,...,0], cmap='jet')
-        plt.subplot(2,3,3)
-        plt.imshow(true_hv[idx,...,1], cmap='jet')
-        plt.subplot(2,3,4)
-        plt.imshow(pred_np[idx], cmap='jet')
-        plt.subplot(2,3,5)
-        plt.imshow(pred_hv[idx,...,0], cmap='jet')
-        plt.subplot(2,3,6)
-        plt.imshow(pred_hv[idx,...,1], cmap='jet')
-        plt.savefig('dumpy.png', dpi=600)
-        plt.close()
-
-        # update global shared states
-        state.tracked_step_output = track_dict
-        return
-####
-
-
 class ScalarMovingAverage(BaseCallbacks):
     """
     Calculate the running average for all scalar output of 
@@ -215,6 +128,24 @@ class ScalarMovingAverage(BaseCallbacks):
 
         state.tracked_step_output['scalar'] = self.tracking_dict
         return
+
+####
+class ProcessAccumulatedRawOutput(BaseCallbacks):
+    def __init__(self, proc_func, per_n_epoch=1):
+        # TODO: allow dynamically attach specific procesing for `type`
+        super().__init__()
+        self.per_n_epoch = per_n_epoch
+        self.proc_func = proc_func
+
+    def run(self, state, event):
+        current_epoch = state.curr_epoch
+        # if current_epoch % self.per_n_epoch != 0: return
+        raw_data = state.epoch_accumulated_output
+        track_dict = self.proc_func(raw_data)
+        # update global shared states
+        state.tracked_step_output = track_dict
+        return
+
 ####
 class VisualizeOutput(BaseCallbacks):
     def __init__(self, proc_func, per_n_epoch=1):

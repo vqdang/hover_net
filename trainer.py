@@ -215,7 +215,6 @@ class Trainer(Config):
 ####
 if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net v1.0')
-    print(args)
     trainer = Trainer()
 
     if args['--view'] and args['--gpu']:
@@ -228,6 +227,6 @@ if __name__ == '__main__':
                 'Use "train" or "valid" for --view.')
         trainer.view_dataset(args['--view'])
     else:
-        os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
-        nr_gpus = len(args['--gpu'].split(','))
+        # os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
+        # nr_gpus = len(args['--gpu'].split(','))
         trainer.run()
