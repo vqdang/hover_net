@@ -35,7 +35,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         self.mask_shape = mask_shape
         self.input_shape = input_shape
         self.augment_img_mask, self.augment_img = self.__augmentation__(mode)
-        self.info_list = file_list
+        self.info_list = file_list[:16]
 
     def __len__(self):
         return len(self.info_list)

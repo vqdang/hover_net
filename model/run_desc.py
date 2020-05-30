@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
+import time
 
 from misc.utils import center_pad_to_shape, cropping_center
 from .utils import crop_to_shape, dice_loss, mse_loss, msge_loss, xentropy_loss
@@ -31,68 +32,81 @@ def train_step(batch_data, run_info):
     ####
     model     = run_info['net']['desc']
     optimizer = run_info['net']['optimizer']
+
+    # print(model.id)
+    # model.id = time.time()
+    # print(model.id)
+
     ####
     model.train() 
     model.zero_grad() # not rnn so not accumulate
 
-    output_dict = model(imgs)
-    output_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in output_dict.items()}
+    # output_dict = model(imgs)
+    # output_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in output_dict.items()}
+    pred_hv = model(imgs)
+    pred_hv = pred_hv.permute(0, 2, 3 ,1)
 
-    pred_np = output_dict['np'] # should be logit value, not softmax output
-    pred_hv = output_dict['hv']
+    # pred_np = output_dict['np'] # should be logit value, not softmax output
+    # pred_hv = output_dict['hv']
 
-    prob_np = F.softmax(pred_np, dim=-1)
+    # prob_np = F.softmax(pred_np, dim=-1)
     ####
-    loss = 0
+    # loss = 0
 
     # TODO: adding loss weighting mechanism
     # * For Nulcei vs Background Segmentation 
     # NP branch
-    true_np_onehot = (F.one_hot(true_np, num_classes=2)).float()
-    term_loss = xentropy_loss(prob_np, true_np_onehot, reduction='mean')
-    track_value('np_xentropy_loss', term_loss.cpu().item())
-    loss += term_loss
+    # true_np_onehot = (F.one_hot(true_np, num_classes=2)).float()
+    # term_loss = xentropy_loss(prob_np, true_np_onehot, reduction='mean')
+    # track_value('np_xentropy_loss', term_loss.detach().cpu().item())
+    # loss += term_loss
 
-    term_loss = dice_loss(prob_np[...,0], true_np_onehot[...,0]) \
-              + dice_loss(prob_np[...,1], true_np_onehot[...,1])
-    track_value('np_dice_loss', term_loss.cpu().item())
-    loss += term_loss
+    # term_loss = dice_loss(prob_np[...,0], true_np_onehot[...,0]) \
+    #           + dice_loss(prob_np[...,1], true_np_onehot[...,1])
+    # track_value('np_dice_loss', term_loss.cpu().item())
+    # loss += term_loss
     
-    # HV branch
-    term_loss = mse_loss(pred_hv, true_hv)
-    track_value('hv_mse_loss', term_loss.cpu().item())
-    loss += 2 * term_loss
+    # # HV branch
+    # term_loss = mse_loss(pred_hv, true_hv)
+    term_loss = mse_loss(pred_hv, torch.rand_like(pred_hv))
+    track_value('hv_mse_loss', term_loss.detach().cpu().item())
+    # loss += 2 * term_loss
 
-    term_loss = msge_loss(pred_hv, true_hv, true_np)
-    track_value('hv_msge_loss', term_loss.cpu().item())
-    loss += term_loss
+    # term_loss = msge_loss(pred_hv, true_hv, true_np)
+    # track_value('hv_msge_loss', term_loss.cpu().item())
+    # loss += term_loss
 
-    track_value('overall_loss', loss.cpu().item())
+    track_value('overall_loss', term_loss.detach().cpu().item())
     # * gradient update
 
     # torch.set_printoptions(precision=10)
-    loss.backward()
+    term_loss.backward()
     optimizer.step()
     ####
+    # valid_step(batch_data, run_info)
+    # model.eval() # infer mode
+    # # -----------------------------------------------------------
+    # with torch.no_grad(): # dont compute gradient
+    #     output_dict = model(imgs) # forward
 
     # pick 2 random sample from the batch for visualization
-    sample_indices = torch.randint(0, true_np.shape[0], (2,))
+    # sample_indices = torch.randint(0, true_np.shape[0], (2,))
 
-    imgs = (imgs[sample_indices]).byte() # to uint8
-    imgs = imgs.permute(0, 2, 3, 1).cpu().numpy()
+    # imgs = (imgs[sample_indices]).byte() # to uint8
+    # imgs = imgs.permute(0, 2, 3, 1).cpu().numpy()
 
-    pred_hv = pred_hv.detach()[sample_indices].cpu().numpy()
-    true_hv = true_hv[sample_indices].cpu().numpy()
+    # pred_hv = pred_hv.detach()[sample_indices].cpu().numpy()
+    # true_hv = true_hv[sample_indices].cpu().numpy()
 
-    prob_np = prob_np.detach()[...,1:][sample_indices].cpu().numpy()
-    true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
+    # prob_np = prob_np.detach()[...,1:][sample_indices].cpu().numpy()
+    # true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
 
     # * Its up to user to define the protocol to process the raw output per step!
-    result_dict['raw'] = { # protocol for contents exchange within `raw`
-        'img': imgs,
-        'np' : (true_np, prob_np),
-        'hv' : (true_hv, pred_hv)
-    }
+    # result_dict['raw'] = { # protocol for contents exchange within `raw`
+    #     'img': imgs,
+    #     'np' : (true_np, prob_np),
+    #     'hv' : (true_hv, pred_hv)
+    # }
     return result_dict
 
 ####
@@ -104,7 +118,7 @@ def valid_step(batch_data, run_info):
     true_hv = batch_data['hv_map']
    
     imgs = imgs.to('cuda').type(torch.float32) # to NCHW
-    imgs = imgs.permute(0, 3, 1, 2)
+    imgs = imgs.permute(0, 3, 1, 2).contiguous() # ! <=== but do contiguos
 
     # HWC
     true_np = torch.squeeze(true_np).to('cuda').type(torch.int64)
@@ -114,22 +128,26 @@ def valid_step(batch_data, run_info):
     model = run_info['net']['desc']
     model.eval() # infer mode
 
+    # print(model.id)
+    # model.id = time.time()
+    # print(model.id)
+
     # -----------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
         output_dict = model(imgs) # forward
-    output_dict = {k : v.permute(0, 2, 3 ,1) for k, v in output_dict.items()}
+        # output_dict = {k : v.permute(0, 2, 3 ,1) for k, v in output_dict.items()}
 
-    pred_np = output_dict['np'] # should be logit value, not softmax output
-    pred_hv = output_dict['hv']
-    prob_np = F.softmax(pred_np, dim=-1)[...,1]
+        # pred_np = output_dict['np'] # should be logit value, not softmax output
+        # pred_hv = output_dict['hv']
+        # prob_np = F.softmax(pred_np, dim=-1)[...,1]
 
     # * Its up to user to define the protocol to process the raw output per step!
     result_dict = { # protocol for contents exchange within `raw`
         'raw': {
-            'true_np' : true_np.cpu().numpy(),
-            'true_hv' : true_hv.cpu().numpy(),
-            'prob_np' : prob_np.cpu().numpy(),
-            'pred_hv' : pred_hv.cpu().numpy()
+            # 'true_np' : true_np.detach().cpu().numpy(),
+            # 'true_hv' : true_hv.detach().cpu().numpy(),
+            # 'prob_np' : prob_np.detach().cpu().numpy(),
+            # 'pred_hv' : pred_hv.detach().cpu().numpy()
         }
     }
     return result_dict
