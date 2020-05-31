@@ -77,7 +77,7 @@ train_config = {
             'dataset'    : '', # whats about compound dataset ?
             'nr_procs'   : 8, # number of threads for dataloader
 
-            'batch_size' : 4,
+            'batch_size' : 16,
             'run_step'   : train_step, # TODO: function name or function variable ?
             'reset_per_run' : False,
 
@@ -88,12 +88,12 @@ train_config = {
                     ScalarMovingAverage(),
                 ],
                 Events.EPOCH_COMPLETED: [
-                    # TrackLr(),
-                    # CheckpointSaver(),
-                    # VisualizeOutput(viz_train_step_output),
-                    # LoggingEpochOutput(),
+                    TrackLr(),
+                    CheckpointSaver(),
+                    VisualizeOutput(viz_train_step_output),
+                    LoggingEpochOutput(),
                     TriggerEngine('valid'),
-                    # ScheduleLr(),
+                    ScheduleLr(),
                 ]
             },
         },       
@@ -101,18 +101,18 @@ train_config = {
             'dataset'    : '', # whats about compound dataset ?
             'nr_procs'   : 4, # number of threads for dataloader
 
-            'batch_size' : 8,
+            'batch_size' : 16,
             'run_step'   : valid_step,
             'reset_per_run' : True, # * to stop aggregating output etc. from last run
             
             # callbacks are run according to the list order of the event            
             'callbacks' : {
                 Events.STEP_COMPLETED  : [
-                    # AccumulateRawOutput(),
+                    AccumulateRawOutput(),
                 ],
                 Events.EPOCH_COMPLETED: [
-                    # ProcessAccumulatedRawOutput(proc_valid_step_output),
-                    # LoggingEpochOutput(),
+                    ProcessAccumulatedRawOutput(proc_valid_step_output),
+                    LoggingEpochOutput(),
                 ]
             },
         },

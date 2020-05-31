@@ -147,7 +147,7 @@ class Trainer(Config):
                 load_feedback = net_desc.load_state_dict(net_state_dict, strict=False)
                 # load_state_dict return (missing keys, unexpected keys)
 
-            # net_desc = DataParallel(net_desc)
+            net_desc = DataParallel(net_desc)
             net_desc = net_desc.to('cuda')
             # print(net_desc) # * dump network definition or not?
             optimizer, optimizer_args = net_info['optimizer']
@@ -185,20 +185,6 @@ class Trainer(Config):
                         triggered_runner_name = callback.triggered_engine_name
                         callback.triggered_engine = runner_dict[triggered_runner_name]
                     runner.add_event_handler(event, callback)
-
-        # import tqdm
-        # for i in range(0, 10):
-        #     dataloader = runner_dict['train'].dataloader
-        #     pbar = tqdm.tqdm(total=len(dataloader), leave=True, ascii=True)
-        #     for data_batch in dataloader:
-        #         pbar.update()
-        #     pbar.close()
-
-        #     dataloader = runner_dict['valid'].dataloader
-        #     pbar = tqdm.tqdm(total=len(dataloader), leave=True, ascii=True)
-        #     for data_batch in dataloader:
-        #         pbar.update()
-        #     pbar.close()
 
         # retrieve main runner
         main_runner = runner_dict['train']
@@ -244,6 +230,6 @@ if __name__ == '__main__':
                 'Use "train" or "valid" for --view.')
         trainer.view_dataset(args['--view'])
     else:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
         # nr_gpus = len(args['--gpu'].split(','))
         trainer.run()

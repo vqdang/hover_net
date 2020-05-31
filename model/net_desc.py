@@ -7,7 +7,9 @@ import torch.nn.functional as F
 
 from collections import OrderedDict
 
-from .utils import crop_to_shape, crop_op
+from .utils import *
+from config import Config
+
 
 ####
 class Net(nn.Module):
@@ -82,23 +84,23 @@ class DenseBlock(Net):
         # ! For inference only so init values for batchnorm may not match tensorflow
         unit_in_ch = in_ch
         self.units = nn.ModuleList()
-        for _ in range(unit_count):
+        for idx in range(unit_count):
             self.units.append(nn.Sequential(OrderedDict([
                 ('preact_bn'  , nn.BatchNorm2d(unit_in_ch, eps=1e-5)),
                 ('preact_relu', nn.ReLU(inplace=True)),
 
-                ('conv1'     , nn.Conv2d(unit_in_ch, unit_ch[0], unit_ksize[0],
+                ('conv1', nn.Conv2d(unit_in_ch, unit_ch[0], unit_ksize[0],
                                     stride=1, padding=0, bias=False)),
                 ('conv1_bn'  , nn.BatchNorm2d(unit_ch[0], eps=1e-5)),
                 ('conv1_relu', nn.ReLU(inplace=True)),
 
-                ('conv2'     , nn.Conv2d(unit_ch[0], unit_ch[1], unit_ksize[1],
+                ('conv2', nn.Conv2d(unit_ch[0], unit_ch[1], unit_ksize[1],
                                     groups=split, stride=1, padding=0, bias=False)),
             ])))
             unit_in_ch += unit_ch[1]
 
         self.blk_bna = nn.Sequential(OrderedDict([
-            ('bn'  , nn.BatchNorm2d(unit_in_ch, eps=1e-5)),
+            ('bn', nn.BatchNorm2d(unit_in_ch, eps=1e-5)),
             ('relu', nn.ReLU(inplace=True)),
         ]))
 
@@ -172,19 +174,10 @@ class ResidualBlock(Net):
         else:
             shortcut = self.shortcut(prev_feat)
 
-        # if self.training:
-        #     for idx in range(0, len(self.units)):
-        #         new_feat = prev_feat
-        #         # * internal flag doesnt play well with external grad flag
-        #         # * so trigger run according to mode is more accurate
-        #         # with torch.set_grad_enabled(not freeze):
-        #         new_feat = self.units[idx](new_feat)
-        #         prev_feat = new_feat + shortcut
-        #         shortcut = prev_feat
-        # else:
         for idx in range(0, len(self.units)):
             new_feat = prev_feat
-            new_feat = self.units[idx](new_feat)
+            with torch.set_grad_enabled(not freeze):
+                new_feat = self.units[idx](new_feat)
             prev_feat = new_feat + shortcut
             shortcut = prev_feat
         feat = self.blk_bna(prev_feat)
@@ -217,13 +210,10 @@ class UpSample2x(nn.Module):
         return ret
 
 ####
-import time
 class HoVerNet(Net):
     def __init__(self, input_ch, nr_types=None, freeze=False):
         super().__init__()
         self.freeze = freeze
-
-        self.id = time.time()
 
         self.conv0 = nn.Sequential(
             OrderedDict([
@@ -240,96 +230,99 @@ class HoVerNet(Net):
         self.conv_bot = nn.Conv2d(
             2048, 1024, 1, stride=1, padding=0, bias=False)
 
-        # def create_decoder_branch(out_ch=2):
-        #     u3 = nn.Sequential(OrderedDict([
-        #         ('conva', nn.Conv2d(1024, 256, 5, stride=1, padding=0, bias=False)),
-        #         ('dense', DenseBlock(256, [1, 5], [128, 32], 8, split=4)),
-        #         ('convf', nn.Conv2d(512, 512, 1, stride=1, padding=0, bias=False)),
-        #     ]))
-        #     u2 = nn.Sequential(OrderedDict([
-        #         ('conva', nn.Conv2d(512, 128, 5, stride=1, padding=0, bias=False)),
-        #         ('dense', DenseBlock(128, [1, 5], [128, 32], 4, split=4)),
-        #         ('convf', nn.Conv2d(256, 256, 1, stride=1, padding=0, bias=False)),
-        #     ]))
-        #     u1 = nn.Sequential(OrderedDict([
-        #         ('conva_pad', TFSamepaddingLayer(ksize=5, stride=1)),
-        #         ('conva'    , nn.Conv2d(256, 64, 5, stride=1, padding=0, bias=False)),
-        #     ]))
+        def create_decoder_branch(out_ch=2):
+            u3 = nn.Sequential(OrderedDict([
+                ('conva', nn.Conv2d(1024, 256, 5, stride=1, padding=0, bias=False)),
+                ('dense', DenseBlock(256, [1, 5], [128, 32], 8, split=4)),
+                ('convf', nn.Conv2d(512, 512, 1, stride=1, padding=0, bias=False)),
+            ]))
+            u2 = nn.Sequential(OrderedDict([
+                ('conva', nn.Conv2d(512, 128, 5, stride=1, padding=0, bias=False)),
+                ('dense', DenseBlock(128, [1, 5], [128, 32], 4, split=4)),
+                ('convf', nn.Conv2d(256, 256, 1, stride=1, padding=0, bias=False)),
+            ]))
+            u1 = nn.Sequential(OrderedDict([
+                ('conva_pad', TFSamepaddingLayer(ksize=5, stride=1)),
+                ('conva'    , nn.Conv2d(256, 64, 5, stride=1, padding=0, bias=False)),
+            ]))
 
-        #     u0 = nn.Sequential(OrderedDict([
-        #         ('bn', nn.BatchNorm2d(64, eps=1e-5)),
-        #         ('relu', nn.ReLU(inplace=True)),
-        #         ('conv', nn.Conv2d(64, out_ch, 1, stride=1, padding=0, bias=True)),
-        #     ]))
+            u0 = nn.Sequential(OrderedDict([
+                ('bn', nn.BatchNorm2d(64, eps=1e-5)),
+                ('relu', nn.ReLU(inplace=True)),
+                ('conv', nn.Conv2d(64, out_ch, 1, stride=1, padding=0, bias=True)),
+            ]))
 
-        #     decoder = nn.Sequential(OrderedDict([
-        #         ('u3', u3),
-        #         ('u2', u2),
-        #         ('u1', u1),
-        #         ('u0', u0),
-        #     ]))
-        #     return decoder
+            decoder = nn.Sequential(OrderedDict([
+                ('u3', u3),
+                ('u2', u2),
+                ('u1', u1),
+                ('u0', u0),
+            ]))
+            return decoder
 
-        # if nr_types is None:
-        #     self.decoder = nn.ModuleDict(
-        #         OrderedDict([
-        #             ('np', create_decoder_branch(out_ch=2)),
-        #             ('hv', create_decoder_branch(out_ch=2)),
-        #         ])
-        #     )
-        # else:
-        #     self.decoder = nn.ModuleDict(
-        #         OrderedDict([
-        #             ('tp', create_decoder_branch(out_ch=nr_types)),
-        #             ('np', create_decoder_branch(out_ch=2)),
-        #             ('hv', create_decoder_branch(out_ch=2)),
-        #         ])
-        #     )
+        if nr_types is None:
+            self.decoder = nn.ModuleDict(
+                OrderedDict([
+                    ('np', create_decoder_branch(out_ch=2)),
+                    ('hv', create_decoder_branch(out_ch=2)),
+                ])
+            )
+        else:
+            self.decoder = nn.ModuleDict(
+                OrderedDict([
+                    ('tp', create_decoder_branch(out_ch=nr_types)),
+                    ('np', create_decoder_branch(out_ch=2)),
+                    ('hv', create_decoder_branch(out_ch=2)),
+                ])
+            )
 
-        # self.upsample2x = UpSample2x()
-        # # TODO: pytorch still require the channel eventhough its ignored
-        # self.weights_init()
+        self.upsample2x = UpSample2x()
+        # TODO: pytorch still require the channel eventhough its ignored
+        self.weights_init()
         # self.check_output_shape([3, 270, 270])
+
+
+    def check_output_shape(self, input_shape):
+        self.input_shape = input_shape
+        dummy_imgs = torch.rand(2, *input_shape).type(torch.float32)
+        dummy_output = self.forward(dummy_imgs)
+        for k, v in dummy_output.items():
+            v_size = list(v.size())
+            v_size[0] = -1 # set the batch dimension
+            print(k, v_size)
 
     def forward(self, imgs, print_size=False):
 
         imgs = imgs / 255.0  # to 0-1 range to match XY
 
-        # if self.training:
-        #     d0 = self.conv0(imgs)
-        #     d0 = self.d0(d0, self.freeze)
-        #     # * internal flag doesnt play well with external grad flag
-        #     # * so trigger run according to mode is more accurate
-        #     with torch.set_grad_enabled(not self.freeze):
-        #         d1 = self.d1(d0)
-        #         d2 = self.d2(d1)
-        #         d3 = self.d3(d2)
-        #     d3 = self.conv_bot(d3)
-        # else:
-        d0 = self.conv0(imgs)
-        d0 = self.d0(d0)
-        d1 = self.d1(d0)
-        d2 = self.d2(d1)
-        d3 = self.d3(d2)
-        d3 = self.conv_bot(d3)
-        # d = [d0, d1, d2, d3]
+        def encoder_forward(imgs):
+            d0 = self.conv0(imgs)
+            d0 = self.d0(d0, self.freeze)
+            with torch.set_grad_enabled(not self.freeze):
+                d1 = self.d1(d0)
+                d2 = self.d2(d1)
+                d3 = self.d3(d2)
+            d3 = self.conv_bot(d3)
+            return [d0, d1, d2, d3]
+
+        d = encoder_forward(imgs)
 
         # TODO: switch to `crop_to_shape` ?
-        # d[0] = crop_op(d[0], [184, 184])
-        # d[1] = crop_op(d[1], [72, 72])
+        d[0] = crop_op(d[0], [184, 184])
+        d[1] = crop_op(d[1], [72, 72])
 
-        # out_dict = {}
-        # for branch_name, branch_desc in self.decoder.items():
-        #     u3 = self.upsample2x(d[-1]) + d[-2]
-        #     u3 = branch_desc[0](u3)
+        out_dict = {}
+        for branch_name, branch_desc in self.decoder.items():
+            u3 = self.upsample2x(d[-1]) + d[-2]
+            u3 = branch_desc[0](u3)
 
-        #     u2 = self.upsample2x(u3) + d[-3]
-        #     u2 = branch_desc[1](u2)
+            u2 = self.upsample2x(u3) + d[-3]
+            u2 = branch_desc[1](u2)
 
-        #     u1 = self.upsample2x(u2) + d[-4]
-        #     u1 = branch_desc[2](u1)
+            u1 = self.upsample2x(u2) + d[-4]
+            u1 = branch_desc[2](u1)
 
-        #     u0 = branch_desc[3](u1)
-        #     out_dict[branch_name] = u0
+            u0 = branch_desc[3](u1)
+            out_dict[branch_name] = u0
 
-        return d3
+        return out_dict
