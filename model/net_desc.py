@@ -295,17 +295,14 @@ class HoVerNet(Net):
 
         imgs = imgs / 255.0  # to 0-1 range to match XY
 
-        def encoder_forward(imgs):
-            d0 = self.conv0(imgs)
-            d0 = self.d0(d0, self.freeze)
-            with torch.set_grad_enabled(not self.freeze):
-                d1 = self.d1(d0)
-                d2 = self.d2(d1)
-                d3 = self.d3(d2)
-            d3 = self.conv_bot(d3)
-            return [d0, d1, d2, d3]
-
-        d = encoder_forward(imgs)
+        d0 = self.conv0(imgs)
+        d0 = self.d0(d0, self.freeze)
+        with torch.set_grad_enabled(not self.freeze):
+            d1 = self.d1(d0)
+            d2 = self.d2(d1)
+            d3 = self.d3(d2)
+        d3 = self.conv_bot(d3)
+        d = [d0, d1, d2, d3]
 
         # TODO: switch to `crop_to_shape` ?
         d[0] = crop_op(d[0], [184, 184])

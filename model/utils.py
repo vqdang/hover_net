@@ -27,7 +27,6 @@ def crop_op(x, cropping, data_format='NCHW'):
         x = x[:, crop_t:-crop_b, crop_l:-crop_r, :]
     return x
 
-
 ####
 def crop_to_shape(x, y, data_format='NCHW'):
     """
@@ -49,9 +48,8 @@ def crop_to_shape(x, y, data_format='NCHW'):
                       x_shape[2] - y_shape[2])
     return crop_op(x, crop_shape, data_format)
 
-
 ####
-def xentropy_loss(pred, true, reduction='mean'):
+def xentropy_loss(true, pred, reduction='mean'):
     """
     Cross entropy loss. Assumes NHWC!
 
@@ -71,20 +69,18 @@ def xentropy_loss(pred, true, reduction='mean'):
     loss = loss.mean() if reduction == 'mean' else loss.sum()
     return loss
 
-
 ####
-def dice_loss(pred, true, smooth=1e-3):
+def dice_loss(true, pred, smooth=1e-3):
     """
     `pred` and `true` must be of torch.float32
+    Assuming of shape NxHxWxC
     """
-    inse = (pred * true).sum()
-    l = pred.sum()
-    r = true.sum()
-    # already flatten
-    dice = 1.0 - (2. * inse + smooth) / (l + r + smooth)
-    ##
-    return dice
-
+    inse = torch.sum(pred * true, (0,1,2))
+    l = torch.sum(pred, (0,1,2))
+    r = torch.sum(true, (0,1,2))
+    loss = 1.0 - (2. * inse + smooth) / (l + r + smooth) 
+    loss = torch.sum(loss)
+    return loss
 
 ####
 def mse_loss(true, pred):
@@ -127,9 +123,9 @@ def msge_loss(true, pred, focus):
 
         assert size % 2 == 1, 'Must be odd, get size=%d' % size
 
-        h_range = np.arange(-size//2+1, size//2+1, dtype=np.float32)
-        v_range = np.arange(-size//2+1, size//2+1, dtype=np.float32)
-        h, v = np.meshgrid(h_range, v_range)
+        h_range = torch.arange(-size//2+1, size//2+1, dtype=torch.float32, device='cuda', requires_grad=False)
+        v_range = torch.arange(-size//2+1, size//2+1, dtype=torch.float32, device='cuda', requires_grad=False)
+        h, v = torch.meshgrid(h_range, v_range)
         kernel_h = h / (h * h + v * v + 1.0e-15)
         kernel_v = v / (h * h + v * v + 1.0e-15)
         return kernel_h, kernel_v
@@ -140,10 +136,8 @@ def msge_loss(true, pred, focus):
         For calculating gradient
         """
         kernel_h, kernel_v = get_sobel_kernel(5)
-        kernel_h = torch.tensor(kernel_h, requires_grad=False)  # constant
-        kernel_v = torch.tensor(kernel_v, requires_grad=False)  # constant
-        kernel_h = kernel_h.view(1, 1, 5, 5).to('cuda')  # constant
-        kernel_v = kernel_v.view(1, 1, 5, 5).to('cuda')  # constant
+        kernel_h = kernel_h.view(1, 1, 5, 5)  # constant
+        kernel_v = kernel_v.view(1, 1, 5, 5)  # constant
 
         h_ch = hv[...,0].unsqueeze(1) # Nx1xHxW
         v_ch = hv[...,1].unsqueeze(1) # Nx1xHxW
@@ -152,17 +146,7 @@ def msge_loss(true, pred, focus):
         h_dv_ch = F.conv2d(h_ch, kernel_v, padding=2)
         v_dh_ch = F.conv2d(v_ch, kernel_h, padding=2)
         dhv = torch.cat([h_dv_ch, v_dh_ch], dim=1)
-        dhv = dhv.permute(0, 2, 3, 1) # to NHWC
-
-        # import matplotlib.pyplot as plt
-        # plt.imshow(h_ch[0,0].detach().cpu().numpy(), cmap='jet')
-        # plt.savefig('dump_h.png', dpi=600)
-        # plt.imshow(v_ch[0,0].detach().cpu().numpy(), cmap='jet')
-        # plt.savefig('dump_v.png', dpi=600)
-        # plt.imshow(dh_ch[0,0].detach().cpu().numpy(), cmap='jet')
-        # plt.savefig('dump_dh.png', dpi=600)
-        # plt.imshow(dv_ch[0,0].detach().cpu().numpy(), cmap='jet')
-        # plt.savefig('dump_dv.png', dpi=600)
+        dhv = dhv.permute(0, 2, 3, 1).contiguous() # to NHWC
         return dhv
 
     focus = (focus[...,None]).float() # assume input NHW

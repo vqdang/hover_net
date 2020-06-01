@@ -14,7 +14,8 @@ Options:
   --view=<dset>   Visualise images after augmentation. Choose 'train' or 'valid'.
 """
 
-
+import cv2
+cv2.setNumThreads(0)
 from docopt import docopt
 import numpy as np
 import matplotlib
@@ -27,9 +28,10 @@ import os
 import json
 
 import torch
-from torch.nn import DataParallel
+from torch.nn import DataParallel # TODO: switch to DistributedDataParallel
 from torch.utils.data import DataLoader
 
+from misc.utils import rm_n_mkdir
 from run_utils.utils import check_log_dir, check_manual_seed, colored
 from run_utils.engine import RunEngine
 
@@ -99,6 +101,8 @@ class Trainer(Config):
         log_info = {}
         if self.logging:
             # check_log_dir(log_dir)
+            rm_n_mkdir(log_dir)
+
             tfwriter = SummaryWriter(log_dir=log_dir)
             json_log_file = log_dir + '/stats.json'
             with open(json_log_file, 'w') as json_file:
@@ -157,6 +161,8 @@ class Trainer(Config):
                 'desc' : net_desc,
                 'optimizer' : optimizer,
                 'lr_scheduler' : scheduler,
+                # TODO: standardize API for external hooks
+                'extra_info' : net_info['extra_info']
             }
 
         # parsing the running engine configuration
@@ -166,11 +172,11 @@ class Trainer(Config):
         # * all engine shared the same network info declaration
         runner_dict = {}
         for runner_name, runner_opt in run_engine_opt.items():
-            # TODO: align naming protocol
             runner_dict[runner_name] = RunEngine(
-                dataloader=self.get_datagen(runner_opt['batch_size'], 
-                                    runner_name, nr_procs=runner_opt['nr_procs'],
-                                    fold_idx=fold_idx),
+                dataloader=self.get_datagen(
+                            opt['batch_size'][runner_name], 
+                            runner_name, nr_procs=runner_opt['nr_procs'],
+                            fold_idx=fold_idx),
                 engine_name=runner_name,
                 run_step=runner_opt['run_step'],
                 run_info=net_run_info,

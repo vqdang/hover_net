@@ -80,8 +80,10 @@ class CheckpointSaver(BaseCallbacks):
         if not state.logging:
             return
         for net_name, net_info in state.run_info.items():
-            net_checkpoint = {key: module.state_dict()
-                              for key, module in net_info.items()}
+            net_checkpoint = {}
+            for key, value in net_info.items():
+                if key == 'extra_info': continue
+                net_checkpoint[key] = value.state_dict()
             torch.save(net_checkpoint, '%s/%s_epoch=%d.tar' %
                        (state.log_dir, net_name, state.curr_epoch))
         return

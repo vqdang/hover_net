@@ -10,6 +10,12 @@ from .utils import crop_to_shape, dice_loss, mse_loss, msge_loss, xentropy_loss
 ####
 def train_step(batch_data, run_info):
     # TODO: synchronize the attach protocol
+    loss_func_dict = {
+        'bce'  : xentropy_loss,
+        'dice' : dice_loss,
+        'mse'  : mse_loss,
+        'msge' : msge_loss,
+    }
     # use 'ema' to add for EMA calculation, must be scalar!
     result_dict = {'EMA' : {}} 
     track_value = lambda name, value: result_dict['EMA'].update({name: value})
@@ -26,7 +32,11 @@ def train_step(batch_data, run_info):
     true_np = torch.squeeze(true_np).to('cuda').type(torch.int64)
     true_hv = torch.squeeze(true_hv).to('cuda').type(torch.float32)
 
-    # true_tp = batch_label[...,2:]
+    true_np_onehot = (F.one_hot(true_np, num_classes=2)).type(torch.float32)
+    true_dict = {
+        'np' : true_np_onehot,
+        'hv' : true_hv,
+    }
 
     ####
     model     = run_info['net']['desc']
@@ -35,37 +45,23 @@ def train_step(batch_data, run_info):
     model.train() 
     model.zero_grad() # not rnn so not accumulate
 
-    output_dict = model(imgs)
-    output_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in output_dict.items()}
+    pred_dict = model(imgs)
+    pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}
+    pred_dict['np'] = F.softmax(pred_dict['np'], dim=-1) 
 
-    pred_np = output_dict['np'] # should be logit value, not softmax output
-    pred_hv = output_dict['hv']
-
-    prob_np = F.softmax(pred_np, dim=-1)
     ####
     loss = 0
-
-    # TODO: adding loss weighting mechanism
-    # * For Nulcei vs Background Segmentation 
-    # NP branch
-    true_np_onehot = (F.one_hot(true_np, num_classes=2)).float()
-    term_loss = xentropy_loss(prob_np, true_np_onehot, reduction='mean')
-    track_value('np_xentropy_loss', term_loss.cpu().item())
-    loss += term_loss
-
-    term_loss = dice_loss(prob_np[...,0], true_np_onehot[...,0]) \
-              + dice_loss(prob_np[...,1], true_np_onehot[...,1])
-    track_value('np_dice_loss', term_loss.cpu().item())
-    loss += term_loss
-    
-    # HV branch
-    term_loss = mse_loss(pred_hv, true_hv)
-    track_value('hv_mse_loss', term_loss.cpu().item())
-    loss += 2 * term_loss
-
-    term_loss = msge_loss(pred_hv, true_hv, true_np)
-    track_value('hv_msge_loss', term_loss.cpu().item())
-    loss += term_loss
+    loss_opts = run_info['net']['extra_info']['loss']
+    for branch_name in pred_dict.keys():
+        for loss_name, loss_weight in loss_opts[branch_name].items():
+            loss_func = loss_func_dict[loss_name]
+            loss_args = [true_dict[branch_name], pred_dict[branch_name]]
+            if loss_name == 'msge':
+                loss_args.append(true_np_onehot[...,1])
+            term_loss = loss_func(*loss_args)
+            track_value('loss_%s_%s' % (branch_name, loss_name), 
+                         term_loss.cpu().item())
+            loss += loss_weight * term_loss
 
     track_value('overall_loss', loss.cpu().item())
     # * gradient update
@@ -79,19 +75,19 @@ def train_step(batch_data, run_info):
     sample_indices = torch.randint(0, true_np.shape[0], (2,))
 
     imgs = (imgs[sample_indices]).byte() # to uint8
-    imgs = imgs.permute(0, 2, 3, 1).cpu().numpy()
+    imgs = imgs.permute(0, 2, 3, 1).contiguous().cpu().numpy()
 
-    pred_hv = pred_hv.detach()[sample_indices].cpu().numpy()
-    true_hv = true_hv[sample_indices].cpu().numpy()
+    pred_dict['np'] = pred_dict['np'][...,1] # return pos only
+    pred_dict = {k : v[sample_indices].detach().cpu().numpy() for k, v in pred_dict.items()}
 
-    prob_np = prob_np.detach()[...,1:][sample_indices].cpu().numpy()
-    true_np = true_np.float()[...,None][sample_indices].cpu().numpy()
-
+    true_dict['np'] = true_np
+    true_dict = {k : v[sample_indices].detach().cpu().numpy() for k, v in true_dict.items()}
+    
     # * Its up to user to define the protocol to process the raw output per step!
     result_dict['raw'] = { # protocol for contents exchange within `raw`
         'img': imgs,
-        'np' : (true_np, prob_np),
-        'hv' : (true_hv, pred_hv)
+        'np' : (true_dict['np'], pred_dict['np']),
+        'hv' : (true_dict['hv'], pred_dict['hv'])
     }
     return result_dict
 
@@ -103,39 +99,41 @@ def valid_step(batch_data, run_info):
     true_np = batch_data['np_map']
     true_hv = batch_data['hv_map']
    
-    imgs = imgs.to('cuda').type(torch.float32) # to NCHW
-    imgs = imgs.permute(0, 3, 1, 2).contiguous()
+    imgs_gpu = imgs.to('cuda').type(torch.float32) # to NCHW
+    imgs_gpu = imgs_gpu.permute(0, 3, 1, 2).contiguous()
 
     # HWC
     true_np = torch.squeeze(true_np).to('cuda').type(torch.int64)
     true_hv = torch.squeeze(true_hv).to('cuda').type(torch.float32)
 
+    true_dict = {
+        'np' : true_np,
+        'hv' : true_hv,
+    }
     ####
     model = run_info['net']['desc']
     model.eval() # infer mode
 
     # -----------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
-        output_dict = model(imgs) # forward
-    output_dict = {k : v.permute(0, 2, 3 ,1) for k, v in output_dict.items()}
-
-    pred_np = output_dict['np'] # should be logit value, not softmax output
-    pred_hv = output_dict['hv']
-    prob_np = F.softmax(pred_np, dim=-1)[...,1]
+        pred_dict = model(imgs_gpu)
+        pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}
+        pred_dict['np'] = F.softmax(pred_dict['np'], dim=-1)[...,1] 
 
     # * Its up to user to define the protocol to process the raw output per step!
     result_dict = { # protocol for contents exchange within `raw`
         'raw': {
-            'true_np' : true_np.cpu().numpy(),
-            'true_hv' : true_hv.cpu().numpy(),
-            'prob_np' : prob_np.cpu().numpy(),
-            'pred_hv' : pred_hv.cpu().numpy()
+            'imgs' : imgs.numpy(),
+            'true_np' : true_dict['np'].cpu().numpy(),
+            'true_hv' : true_dict['hv'].cpu().numpy(),
+            'prob_np' : pred_dict['np'].cpu().numpy(),
+            'pred_hv' : pred_dict['hv'].cpu().numpy()
         }
     }
     return result_dict
 
 ####
-def viz_train_step_output(raw_data):
+def viz_step_output(raw_data):
     """
     `raw_data` will be implicitly provided in the similar format as the 
     return dict from train/valid step, but may have been accumulated across N running step
@@ -159,7 +157,7 @@ def viz_train_step_output(raw_data):
         ch[ch < vmin] = vmin
         ch = (ch - vmin) / (vmax - vmin + 1.0e-16)
         # take RGB from RGBA heat map
-        ch_cmap = (cmap(ch)[..., :3] * 255).astype('uint8')
+        ch_cmap = (cmap(ch)[...,:3] * 255).astype('uint8')
         # ch_cmap = center_pad_to_shape(ch_cmap, aligned_shape)
         return ch_cmap
 
@@ -171,29 +169,27 @@ def viz_train_step_output(raw_data):
         true_viz_list = [img]
         # cmap may randomly fails if of other types
         true_viz_list.append(colorize(true_np[idx], 0, 1))
-        true_viz_list.append(colorize(true_hv[idx][..., 0], -1, 1))
-        true_viz_list.append(colorize(true_hv[idx][..., 1], -1, 1))
+        true_viz_list.append(colorize(true_hv[idx][...,0], -1, 1))
+        true_viz_list.append(colorize(true_hv[idx][...,1], -1, 1))
         true_viz_list = np.concatenate(true_viz_list, axis=1)
 
         pred_viz_list = [img]
         # cmap may randomly fails if of other types
         pred_viz_list.append(colorize(pred_np[idx], 0, 1))
-        pred_viz_list.append(colorize(pred_hv[idx][..., 0], -1, 1))
-        pred_viz_list.append(colorize(pred_hv[idx][..., 1], -1, 1))
+        pred_viz_list.append(colorize(pred_hv[idx][...,0], -1, 1))
+        pred_viz_list.append(colorize(pred_hv[idx][...,1], -1, 1))
         pred_viz_list = np.concatenate(pred_viz_list, axis=1)
 
         viz_list.append(
             np.concatenate([true_viz_list, pred_viz_list], axis=0)
         )
     viz_list = np.concatenate(viz_list, axis=0)
-    # plt.imshow(viz_list)
-    # plt.savefig('dump.png', dpi=600)
     return viz_list
 
 ####
 def proc_valid_step_output(raw_data):
     # TODO: add auto populate from main state track list
-    track_dict = {'scalar': {}}
+    track_dict = {'scalar': {}, 'image' : {}}
     def track_value(name, value, vtype): return track_dict[vtype].update(
         {name: value})
 
@@ -224,5 +220,17 @@ def proc_valid_step_output(raw_data):
     error = pred_hv - true_hv
     mse = np.sum(error * error) / nr_pixels
     track_value('hv_mse', mse, 'scalar')
+
+    # *
+    imgs = np.array(raw_data['imgs'])
+    print(imgs.shape)
+    selected_idx = np.random.randint(0, imgs.shape[0], size=(8,))
+    viz_raw_data = {
+        'img': imgs[selected_idx],
+        'np' : (true_np[selected_idx], pred_np[selected_idx]),
+        'hv' : (true_hv[selected_idx], pred_hv[selected_idx])
+    }
+    viz_fig = viz_step_output(viz_raw_data)
+    track_dict['image']['output'] = viz_fig
 
     return track_dict

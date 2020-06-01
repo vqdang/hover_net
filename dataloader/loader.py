@@ -34,8 +34,11 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         assert input_shape is not None and mask_shape is not None
         self.mask_shape = mask_shape
         self.input_shape = input_shape
-        self.augment_img_mask, self.augment_img = self.__augmentation__(mode)
-        self.info_list = file_list#[:16]
+
+        self.info_list = file_list#[:32]
+        augmentor = self.__augmentation__(mode)
+        self.shape_augs = iaa.Sequential(augmentor[0]) 
+        self.input_augs = iaa.Sequential(augmentor[1]) 
 
     def __len__(self):
         return len(self.info_list)
@@ -45,39 +48,41 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         data = np.load(path)
 
         # split stacked channel into image and label
-        img = (data[..., :3]).astype('uint8')  # RGB images
-        ann = data[..., 3:]  # instance ID map and type map
+        img = (data[...,:3]).astype('uint8') # RGB images
+        ann = data[...,3:] # instance ID map and type map
 
-        # perform augmentation
-        aug_img_mask = self.augment_img_mask(image=img, mask=ann)
-        img = aug_img_mask['image']
-        ann = aug_img_mask['mask']
+        if self.shape_augs is not None:
+            shape_augs = self.shape_augs.to_deterministic()
+            img = shape_augs.augment_image(img)
+            ann = shape_augs.augment_image(ann)
 
-        aug_img = self.augment_img(image=img)
-        img = aug_img['image']
-
-        feed_dict = {'img': img}
-        # * Specific on-the-fly processing for annotation label
-        if ann.shape[-1] == 2:  # nuclei segmentation + classification
+        if self.input_augs is not None:
+            input_augs = self.input_augs.to_deterministic()
+            img = input_augs.augment_image(img)
+        
+        feed_dict = {'img' : img}
+        # * Specific on the flight processing for annotation label
+        if ann.shape[-1] == 2: # Nuclei Segmentation + Type Classification
             inst_map, type_map = np.dsplit(ann, -1)
             np_map = np.array(inst_map > 0, dtype='uint8')
             hv_map = gen_instance_hv_map(inst_map, self.mask_shape)
-            # binarise instance map, ordering of operaton matters !
+            # binarize instance map, ordering of operaton matters !
             np_map = cropping_center(np_map, self.mask_shape)
             hv_map = cropping_center(hv_map, self.mask_shape)
             tp_map = cropping_center(type_map, self.mask_shape)
-            feed_dict['np_map'] = np_map[..., None]  # HWC
+            feed_dict['np_map'] = np_map[...,None] # HWC
             feed_dict['hv_map'] = hv_map
-            feed_dict['tp_map'] = tp_map[..., None]  # HWC
-        else:  # nuclei segmentation only
-            inst_map = ann[..., 0]  # HW1 -> HW
+            feed_dict['tp_map'] = tp_map[...,None] # HWC
+        else: # Nuclei Segmentation only
+            inst_map = ann[...,0] # HW1 -> HW
             np_map = np.array(inst_map > 0, dtype='uint8')
             hv_map = gen_instance_hv_map(inst_map, self.mask_shape)
             np_map = cropping_center(np_map, self.mask_shape)
             hv_map = cropping_center(hv_map, self.mask_shape)
-            feed_dict['np_map'] = np_map[..., None]  # HWC
+            feed_dict['np_map'] = np_map[...,None] # HWC
             feed_dict['hv_map'] = hv_map
 
+        # print(img.shape, ann.shape)
         return feed_dict
 
     @staticmethod
@@ -117,49 +122,56 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         return
 
     def __augmentation__(self, mode):
-        """
-        Augmentation pipeline. For more information on how this can be modified, refer to:
-        https://albumentations.readthedocs.io/en/latest/api/augmentations.html#module-albumentations.augmentations.transforms
-
-        """
         if mode == 'train':
-            augment_img_mask = A.Compose([
-                A.ShiftScaleRotate(shift_limit=5, scale_limit=0.2,
-                                   rotate_limit=179, interpolation=cv2.INTER_NEAREST),
-                A.VerticalFlip(p=.5),
-                A.HorizontalFlip(p=.5),
-                A.ElasticTransform(alpha_affine=0, alpha=35,
-                                   sigma=5, interpolation=cv2.INTER_NEAREST),
-            ])
+            shape_augs = [
+                # * order = ``0`` -> ``cv2.INTER_NEAREST``
+                # * order = ``1`` -> ``cv2.INTER_LINEAR``
+                # * order = ``2`` -> ``cv2.INTER_CUBIC``
+                # * order = ``3`` -> ``cv2.INTER_CUBIC``
+                # * order = ``4`` -> ``cv2.INTER_CUBIC``
+                iaa.Affine(
+                    # scale images to 80-120% of their size, individually per axis
+                    scale={"x": (0.8, 1.2), 
+                           "y": (0.8, 1.2)}, 
+                    # translate by -A to +A percent (per axis)
+                    translate_percent={"x": (-0.01, 0.01), 
+                                       "y": (-0.01, 0.01)}, 
+                    shear=(-5, 5), # shear by -5 to +5 degrees
+                    rotate=(-179, 179), # rotate by -179 to +179 degrees
+                    order=0,    # use nearest neighbour
+                    backend='cv2' # opencv for fast processing
+                ),
+                # set position to 'center' for center crop
+                # else 'uniform' for random crop
+                iaa.CropToFixedSize(self.input_shape[0], 
+                                    self.input_shape[1],
+                                    position='center'
+                ),
+                iaa.Fliplr(0.5),
+                iaa.Flipud(0.5),
+            ]
+        
+            input_augs = [
+                iaa.OneOf([
+                            iaa.GaussianBlur((0, 2.0)), # gaussian blur with random sigma
+                            iaa.MedianBlur(k=(1, 3)), # median with random kernel sizes
+                            iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+                            ]),
+                iaa.Sequential([
+                    iaa.Add((-16, 16)),
+                    iaa.AddToHueAndSaturation((-10, 10)),
+                    iaa.LinearContrast((0.85, 1.15), per_channel=1.0),
+                ], random_order=True),
+            ]   
+        elif mode == 'valid':
+            shape_augs = [
+                # set position to 'center' for center crop
+                # else 'uniform' for random crop
+                iaa.CropToFixedSize(self.input_shape[0], 
+                                    self.input_shape[1],
+                                    position='center')
+            ]
+            input_augs = [
+            ]
 
-            augment_img = A.Compose([
-                # different ordering will give different results (not commutative)
-                A.OneOf([
-                    A.Compose([
-                        A.HueSaturationValue(hue_shift_limit=(-25, 0),
-                                             sat_shift_limit=0, val_shift_limit=0, p=1),
-                        A.RandomBrightnessContrast(
-                            brightness_limit=0.3, contrast_limit=0.4, p=1)
-                    ]),
-                    A.Compose([
-                        A.RandomBrightnessContrast(
-                            brightness_limit=0.3, contrast_limit=0.4, p=1),
-                        A.HueSaturationValue(hue_shift_limit=(-25, 0),
-                                             sat_shift_limit=0, val_shift_limit=0, p=1)
-                    ])
-                ]),
-                A.OneOf([A.MedianBlur(blur_limit=3),
-                         A.GaussianBlur(blur_limit=3),
-                         A.GaussNoise(var_limit=0.05*255)
-                         ]),
-
-                A.CenterCrop(self.input_shape[0], self.input_shape[1])
-            ])
-
-        else:
-            augment_img_mask = A.Compose([
-                A.CenterCrop(self.input_shape[0], self.input_shape[1])
-            ])
-            augment_img = A.NoOp()
-
-        return augment_img_mask, augment_img
+        return shape_augs, input_augs

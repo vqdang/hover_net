@@ -1,5 +1,6 @@
 
 import json
+import random
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -54,9 +55,8 @@ class LoggingGradient(BaseCallbacks):
         return fig
 
     def run(self, state, event):
-        # TODO: improve this
-        if not state.logging:
-            return
+
+        if random.random() > 0.05: return
         curr_step = state.curr_global_step
 
         # logging the grad of all trainable parameters
@@ -64,34 +64,13 @@ class LoggingGradient(BaseCallbacks):
         run_info = state.run_info
         for net_name, net_info in run_info.items():
             netdesc = net_info['desc'].module
-
-            # get the grad of all trainable parameters
-            param_name_list = []
-            param_value_list = []  # dont use dict because order may change
             for param_name, param in netdesc.named_parameters():
-                if param.requires_grad and "bias" not in param_name:
-                    # calculate in GPU
-                    param_grad = param.grad.abs().mean()
-                    # move to CPU
-                    param_grad = param_grad.cpu().item()
-                    param_name_list.append(param_name)
-                    param_value_list.append(param_grad)
-
-            gradsummary = np.array(list(param_value_list))
-            # gradsummary = np.log(gradsummary)
-            # encode each layer as an index so binning value = index
-            bin_values = np.array([float(i)
-                                   for i in range(gradsummary.shape[0])])
-            tfwriter.add_histogram_raw(
-                tag="%s/grad_layer" % net_name,
-                min=np.min(gradsummary),
-                max=np.max(gradsummary),
-                num=gradsummary.shape[0],
-                sum=gradsummary.sum(),
-                sum_squares=np.power(gradsummary, 2).sum(),
-                bucket_limits=bin_values,
-                bucket_counts=gradsummary,
-                global_step=curr_step)
+                param_grad = param.grad
+                if param_grad is None: continue
+                tfwriter.add_histogram(
+                    "%s/%s" % (net_name, param_name),
+                    param_grad.cpu().numpy().flatten(),
+                    global_step=curr_step) # ditribute into 10 bins (np default)
         return
 ####
 
