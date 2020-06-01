@@ -10,7 +10,7 @@ Options:
   -h --help            Show this string.
   --version            Show version.
   --gpu=<id>           GPU list. [default: 0]
-  --mode=<mode>        Inference mode. 'roi' or 'wsi'. [default: roi]
+  --mode=<mode>        Inference mode. 'tile' or 'wsi'. [default: tile]
   --model=<path>       Path to saved checkpoint.
   --input_dir=<path>   Directory containing input images/WSIs.
   --output_dir=<path>  Directory where the output will be saved. [default: output/]
@@ -123,6 +123,7 @@ class InferTile(Config):
             for output_keys in sample_output.keys():
                 batch_output_tmp = sample_output[output_keys]
                 if len(batch_output_tmp.shape) == 3:
+                    import matplotlib.pyplot as plt
                     batch_output_tmp = np.expand_dims(batch_output_tmp, -1) 
                 batch_list.append(batch_output_tmp)
             sample_output = np.concatenate(batch_list, axis=-1)
