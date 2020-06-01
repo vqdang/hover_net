@@ -402,6 +402,9 @@ class InferWSI(Config):
         patch_shape = np.squeeze(patches[0]).shape
         ch = 1 if len(patch_shape) == 2 else patch_shape[-1]
 
+        pred_map = self.zero_array
+        pred_map[np.array(self.patch_idx)] = np.squeeze(np.array(pred_map_list))
+
         patch_info = np.array(patch_info)
         nr_row = patch_info[:, 0].max() + 1
         nr_col = patch_info[:, 1].max() + 1
@@ -513,13 +516,6 @@ if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net Pytorch Inference v1.0')
     print(args)
 
-    args['--model'] = 'logs/tmp/00/net_epoch=50.tar'
-    args['--input_dir'] =  '/home/simon/Desktop/Projects/Nuclei_seg/hovernet_inference/WSIs'
-    args['--output_dir'] = 'output/'
-    args['--mode'] = 'wsi'
-    args['--gpu'] = '0'
-    args['--batch_size'] = '8'
-
     os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
 
     # raise exceptions for invalid / missing arguments
@@ -535,6 +531,7 @@ if __name__ == '__main__':
     # import libraries for WSI processing
     if args['--mode'] == 'wsi':
         import openslide as ops
+        import glymur
     
     if args['--mode'] == 'tile':
         infer = InferTile()
