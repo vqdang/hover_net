@@ -39,9 +39,11 @@ class Kumar(object):
             self.data_root + '/Kumar/patches/valid_same/',
             self.data_root + '/Kumar/patches/valid_diff/'
             ]
+        
+        self.nr_types = None # no classification labels
 
         # used for determining the colour of contours in overlay
-        self.class_color = {
+        self.class_colour = {
             0: (0, 0, 0),
             1: (255, 255, 0),
         }
@@ -86,8 +88,10 @@ class CPM17(object):
         self.valid_dir_list = [
             self.data_root + '/cpm17/patches/valid/']
 
+        self.nr_types = None  # no classification labels
+
         # used for determining the colour of contours in overlay
-        self.class_color = {
+        self.class_colour = {
             0: (0, 0, 0),
             1: (255, 255, 0),
         }
@@ -137,7 +141,7 @@ class CoNSeP(object):
 
         if type_classification:
             # used for determining the colour of contours in overlay
-            self.class_color = {
+            self.class_colour = {
                 0: (0, 0, 0),
                 1: (255, 0, 0),
                 2: (0, 255, 0),
@@ -147,7 +151,7 @@ class CoNSeP(object):
             }
         else:
             # used for determining the colour of contours in overlay
-            self.class_color = {
+            self.class_colour = {
                 0: (0, 0, 0),
                 1: (255, 255, 0),
             }

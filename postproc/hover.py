@@ -49,9 +49,9 @@ def proc_np_hv(pred, marker_mode=2, energy_mode=2, rgb=None):
 
     Args:
         pred: prediction output, assuming 
-                channel 0 contain probability map of nuclei
-                channel 1 containing the regressed X-map
-                channel 2 containing the regressed Y-map
+              channel 0 contain probability map of nuclei
+              channel 1 containing the regressed X-map
+              channel 2 containing the regressed Y-map
     """
     assert marker_mode == 2 or marker_mode == 1, 'Only support 1 or 2'
     assert energy_mode == 2 or energy_mode == 1, 'Only support 1 or 2'

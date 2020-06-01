@@ -157,6 +157,37 @@ def valid_step(batch_data, run_info):
     return result_dict
 
 ####
+
+
+def infer_step(batch_data, run_info):
+
+    ####
+    imgs = batch_data.float().to('cuda')  # to NCHW
+    imgs = imgs.permute(0, 3, 1, 2)
+
+    ####
+    model = run_info
+    model.eval()  # infer mode
+
+    # --------------------------------------------------------------
+    with torch.no_grad():  # dont compute gradient
+        output_dict = model(imgs)  # forward
+    output_dict = {k: v.permute(0, 2, 3, 1) for k, v in output_dict.items()}
+
+    pred_np = output_dict['np']  # should be logit value, not softmax output
+    pred_hv = output_dict['hv']
+    prob_np = F.softmax(pred_np, dim=-1)[..., 1]
+
+    # * Its up to user to define the protocol to process the raw output per step!
+    result_dict = {  # protocol for contents exchange within `raw`
+        'raw': {
+            'prob_np': prob_np.cpu().numpy(),
+            'pred_hv': pred_hv.cpu().numpy()
+        }
+    }
+    return result_dict
+
+####
 def viz_train_step_output(raw_data):
     """
     `raw_data` will be implicitly provided in the similar format as the 
@@ -211,3 +242,5 @@ def viz_train_step_output(raw_data):
     # plt.imshow(viz_list)
     # plt.savefig('dump.png', dpi=600)
     return viz_list
+
+

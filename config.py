@@ -38,6 +38,10 @@ class Config(object):
             'valid': {
                 'input_shape': [270, 270],
                 'mask_shape': [80, 80],
+            },
+            'test': {
+                'input_shape': [270, 270],
+                'mask_shape': [80, 80],
             }
         }
 

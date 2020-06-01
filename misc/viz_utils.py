@@ -14,7 +14,7 @@ from config import Config
 
 
 ####
-def visualize_instances(input_image, pred_inst, pred_type=None, line_thickness=2):
+def visualize_instances(input_image, pred_inst, pred_type=None, colours=None, line_thickness=2):
     """
     Overlays segmentation results on image as contours
 
@@ -22,17 +22,12 @@ def visualize_instances(input_image, pred_inst, pred_type=None, line_thickness=2
         input_image: input image
         pred_inst: instance mask with unique value for every object
         pred_type: type mask with unique value for every class
+        colours: 
         line_thickness: line thickness of contours
 
     Returns:
         overlay: output image with segmentation overlay as contours
     """
-
-    # get the dict of colours for each type of nucleus to use in the overlay
-    cfg = Config()
-    self.dataset_info = getattr(dataset, self.dataset_name)(self.type_classification)
-    colour_dict = self.dataset_info.class_colour
-
     overlay = np.copy((input_image).astype(np.uint8))
 
     if pred_type is not None:
@@ -66,7 +61,7 @@ def visualize_instances(input_image, pred_inst, pred_type=None, line_thickness=2
                     list(np.asarray(contours_crop[0][i].astype('int32')) + index_correction))
         contours = list(itertools.chain(*contours))
         cv2.drawContours(overlay, np.asarray(contours), -1,
-                         colour_dict[type_id], line_thickness)
+                         colours[type_id], line_thickness)
     return overlay
 
 

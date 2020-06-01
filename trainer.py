@@ -35,7 +35,7 @@ from config import Config
 import dataset
 
 from tensorboardX import SummaryWriter
-from dataloader.loader import TrainSerialLoader
+from dataloader.train_loader import TrainSerialLoader
 
 
 ####
