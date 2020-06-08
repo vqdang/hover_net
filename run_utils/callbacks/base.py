@@ -25,7 +25,6 @@ class TrackLr(BaseCallbacks):
     """
     Add learning rate to tracking
     """
-
     def __init__(self, per_n_epoch=1, per_n_step=None):
         super().__init__()
         self.per_n_epoch = per_n_epoch
@@ -41,10 +40,9 @@ class TrackLr(BaseCallbacks):
 
 ####
 class ScheduleLr(BaseCallbacks):
-    '''
+    """
     Trigger all scheduler
-    '''
-
+    """
     def __init__(self):
         super().__init__()
 
@@ -68,14 +66,12 @@ class TriggerEngine(BaseCallbacks):
                                   nr_epoch=self.nr_epoch,
                                   shared_state=state)
         return
-
 ####
 class CheckpointSaver(BaseCallbacks):
     """
     Must declare save dir first in the shared global state of the
     attached engine
     """
-
     def run(self, state, event):
         if not state.logging:
             return
@@ -100,30 +96,12 @@ class AccumulateRawOutput(BaseCallbacks):
             else:
                 accumulated_output[key] = list(step_value)
         return
-
 ####
 class ScalarMovingAverage(BaseCallbacks):
     """
     Calculate the running average for all scalar output of 
     each runstep of the attached RunEngine
     """
-
-    def __init__(self, alpha=0.95):
-        super().__init__()
-        self.alpha = alpha
-        self.tracking_dict = {}
-
-    def run(self, state, event):
-        # TODO: protocol for dynamic key retrieval for EMA
-        step_output = state.step_output['EMA']
-
-        for key, current_value in step_output.items():
-            if key in self.tracking_dict:
-                old_ema_value = self.tracking_dict[key]
-                # calculate the exponential moving average
-                new_ema_value = old_ema_value * self.alpha  \
-                    + (1.0 - self.alpha) * current_value
-                self.tracking_dict[key] = new_ema_value
             else:  # init for variable which appear for the first time
                 new_ema_value = current_value
                 self.tracking_dict[key] = new_ema_value
@@ -148,14 +126,11 @@ class ProcessAccumulatedRawOutput(BaseCallbacks):
         state.tracked_step_output = track_dict
         return
 
-
 ####
 class VisualizeOutput(BaseCallbacks):
     def __init__(self, proc_func, per_n_epoch=1):
-        """
-        TODO: option to dump viz per epoch or per n step
-        """
-        super(VisualizeOutput, self).__init__()
+        super().__init__()
+        # TODO: option to dump viz per epoch or per n step
         self.per_n_epoch = per_n_epoch
         self.proc_func = proc_func
 

@@ -93,7 +93,7 @@ train_config = {
                 },
             },
 
-            'batch_size' : { # engine name : value
+            'batch_size' : {
                 'train' : 8,
                 'valid' : 16,
             },

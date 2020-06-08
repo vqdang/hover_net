@@ -14,9 +14,8 @@ from config import Config
 ####
 class Net(nn.Module):
     """ 
-    A base class provides a common weight initialization scheme.
+    A base class provides a common weight initialisation scheme.
     """
-
     def weights_init(self):
         for m in self.modules():
             classname = m.__class__.__name__
@@ -37,14 +36,14 @@ class Net(nn.Module):
     def forward(self, x):
         return x
 
+
 ####
 class TFSamepaddingLayer(Net):
-    '''
+    """
     To align with tf `same` padding. 
     Putting this before any conv layer that need padding
     Assuming kernel has Height == Width for simplicity
-    '''
-
+    """
     def __init__(self, ksize, stride):
         super().__init__()
         self.ksize = ksize
@@ -69,10 +68,15 @@ class TFSamepaddingLayer(Net):
 
 ####
 class DenseBlock(Net):
-    '''
-    Only perform `valid` convolution 
-    '''
+    """
+    Dense Block as defined in:
 
+    Huang, Gao, Zhuang Liu, Laurens Van Der Maaten, and Kilian Q. Weinberger. 
+    "Densely connected convolutional networks." In Proceedings of the IEEE conference 
+    on computer vision and pattern recognition, pp. 4700-4708. 2017.
+
+    Only performs `valid` convolution 
+    """
     def __init__(self, in_ch, unit_ksize, unit_ch, unit_count, split=1):
         super().__init__()
         assert len(unit_ksize) == len(unit_ch), 'Unbalance Unit Info'
@@ -116,6 +120,13 @@ class DenseBlock(Net):
 
 ####
 class ResidualBlock(Net):
+    """
+    Residual block as defined in:
+
+    He, Kaiming, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. "Deep residual learning 
+    for image recognition." In Proceedings of the IEEE conference on computer vision 
+    and pattern recognition, pp. 770-778. 2016.
+    """
     def __init__(self, in_ch, unit_ksize, unit_ch, unit_count, stride=1):
         super().__init__()
         assert len(unit_ksize) == len(unit_ch), 'Unbalance Unit Info'
@@ -186,10 +197,9 @@ class ResidualBlock(Net):
 
 ####
 class UpSample2x(nn.Module):
-    '''
+    """
     Assume input is of NCHW, port FixedUnpooling
-    '''
-
+    """
     def __init__(self):
         super().__init__()
         # correct way to create constant within module
@@ -209,8 +219,12 @@ class UpSample2x(nn.Module):
         ret = ret.reshape((-1, input_shape[1], input_shape[2] * 2, input_shape[3] * 2))
         return ret
 
+
 ####
 class HoVerNet(Net):
+    """
+    Initialise HoVer-Net
+    """
     def __init__(self, input_ch, nr_types=None, freeze=False):
         super().__init__()
         self.freeze = freeze

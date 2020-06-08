@@ -13,18 +13,18 @@ from .serialize import fig2data, serialize
 # TODO: logging for all printed info on the terminal
 
 
+####
 class LoggingGradient(BaseCallbacks):
     """
     Will log per each training step
     """
-
     def _pyplot_grad_flow(self, named_parameters):
-        '''
+        """
         Plots the gradients flowing through different layers in the net during training.
         "_pyplot_grad_flow(self.model.named_parameters())" to visualize the gradient flow
 
         ! Very slow if triggered per steps because of CPU <=> GPU
-        '''
+        """
         ave_grads = []
         max_grads = []
         layers = []
@@ -77,17 +77,16 @@ class LoggingGradient(BaseCallbacks):
                     param.detach().cpu().numpy().flatten(),
                     global_step=curr_step) # ditribute into 10 bins (np default)
         return
+
+
 ####
-
-
 class LoggingEpochOutput(BaseCallbacks):
     """
     Must declare save dir first in the shared global state of the
     attached engine
     """
-
     def __init__(self, per_n_epoch=1):
-        super(LoggingEpochOutput, self).__init__()
+        super().__init__()
         self.per_n_epoch = per_n_epoch
 
     def run(self, state, event):

@@ -28,6 +28,7 @@ def fig2data(fig, dpi=180):
 ####
 
 
+####
 class _Scalar(object):
     @staticmethod
     def to_console(value):
@@ -40,9 +41,8 @@ class _Scalar(object):
     @staticmethod
     def to_tensorboard(value):
         return 'scalar', value
+
 ####
-
-
 class _ConfusionMatrix(object):
     @staticmethod
     def to_console(value):
@@ -145,9 +145,8 @@ class _ConfusionMatrix(object):
         img = fig2data(plt.gcf())
         plt.close()
         return 'image', img
+
 ####
-
-
 class _Image(object):
     @staticmethod
     def to_console(value):
@@ -163,7 +162,6 @@ class _Image(object):
     def to_tensorboard(value):
         # TODO: add method
         return 'image', value
-####
 
 
 __converter_dict = {
@@ -173,6 +171,7 @@ __converter_dict = {
 }
 
 
+####
 def serialize(value, input_format, output_format):
     converter = __converter_dict[input_format]
     if output_format == 'console':

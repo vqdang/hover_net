@@ -29,7 +29,6 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         mask_shape: shape of the output [h,w] - defined in config.py
         mode: 'train' or 'valid'
     """
-
     def __init__(self, file_list, input_shape=None, mask_shape=None, mode='train'):
         assert input_shape is not None and mask_shape is not None
         self.mask_shape = mask_shape

@@ -6,6 +6,13 @@ import scipy.io as sio
 
 ####
 class Kumar(object):
+    """
+    Defines the Kumar dataset as originally introduced in:
+
+    Kumar, Neeraj, Ruchika Verma, Sanuj Sharma, Surabhi Bhargava, Abhishek Vahadane, 
+    and Amit Sethi. "A dataset and a technique for generalized nuclear segmentation for 
+    computational pathology." IEEE transactions on medical imaging 36, no. 7 (2017): 1550-1560.
+    """
     def __init__(self, type_classification=False):
         self.data_root = 'dataset'
         self.desc = {
@@ -32,9 +39,11 @@ class Kumar(object):
             self.data_root + '/train/Kumar/valid_same/540x540_80x80/',
             self.data_root + '/train/Kumar/valid_diff/540x540_80x80/'
             ]
+        
+        self.nr_types = None # no classification labels
 
         # used for determining the colour of contours in overlay
-        self.class_color = {
+        self.class_colour = {
             0: (0, 0, 0),
             1: (255, 255, 0),
         }
@@ -52,6 +61,13 @@ class Kumar(object):
 
 ####
 class CPM17(object):
+    """
+    Defines the CPM 2017 dataset as originally introduced in:
+
+    Vu, Quoc Dang, Simon Graham, Tahsin Kurc, Minh Nguyen Nhat To, Muhammad Shaban, 
+    Talha Qaiser, Navid Alemi Koohbanani et al. "Methods for segmentation and classification 
+    of digital microscopy tissue images." Frontiers in bioengineering and biotechnology 7 (2019).
+    """
     def __init__(self, type_classification=False):
         self.data_root = 'dataset'
         self.desc = {
@@ -72,8 +88,10 @@ class CPM17(object):
         self.valid_dir_list = [
             self.data_root + '/cpm17/patches/valid/']
 
+        self.nr_types = None  # no classification labels
+
         # used for determining the colour of contours in overlay
-        self.class_color = {
+        self.class_colour = {
             0: (0, 0, 0),
             1: (255, 255, 0),
         }
@@ -92,6 +110,13 @@ class CPM17(object):
 
 ####
 class CoNSeP(object):
+    """
+    Defines the CoNSeP dataset as originally introduced in:
+
+    Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Ayesha Azam, Yee Wah Tsang, Jin Tae Kwak, 
+    and Nasir Rajpoot. "Hover-Net: Simultaneous segmentation and classification of nuclei 
+    in multi-tissue histology images." Medical Image Analysis 58 (2019): 101563.
+    """
     def __init__(self, type_classification=False):
         self.data_root = 'dataset'
         self.desc = {
@@ -116,7 +141,7 @@ class CoNSeP(object):
 
         if type_classification:
             # used for determining the colour of contours in overlay
-            self.class_color = {
+            self.class_colour = {
                 0: (0, 0, 0),
                 1: (255, 0, 0),
                 2: (0, 255, 0),
@@ -126,7 +151,7 @@ class CoNSeP(object):
             }
         else:
             # used for determining the colour of contours in overlay
-            self.class_color = {
+            self.class_colour = {
                 0: (0, 0, 0),
                 1: (255, 255, 0),
             }

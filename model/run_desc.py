@@ -1,6 +1,5 @@
-import matplotlib.pyplot as plt
-# * For visualizing thingy
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 
@@ -114,7 +113,7 @@ def valid_step(batch_data, run_info):
     model = run_info['net']['desc']
     model.eval() # infer mode
 
-    # -----------------------------------------------------------
+    # --------------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
         pred_dict = model(imgs_gpu)
         pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}

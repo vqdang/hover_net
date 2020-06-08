@@ -14,6 +14,8 @@ from skimage import morphology as morph
 
 from misc.utils import cropping_center, bounding_box
 
+
+####
 def fix_mirror_padding(ann):
     """
     Deal with duplicated instances due to mirroring in interpolation
@@ -30,6 +32,8 @@ def fix_mirror_padding(ann):
         current_max_id = np.amax(ann)
     return ann
 
+
+####
 def gen_instance_hv_map(ann, crop_shape):
     """
         Input annotation must be of original shape.
@@ -41,7 +45,6 @@ def gen_instance_hv_map(ann, crop_shape):
         Obtain the horizontal and vertical distance maps for each
         nuclear instance.
     """
-
     orig_ann = ann.copy() # instance ID map
     fixed_ann = fix_mirror_padding(orig_ann)
     # re-cropping with fixed instance id map
