@@ -35,11 +35,12 @@ train_config = {
                         'loss' : {
                             'np' : {
                                 'bce'  : 1, 
-                                'dice' : 1
+                                # 'dice' : 1
                             }, 
                             'hv' : {
-                                'mse'  : 2, 
-                                'msge' : 2
+                                'mse'  : 1, 
+                                # 'mse'  : 2, 
+                                # 'msge' : 2
                             },
                         },
                     },
@@ -53,7 +54,7 @@ train_config = {
 
             'batch_size' : { # engine name : value
                 'train' : 16,
-                'valid' : 32,
+                'valid' : 16,
             },
             'nr_epochs': 50,
         },
@@ -76,11 +77,12 @@ train_config = {
                         'loss' : {
                             'np' : {
                                 'bce'  : 1, 
-                                'dice' : 1
+                                # 'dice' : 1
                             }, 
                             'hv' : {
-                                'mse'  : 2, 
-                                'msge' : 2
+                                'mse'  : 1, 
+                                # 'mse'  : 2, 
+                                # 'msge' : 2
                             },
                         },
                     },
@@ -108,7 +110,7 @@ train_config = {
         'train': {
             # TODO: align here, file path or what? what about CV?
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 12, # number of threads for dataloader
+            'nr_procs'   : 8, # number of threads for dataloader
 
             'run_step'   : train_step, # TODO: function name or function variable ?
             'reset_per_run' : False,
@@ -131,7 +133,7 @@ train_config = {
         },       
         'valid' : {
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 8, # number of threads for dataloader
+            'nr_procs'   : 4, # number of threads for dataloader
 
             'run_step'   : valid_step,
             'reset_per_run' : True, # * to stop aggregating output etc. from last run

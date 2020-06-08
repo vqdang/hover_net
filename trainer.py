@@ -75,9 +75,11 @@ class Trainer(Config):
         for dir_path in data_dir_list:
             file_list.extend(glob.glob('%s/*.npy' % dir_path))
         file_list.sort() # to always ensure same input ordering
+
         assert len(file_list) > 0, \
                 'No .npy found for `%s`, please check `%s` in `config.py`' %\
                 (run_mode, '%s_dir_list' % run_mode)
+        print('Dataset %s: %d' % (run_mode, len(file_list)))
 
         input_dataset = TrainSerialLoader(file_list, mode=run_mode, 
                                             **self.shape_info[run_mode])
@@ -101,7 +103,7 @@ class Trainer(Config):
         log_info = {}
         if self.logging:
             # check_log_dir(log_dir)
-            rm_n_mkdir(log_dir)
+            # rm_n_mkdir(log_dir)
 
             tfwriter = SummaryWriter(log_dir=log_dir)
             json_log_file = log_dir + '/stats.json'
@@ -236,6 +238,6 @@ if __name__ == '__main__':
                 'Use "train" or "valid" for --view.')
         trainer.view_dataset(args['--view'])
     else:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
         # nr_gpus = len(args['--gpu'].split(','))
         trainer.run()

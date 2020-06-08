@@ -28,7 +28,7 @@ class Config(object):
         # class must be added in dataset.py
         self.dataset_name = 'Kumar' 
 
-        self.log_dir = 'exp_output/tmp' # log directory where checkpoints are saved
+        self.log_dir = 'exp_output/bce+mse/' # log directory where checkpoints are saved
 
         self.shape_info = {
             'train': {

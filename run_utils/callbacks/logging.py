@@ -66,10 +66,15 @@ class LoggingGradient(BaseCallbacks):
             netdesc = net_info['desc'].module
             for param_name, param in netdesc.named_parameters():
                 param_grad = param.grad
+                # TODO: sync test None or epislon for pytorch 1.4 vs 1.5
                 if param_grad is None: continue
                 tfwriter.add_histogram(
-                    "%s/%s" % (net_name, param_name),
-                    param_grad.cpu().numpy().flatten(),
+                    "%s_grad/%s" % (net_name, param_name),
+                    param_grad.detach().cpu().numpy().flatten(),
+                    global_step=curr_step) # ditribute into 10 bins (np default)
+                tfwriter.add_histogram(
+                    "%s_para/%s" % (net_name, param_name),
+                    param.detach().cpu().numpy().flatten(),
                     global_step=curr_step) # ditribute into 10 bins (np default)
         return
 ####
