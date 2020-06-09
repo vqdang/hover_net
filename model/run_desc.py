@@ -132,6 +132,34 @@ def valid_step(batch_data, run_info):
     return result_dict
 
 ####
+def infer_step(batch_data, model):
+
+    ####
+    patch_imgs = batch_data
+   
+    patch_imgs_gpu = patch_imgs.to('cuda').type(torch.float32) # to NCHW
+    patch_imgs_gpu = patch_imgs_gpu.permute(0, 3, 1, 2).contiguous()
+
+    ####
+    model.eval() # infer mode
+
+    # --------------------------------------------------------------
+    with torch.no_grad(): # dont compute gradient
+        pred_dict = model(patch_imgs_gpu)
+        pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}
+        pred_dict['np'] = F.softmax(pred_dict['np'], dim=-1)[...,1] 
+
+
+    # * Its up to user to define the protocol to process the raw output per step!
+    result_dict = { # protocol for contents exchange within `raw`
+        'raw': {
+            'prob_np' : pred_dict['np'].cpu().numpy(),
+            'pred_hv' : pred_dict['hv'].cpu().numpy()
+        }
+    }
+    return result_dict
+    
+####
 def viz_step_output(raw_data):
     """
     `raw_data` will be implicitly provided in the similar format as the 
@@ -186,48 +214,95 @@ def viz_step_output(raw_data):
     return viz_list
 
 ####
+from itertools import chain
 def proc_valid_step_output(raw_data):
     # TODO: add auto populate from main state track list
     track_dict = {'scalar': {}, 'image' : {}}
-    def track_value(name, value, vtype): return track_dict[vtype].update(
-        {name: value})
+    def track_value(name, value, vtype): return track_dict[vtype].update({name: value})
+
+    def longlist2array(longlist):
+        tmp = list(chain.from_iterable(longlist))
+        return np.array(tmp).reshape((len(longlist),) + longlist[0].shape)
 
     # ! factor this out
-    def _dice(true, pred, label):
+    # def _dice(true, pred, label):
+    #     true = np.array(true == label, np.int32)
+    #     pred = np.array(pred == label, np.int32)
+    #     inter = (pred * true).sum()
+    #     total = (pred + true).sum()
+    #     return 2 * inter / (total + 1.0e-8)
+
+    # ! paging / caching problem when merging huge list ?
+    # pred_np = longlist2array(raw_data['prob_np'])
+    # true_np = longlist2array(raw_data['true_np'])
+    # nr_pixels = np.size(true_np)
+    # * NP segmentation statistic
+    # pred_np[pred_np > 0.5]  = 1.0
+    # pred_np[pred_np <= 0.5] = 0.0
+
+    # acc_np = (pred_np == true_np).sum() / nr_pixels
+    # dice_np = _dice(true_np, pred_np, 1)
+    # track_value('np_acc', acc_np, 'scalar')
+    # track_value('np_dice', dice_np, 'scalar')
+    def _dice_info(true, pred, label):
         true = np.array(true == label, np.int32)
         pred = np.array(pred == label, np.int32)
         inter = (pred * true).sum()
         total = (pred + true).sum()
-        return 2 * inter / (total + 1.0e-8)
+        return inter, total
 
-    pred_np = np.array(raw_data['prob_np'])
-    true_np = np.array(raw_data['true_np'])
-    nr_pixels = np.size(true_np)
-    # * NP segmentation statistic
-    pred_np[pred_np > 0.5] = 1.0
-    pred_np[pred_np <= 0.5] = 0.0
-
-    # TODO: something sketchy here
-    acc_np = (pred_np == true_np).sum() / nr_pixels
-    dice_np = _dice(true_np, pred_np, 1)
+    over_inter = 0
+    over_total = 0
+    over_correct = 0
+    prob_np = raw_data['prob_np']
+    true_np = raw_data['true_np']
+    for idx in range(len(raw_data['true_np'])):
+        patch_prob_np = prob_np[idx]
+        patch_true_np = true_np[idx]
+        patch_pred_np = np.array(patch_prob_np > 0.5, dtype=np.int32)
+        inter, total = _dice_info(patch_true_np, patch_pred_np, 1)
+        correct = (patch_pred_np == patch_true_np).sum()
+        over_inter += inter
+        over_total += total
+        over_correct += correct
+    nr_pixels = len(true_np) * np.size(true_np[0])
+    acc_np  = over_correct / nr_pixels
+    dice_np = 2 * over_inter / (over_total + 1.0e-8)
     track_value('np_acc', acc_np, 'scalar')
     track_value('np_dice', dice_np, 'scalar')
 
     # * HV regression statistic
-    pred_hv = np.array(raw_data['pred_hv'])
-    true_hv = np.array(raw_data['true_hv'])
-    error = pred_hv - true_hv
-    mse = np.sum(error * error) / nr_pixels
+    pred_hv = raw_data['pred_hv']
+    true_hv = raw_data['true_hv']
+
+    over_squared_error = 0
+    for idx in range(len(raw_data['true_np'])):
+        patch_pred_hv = pred_hv[idx]
+        patch_true_hv = true_hv[idx]
+        squared_error = patch_pred_hv - patch_true_hv
+        squared_error = squared_error * squared_error
+        over_squared_error += squared_error.sum()
+    mse = over_squared_error / nr_pixels
     track_value('hv_mse', mse, 'scalar')
 
+    # pred_hv = longlist2array(raw_data['pred_hv'])
+    # true_hv = longlist2array(raw_data['true_hv'])
+    # error = pred_hv - true_hv
+    # mse = np.sum(error * error) / nr_pixels
+    # track_value('hv_mse', mse, 'scalar')
+
     # *
-    imgs = np.array(raw_data['imgs'])
-    print(imgs.shape)
-    selected_idx = np.random.randint(0, imgs.shape[0], size=(8,))
+    imgs = raw_data['imgs']
+    selected_idx = np.random.randint(0, len(imgs), size=(8,)).tolist()
+    imgs    = np.array([imgs[idx] for idx in selected_idx])
+    true_np = np.array([true_np[idx] for idx in selected_idx])
+    true_hv = np.array([true_hv[idx] for idx in selected_idx])
+    prob_np = np.array([prob_np[idx] for idx in selected_idx])
+    pred_hv = np.array([pred_hv[idx] for idx in selected_idx])
     viz_raw_data = {
-        'img': imgs[selected_idx],
-        'np' : (true_np[selected_idx], pred_np[selected_idx]),
-        'hv' : (true_hv[selected_idx], pred_hv[selected_idx])
+        'img': imgs,
+        'np' : (true_np, prob_np),
+        'hv' : (true_hv, pred_hv)
     }
     viz_fig = viz_step_output(viz_raw_data)
     track_dict['image']['output'] = viz_fig

@@ -110,7 +110,7 @@ train_config = {
         'train': {
             # TODO: align here, file path or what? what about CV?
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 8, # number of threads for dataloader
+            'nr_procs'   : 16, # number of threads for dataloader
 
             'run_step'   : train_step, # TODO: function name or function variable ?
             'reset_per_run' : False,
@@ -118,7 +118,7 @@ train_config = {
             # callbacks are run according to the list order of the event
             'callbacks': {
                 Events.STEP_COMPLETED: [
-                    LoggingGradient(),
+                    # LoggingGradient(),
                     ScalarMovingAverage(),
                 ],
                 Events.EPOCH_COMPLETED: [
@@ -133,7 +133,7 @@ train_config = {
         },       
         'valid' : {
             'dataset'    : '', # whats about compound dataset ?
-            'nr_procs'   : 4, # number of threads for dataloader
+            'nr_procs'   : 8, # number of threads for dataloader
 
             'run_step'   : valid_step,
             'reset_per_run' : True, # * to stop aggregating output etc. from last run

@@ -187,7 +187,7 @@ def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
 
         true = np.load(true_dir + basename + '.npy')
         true = true.astype('int32')
-        true = true[..., 0]  # HxWx1, uncomment to use label class from CoNSeP
+        # true = true[..., 0]  # HxWx1, uncomment to use label class from CoNSeP
 
         pred = sio.loadmat(pred_dir + basename + '.mat')
         pred = (pred['inst_map']).astype('int32')
@@ -237,16 +237,25 @@ if __name__ == '__main__':
     # print(args.mode)
     # exit()
 
-    args.true_dir = 'data/dump/'
-    # args.true_dir = '../../../../dataset/CoNSeP/Test/Labels/'
-    # args.pred_dir = 'exp/dummy/np_hv/output_59280/_proc/'
+    args.true_dir = '../../../dataset/NUC_HE_Kumar/train-set/msks_fixed/imgs_all/'
 
-    # args.true_dir = 'data/NUC_UHCW/CoNSeP_info/'
-    args.pred_dir = 'exp/dummy2/np_hv/output_39330/_proc/'
-    # args.pred_dir = 'exp/dummy/np_hv/XXXX/_proc/'
-    run_nuclei_type_stat(args.pred_dir, args.true_dir)
+    args.pred_dir = 'exp_output/bce+mse/output_42x/valid_same/'
+    run_nuclei_inst_stat(args.pred_dir, args.true_dir)
+
+    args.pred_dir = 'exp_output/bce+mse/output_42x/valid_diff/'
+    run_nuclei_inst_stat(args.pred_dir, args.true_dir)
 
     # if args.mode == 'instance':
     #     run_nuclei_inst_stat(args.pred_dir, args.true_dir)
     # if args.mode == 'type':
     #     run_nuclei_type_stat(args.pred_dir, args.true_dir)
+
+# exp_output/bce+mse/output_42x/valid_same/
+# [ 0.81851  0.78892  0.76237  0.60234  0.63421  0.61689]
+# exp_output/bce+mse/output_42x/valid_diff/
+# [ 0.81939  0.71354  0.77806  0.55995  0.62261  0.59034]
+
+# exp_output/bce+mse/output_42/valid_same/
+# [ 0.82047  0.79253  0.76447  0.60655  0.63437  0.61639]
+# exp_output/bce+mse/output_42/valid_diff/
+# [ 0.82247  0.71354  0.77569  0.55881  0.62197  0.58520]

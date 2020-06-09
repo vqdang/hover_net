@@ -39,8 +39,7 @@ from config import Config
 import dataset
 
 from tensorboardX import SummaryWriter
-from dataloader.train_loader import TrainSerialLoader
-
+from dataloader.loader import TrainSerialLoader
 
 ####
 class Trainer(Config):
@@ -58,8 +57,9 @@ class Trainer(Config):
         check_manual_seed(self.seed)
         dataloader = self.get_datagen(1, mode)
         for batch_data in dataloader: # convert from Tensor to Numpy
-            batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
-            TrainSerialLoader.view(batch_data_np)
+            # batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
+            # TrainSerialLoader.view(batch_data_np)
+            continue
         return
 
     ####
@@ -84,12 +84,22 @@ class Trainer(Config):
         input_dataset = TrainSerialLoader(file_list, mode=run_mode, 
                                             **self.shape_info[run_mode])
 
+        # * must initialize augmentor per worker, else duplicated rng generators may happen
+        def worker_init_fn(worker_id):
+            worker_info = torch.utils.data.get_worker_info()
+            # retriev the dataset copied into this worker process
+            worker_info.dataset.setup_augmentor(worker_info.id)  
+            return
+
+        # TODO: deal with hanging, deadlock ?
         nr_procs =  nr_procs if not self.debug else 0
         dataloader = DataLoader(input_dataset, 
-                        num_workers= nr_procs, 
-                        batch_size = batch_size, 
-                        shuffle    = run_mode=='train', 
-                        drop_last  = run_mode=='train')
+                        num_workers = nr_procs, 
+                        batch_size  = batch_size, 
+                        shuffle     = run_mode=='train', 
+                        drop_last   = run_mode=='train',
+                        worker_init_fn = worker_init_fn,
+                    )
         return dataloader
 
     ####
@@ -102,7 +112,7 @@ class Trainer(Config):
         log_info = {}
         if self.logging:
             # check_log_dir(log_dir)
-            # rm_n_mkdir(log_dir)
+            rm_n_mkdir(log_dir)
 
             tfwriter = SummaryWriter(log_dir=log_dir)
             json_log_file = log_dir + '/stats.json'
@@ -144,7 +154,7 @@ class Trainer(Config):
                     net_state_dict = torch.load(pretrained_path)['desc']
                 else:
                     net_state_dict = dict(np.load(pretrained_path))
-                    net_state_dict = {k : torch.Tensor(v) for k, v in net_state_dict.items()}
+                    net_state_dict = {k : torch.from_numpy(v) for k, v in net_state_dict.items()}
                 
                 colored_word = colored(net_name, color='red', attrs=['bold'])
                 print('Use pretrained path for %s: %s' % (colored_word, pretrained_path))
@@ -152,7 +162,8 @@ class Trainer(Config):
                 load_feedback = net_desc.load_state_dict(net_state_dict, strict=False)
                 # load_state_dict return (missing keys, unexpected keys)
 
-            net_desc = DataParallel(net_desc)
+            # * extremely slow to pass this on DGX with 1 GPU, why (?)
+            # net_desc = DataParallel(net_desc) 
             net_desc = net_desc.to('cuda')
             # print(net_desc) # * dump network definition or not?
             optimizer, optimizer_args = net_info['optimizer']
@@ -217,6 +228,9 @@ class Trainer(Config):
         prev_save_path = None
         for phase_idx, phase_info in enumerate(phase_list):
             save_path = self.log_dir + '/%02d' % (phase_idx)
+            if phase_idx == 0: 
+                prev_save_path = save_path
+                continue
             self.run_once(phase_info, engine_opt, save_path, prev_log_dir=prev_save_path)
             prev_save_path = save_path
 
@@ -230,12 +244,12 @@ if __name__ == '__main__':
         raise Exception(
             'Supply only one of --view and --gpu.')
 
-    if args['--view']:
-        if args['--view'] != 'train' and args['--view'] != 'valid':
-            raise Exception(
-                'Use "train" or "valid" for --view.')
-        trainer.view_dataset(args['--view'])
-    else:
-        os.environ['CUDA_VISIBLE_DEVICES'] = '2,3'
-        # nr_gpus = len(args['--gpu'].split(','))
-        trainer.run()
+    # if args['--view']:
+    #     if args['--view'] != 'train' and args['--view'] != 'valid':
+    #         raise Exception(
+    #             'Use "train" or "valid" for --view.')
+    #     trainer.view_dataset(args['--view'])
+    # else:
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    # trainer.view_dataset()
+    trainer.run()

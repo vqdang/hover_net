@@ -12,8 +12,8 @@ import torch.utils.data as data
 from torchvision import transforms
 from torchvision.utils import make_grid
 
-import openslide as ops
-import glymur
+# import openslide as ops
+# import glymur
 
 import matplotlib.pyplot as plt
 

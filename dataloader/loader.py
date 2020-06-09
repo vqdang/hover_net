@@ -9,13 +9,16 @@ import numpy as np
 import scipy.io as sio
 import torch.utils.data
 
+import imgaug as ia
 from imgaug import augmenters as iaa
-import albumentations as A
 
-from misc.utils import cropping_center, center_pad_to_shape
-from .augs import gen_instance_hv_map
+from misc.utils import center_pad_to_shape, cropping_center
 
+from .augs import (add_to_brightness, add_to_contrast, add_to_hue,
+                   add_to_saturation, gaussian_blur, gen_instance_hv_map,
+                   median_blur)
 
+####
 class TrainSerialLoader(torch.utils.data.Dataset):
     """
     Data Loader. Loads images from a file list and 
@@ -31,18 +34,28 @@ class TrainSerialLoader(torch.utils.data.Dataset):
     """
     def __init__(self, file_list, input_shape=None, mask_shape=None, mode='train'):
         assert input_shape is not None and mask_shape is not None
+        self.mode = mode
         self.mask_shape = mask_shape
         self.input_shape = input_shape
+        self.info_list = file_list
+        # if mode == 'train':
+        #     self.info_list = self.info_list[:256]
+        self.id = 0
+        return
 
-        self.info_list = file_list#[:32]
-        augmentor = self.__augmentation__(mode)
-        self.shape_augs = iaa.Sequential(augmentor[0]) 
-        self.input_augs = iaa.Sequential(augmentor[1]) 
+    def setup_augmentor(self, worker_id):
+        seed = np.random.randint(0, 2**32) + worker_id
+        self.augmentor = self.__augmentation__(self.mode, seed)
+        self.shape_augs = iaa.Sequential(self.augmentor[0]) 
+        self.input_augs = iaa.Sequential(self.augmentor[1]) 
+        self.id = self.id + worker_id
+        return
 
     def __len__(self):
         return len(self.info_list)
 
     def __getitem__(self, idx):
+        # print(idx)
         path = self.info_list[idx]
         data = np.load(path)
 
@@ -117,10 +130,11 @@ class TrainSerialLoader(torch.utils.data.Dataset):
             displayed_sample = prep_sample(sample_data)
             plt.subplot(batch_size, 1, sample_idx+1)
             plt.imshow(displayed_sample)
-        plt.show()
+        # plt.show()
+        plt.savefig('dump.png', dpi=600)
         return
 
-    def __augmentation__(self, mode):
+    def __augmentation__(self, mode, rng):
         if mode == 'train':
             shape_augs = [
                 # * order = ``0`` -> ``cv2.INTER_NEAREST``
@@ -138,7 +152,8 @@ class TrainSerialLoader(torch.utils.data.Dataset):
                     shear=(-5, 5), # shear by -5 to +5 degrees
                     rotate=(-179, 179), # rotate by -179 to +179 degrees
                     order=0,    # use nearest neighbour
-                    backend='cv2' # opencv for fast processing
+                    backend='cv2', # opencv for fast processing
+                    seed=rng
                 ),
                 # set position to 'center' for center crop
                 # else 'uniform' for random crop
@@ -146,20 +161,21 @@ class TrainSerialLoader(torch.utils.data.Dataset):
                                     self.input_shape[1],
                                     position='center'
                 ),
-                iaa.Fliplr(0.5),
-                iaa.Flipud(0.5),
+                iaa.Fliplr(0.5, seed=rng),
+                iaa.Flipud(0.5, seed=rng),
             ]
         
             input_augs = [
                 iaa.OneOf([
-                            iaa.GaussianBlur((0, 2.0)), # gaussian blur with random sigma
-                            iaa.MedianBlur(k=(1, 3)), # median with random kernel sizes
-                            iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
-                            ]),
+                    iaa.Lambda(seed=rng, func_images= lambda *args : gaussian_blur(*args, max_ksize=3)),
+                    iaa.Lambda(seed=rng, func_images= lambda *args : median_blur(*args, max_ksize=3)),
+                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+                ]),
                 iaa.Sequential([
-                    iaa.Add((-16, 16)),
-                    iaa.AddToHueAndSaturation((-10, 10)),
-                    iaa.LinearContrast((0.85, 1.15), per_channel=1.0),
+                    iaa.Lambda(seed=rng, func_images= lambda *args : add_to_hue(*args, range=(-8, 8))),
+                    iaa.Lambda(seed=rng, func_images= lambda *args : add_to_saturation(*args, range=(-0.2, 0.2))),
+                    iaa.Lambda(seed=rng, func_images= lambda *args : add_to_brightness(*args, range=(-26, 26))),
+                    iaa.Lambda(seed=rng, func_images= lambda *args : add_to_contrast(*args, range=(0.75, 1.25))),
                 ], random_order=True),
             ]   
         elif mode == 'valid':

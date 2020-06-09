@@ -50,18 +50,17 @@ from misc.viz_utils import visualize_instances
 import postproc.process_utils as proc_utils
 import dataset
 
-
-
 ####
-class InferTile(Config):
+class InferTile(object):
     """
     Run inference on tiles
     """
     def __init__(self):
         super().__init__()
-        self.input_shape = self.shape_info['test']['input_shape']
-        self.mask_shape = self.shape_info['test']['mask_shape']
-        dataset_info = getattr(dataset, self.dataset_name)(self.type_classification)
+        # TODO: decouple the infer confif out from train config
+        self.input_shape = [270, 270]
+        self.mask_shape  = [80, 80]
+        dataset_info = getattr(dataset, 'Kumar')(None)
         self.nr_types = dataset_info.nr_types
         self.colour_dict = dataset_info.class_colour
     
@@ -71,13 +70,13 @@ class InferTile(Config):
         Load arguments
         """
         # Paths
-        self.model_path = args['--model']
-        self.input_dir = args['--input_dir']
-        self.output_dir = args['--output_dir']
+        self.model_path = 'exp_output/bce+mse/01/net_epoch=42.tar'
+        self.input_dir  = '../../../dataset/NUC_HE_Kumar/train-set/orig_split/valid_diff/'
+        self.output_dir = 'exp_output/bce+mse/output_42x/valid_diff/'
 
         # Processing
-        self.batch_size = int(args['--batch_size'])
-        self.num_workers = int(args['--num_workers'])
+        self.batch_size = 8
+        self.num_workers = 2
 
     ####
     def load_model(self):
@@ -86,16 +85,15 @@ class InferTile(Config):
         associated run steps to process each data batch
         """
         netdesc = importlib.import_module('model.net_desc')
-        net = netdesc.HoVerNet(3, self.nr_types)
+        net = netdesc.HoVerNet(3)
 
         saved_state_dict = torch.load(self.model_path)
-        net.load_state_dict(saved_state_dict, strict=False)
+        net.load_state_dict(saved_state_dict['desc'], strict=True)
         net = torch.nn.DataParallel(net).to('cuda')
 
-        run_step = importlib.import_module('model.run_desc')
-        run_step = getattr(run_step, 'infer_step') 
-        def infer_step(input_batch): 
-            return run_step(input_batch, net)
+        run_desc = importlib.import_module('model.run_desc')
+        run_step = getattr(run_desc, 'infer_step') 
+        infer_step = lambda input_batch : run_step(input_batch, net)
 
         return infer_step
 
@@ -115,8 +113,8 @@ class InferTile(Config):
 
         patch_accmulator = []
         for batch_idx, batch_data in enumerate(dataloader):
-            sample_list, sample_info_list = batch_data
-            sample_output = run_step(sample_list)['raw']
+            sample_data_list, sample_info_list = batch_data
+            sample_output = run_step(sample_data_list)['raw']
 
             # combine the output from each branch
             batch_list = []
@@ -187,22 +185,21 @@ class InferTile(Config):
             # extract patches and run inference
             pred_map = self.__process_single_tile(filename, img_shape)
             # apply post-processing
-            pred_inst, pred_type = proc_utils.process_instance(pred_map, self.type_classification, nr_types=6)
+            pred_inst, pred_type = proc_utils.process_instance(pred_map, 
+                                                     False, nr_types=0)
             
             # generate overlay
             overlaid_output = visualize_instances(img, pred_inst, colours=self.colour_dict)
             overlaid_output = cv2.cvtColor(overlaid_output, cv2.COLOR_BGR2RGB)
 
-            cv2.imwrite('%s/%s.png' % (self.output_dir, basename),
-                        overlaid_output)
+            cv2.imwrite('%s/%s.png' % (self.output_dir, basename), overlaid_output)
 
-            if self.type_classification:
-                sio.savemat('%s/%s.mat' % (self.output_dir, basename),
-                            {'inst_map': pred_inst,
-                             'type_map': pred_type})
-            else:
-                sio.savemat('%s/%s.mat' % (self.output_dir, basename),
-                            {'inst_map': pred_inst})
+            # if self.type_classification:
+            #     sio.savemat('%s/%s.mat' % (self.output_dir, basename),
+            #                 {'inst_map': pred_inst,
+            #                  'type_map': pred_type})
+            # else:
+            sio.savemat('%s/%s.mat' % (self.output_dir, basename), {'inst_map': pred_inst})
                 
     
 ####
@@ -515,29 +512,28 @@ class InferWSI(Config):
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net Pytorch Inference v1.0')
-    print(args)
 
     os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
 
     # raise exceptions for invalid / missing arguments
-    if args['--model'] == None:
-        raise Exception('A model path must be supplied as an argument with --model.')
-    if args['--mode'] != 'tile' and args['--mode'] != 'wsi':
-        raise Exception('Mode not recognised. Use either "tile" or "wsi"')
-    if args['--input_dir'] == None:
-        raise Exception('An input directory must be supplied as an argument with --input_dir.')
-    if args['--input_dir'] == args['--output_dir']:
-        raise Exception('Input and output directories should not be the same- otherwise input directory will be overwritten.')
+    # if args['--model'] == None:
+    #     raise Exception('A model path must be supplied as an argument with --model.')
+    # if args['--mode'] != 'tile' and args['--mode'] != 'wsi':
+    #     raise Exception('Mode not recognised. Use either "tile" or "wsi"')
+    # if args['--input_dir'] == None:
+    #     raise Exception('An input directory must be supplied as an argument with --input_dir.')
+    # if args['--input_dir'] == args['--output_dir']:
+    #     raise Exception('Input and output directories should not be the same- otherwise input directory will be overwritten.')
 
     # import libraries for WSI processing
-    if args['--mode'] == 'wsi':
-        import openslide as ops
-        import glymur
+    # if args['--mode'] == 'wsi':
+    #     import openslide as ops
+    #     import glymur
     
-    if args['--mode'] == 'tile':
-        infer = InferTile()
-    elif args['--mode'] == 'wsi':  # currently saves results per tile
-        infer = InferWSI()
+    # if args['--mode'] == 'tile':
+    infer = InferTile()
+    # elif args['--mode'] == 'wsi':  # currently saves results per tile
+    #     infer = InferWSI()
         
     infer.load_args(args)
     infer.process_all_files()

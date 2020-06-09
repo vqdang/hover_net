@@ -7,41 +7,6 @@ from scipy.ndimage.morphology import (binary_dilation, binary_fill_holes,
                                       distance_transform_edt)
 from skimage.morphology import remove_small_objects, watershed
 
-
-####
-def proc_np_dist(pred):
-    """
-    Process Nuclei Prediction with Distance Map
-
-    Args:
-        pred: prediction output, assuming 
-                channel 0 contain probability map of nuclei
-                channel 1 containing the regressed distance map
-    """
-    blb_raw = pred[..., 0]
-    dst_raw = pred[..., 1]
-
-    blb = np.copy(blb_raw)
-    blb[blb > 0.5] = 1
-    blb[blb <= 0.5] = 0
-    blb = measurements.label(blb)[0]
-    blb = remove_small_objects(blb, min_size=10)
-    blb[blb > 0] = 1
-
-    dst_raw[dst_raw < 0] = 0
-    dst = np.copy(dst_raw)
-    dst = dst * blb
-    dst[dst > 0.5] = 1
-    dst[dst <= 0.5] = 0
-
-    marker = dst.copy()
-    marker = binary_fill_holes(marker)
-    marker = measurements.label(marker)[0]
-    marker = remove_small_objects(marker, min_size=10)
-    proced_pred = watershed(-dst_raw, marker, mask=blb)
-    return proced_pred
-
-
 ####
 def proc_np_hv(pred, marker_mode=2, energy_mode=2, rgb=None):
     """
@@ -62,8 +27,7 @@ def proc_np_hv(pred, marker_mode=2, energy_mode=2, rgb=None):
 
     # processing
     blb = np.copy(blb_raw)
-    blb[blb >= 0.5] = 1
-    blb[blb < 0.5] = 0
+    blb = np.array(blb >= 0.5, dtype=np.int32)
 
     blb = measurements.label(blb)[0]
     blb = remove_small_objects(blb, min_size=10)

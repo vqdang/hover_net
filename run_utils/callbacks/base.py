@@ -78,8 +78,8 @@ class CheckpointSaver(BaseCallbacks):
         for net_name, net_info in state.run_info.items():
             net_checkpoint = {}
             for key, value in net_info.items():
-                if key == 'extra_info': continue
-                net_checkpoint[key] = value.state_dict()
+                if key != 'extra_info': 
+                    net_checkpoint[key] = value.state_dict()
             torch.save(net_checkpoint, '%s/%s_epoch=%d.tar' %
                        (state.log_dir, net_name, state.curr_epoch))
         return
@@ -102,6 +102,22 @@ class ScalarMovingAverage(BaseCallbacks):
     Calculate the running average for all scalar output of 
     each runstep of the attached RunEngine
     """
+
+    def __init__(self, alpha=0.95):
+        super().__init__()
+        self.alpha = alpha
+        self.tracking_dict = {}
+
+    def run(self, state, event):
+        # TODO: protocol for dynamic key retrieval for EMA
+        step_output = state.step_output['EMA']
+
+        for key, current_value in step_output.items():
+            if key in self.tracking_dict:
+                old_ema_value = self.tracking_dict[key]
+                # calculate the exponential moving average
+                new_ema_value = old_ema_value * self.alpha + (1.0 - self.alpha) * current_value
+                self.tracking_dict[key] = new_ema_value
             else:  # init for variable which appear for the first time
                 new_ema_value = current_value
                 self.tracking_dict[key] = new_ema_value
