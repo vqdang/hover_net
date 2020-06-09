@@ -142,6 +142,18 @@ def msge_loss(true, pred, focus):
         h_ch = hv[...,0].unsqueeze(1) # Nx1xHxW
         v_ch = hv[...,1].unsqueeze(1) # Nx1xHxW
 
+        import matplotlib.pyplot as plt
+        plt.imshow(h_ch[0][0].detach().cpu().numpy(), cmap='jet')
+        plt.savefig('dump_h.png', dpi=600)
+        plt.close()
+
+        plt.imshow(F.conv2d(h_ch, kernel_v, padding=2)[0][0].detach().cpu().numpy(), cmap='jet')
+        plt.savefig('dump_h_dv.png', dpi=600)
+        plt.close()
+
+        plt.imshow(F.conv2d(h_ch, kernel_h, padding=2)[0][0].detach().cpu().numpy(), cmap='jet')
+        plt.savefig('dump_h_dh.png', dpi=600)
+        plt.close()
         # can only apply in NCHW mode
         h_dv_ch = F.conv2d(h_ch, kernel_v, padding=2)
         v_dh_ch = F.conv2d(v_ch, kernel_h, padding=2)
