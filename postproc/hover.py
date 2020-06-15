@@ -26,8 +26,7 @@ def proc_np_hv(pred, marker_mode=2, energy_mode=2, rgb=None):
     v_dir_raw = pred[..., 2]
 
     # processing
-    blb = np.copy(blb_raw)
-    blb = np.array(blb >= 0.5, dtype=np.int32)
+    blb = np.array(blb_raw >= 0.5, dtype=np.int32)
 
     blb = measurements.label(blb)[0]
     blb = remove_small_objects(blb, min_size=10)
@@ -57,8 +56,7 @@ def proc_np_hv(pred, marker_mode=2, energy_mode=2, rgb=None):
             dist = -cv2.GaussianBlur(dist, (3, 3), 0)
 
         if marker_mode == 2:
-            overall[overall >= 0.4] = 1
-            overall[overall < 0.4] = 0
+            overall = np.array(overall >= 0.4, dtype=np.int32)
 
             marker = blb - overall
             marker[marker < 0] = 0
