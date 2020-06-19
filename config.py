@@ -31,14 +31,13 @@ class Config(object):
 
         # TODO:  self meta tagging and hash code for exp run
         # log directory where checkpoints are saved
-        self.log_dir = 'exp_output/consep/bce+dice+mse+msge_v1/'
+        self.log_dir = 'exp_output/dump/'
 
         self.train_dir_list = [
             'dataset/train/consep/train/540x540_80x80/'
         ]
         self.valid_dir_list = [
-            'dataset/train/consep/valid_same/540x540_80x80/',
-            'dataset/train/consep/valid_diff/540x540_80x80/'
+            'dataset/train/consep/valid/540x540_80x80/'
         ]
 
         self.shape_info = {

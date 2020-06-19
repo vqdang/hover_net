@@ -36,10 +36,9 @@ from run_utils.utils import check_log_dir, check_manual_seed, colored
 from run_utils.engine import RunEngine
 
 from config import Config
-import dataset
 
 from tensorboardX import SummaryWriter
-from dataloader.loader import FileLoader
+from dataloader.train_loader import FileLoader
 
 ####
 class Trainer(Config):
@@ -50,7 +49,6 @@ class Trainer(Config):
     def __init__(self):
         super().__init__()
         self.model_config = self.model_config_file.__getattribute__('train_config')
-        self.dataset_info = getattr(dataset, self.dataset_name)()
         return
 
     ####
@@ -70,9 +68,9 @@ class Trainer(Config):
         # ! Hard assumption on file type
         file_list = []
         if run_mode == 'train':
-            data_dir_list = self.dataset_info.train_dir_list
+            data_dir_list = self.train_dir_list
         else:
-            data_dir_list = self.dataset_info.valid_dir_list
+            data_dir_list = self.valid_dir_list
         for dir_path in data_dir_list:
             file_list.extend(glob.glob('%s/*.npy' % dir_path))
         file_list.sort() # to always ensure same input ordering
