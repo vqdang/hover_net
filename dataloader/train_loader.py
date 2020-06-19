@@ -32,10 +32,13 @@ class FileLoader(torch.utils.data.Dataset):
         mask_shape: shape of the output [h,w] - defined in config.py
         mode: 'train' or 'valid'
     """
-    def __init__(self, file_list, input_shape=None, mask_shape=None, 
+    # TODO: doc string
+    def __init__(self, file_list, with_type=False,
+                input_shape=None, mask_shape=None, 
                 mode='train', setup_augmentor=True):
         assert input_shape is not None and mask_shape is not None
         self.mode = mode
+        self.with_type = with_type
         self.mask_shape = mask_shape
         self.input_shape = input_shape
         self.info_list = file_list
@@ -75,8 +78,8 @@ class FileLoader(torch.utils.data.Dataset):
         
         feed_dict = {'img' : img}
         # * Specific on the flight processing for annotation label
-        if False and ann.shape[-1] == 2: # Nuclei Segmentation + Type Classification
-            inst_map, type_map = np.dsplit(ann, -1)
+        if self.with_type: # Nuclei Segmentation + Type Classification
+            inst_map, type_map = np.dsplit(ann, -1) # alwasy assume HW2
             np_map = np.array(inst_map > 0, dtype='uint8')
             hv_map = gen_instance_hv_map(inst_map, self.mask_shape)
             # binarize instance map, ordering of operaton matters !

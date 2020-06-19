@@ -35,12 +35,11 @@ train_config = {
                         'loss' : {
                             'np' : {
                                 'bce'  : 1, 
-                                # 'dice' : 1
+                                'dice' : 1
                             }, 
                             'hv' : {
                                 'mse'  : 1, 
-                                # 'mse'  : 2, 
-                                # 'msge' : 2
+                                'msge' : 1
                             },
                         },
                     },
@@ -77,12 +76,11 @@ train_config = {
                         'loss' : {
                             'np' : {
                                 'bce'  : 1, 
-                                # 'dice' : 1
+                                'dice' : 1
                             }, 
                             'hv' : {
                                 'mse'  : 1, 
-                                # 'mse'  : 2, 
-                                # 'msge' : 2
+                                'msge' : 1
                             },
                         },
                     },

@@ -4,7 +4,7 @@ import random
 import cv2
 import numpy as np
 
-import dataset
+from dataset import get_dataset
 
 
 class Config(object):
@@ -20,24 +20,25 @@ class Config(object):
         # turn on debug flag to trace some parallel processing problems more easily
         self.debug = False 
 
-        self.type_classification = False  # whether to predict the nuclear type- dependent on dataset!
+        # whether to predict the nuclear type, availability depending on dataset!
+        self.type_classification = False
 
         # determines which dataset to be used during training / inference. The appropriate class
         # is initialised in dataset.py. Refer to dataset.py for info regarding data paths. Currently 
         # implemented: 'Kumar', 'CPM17', 'CoNSeP'. If using additional datasets, an appropriate 
         # class must be added in dataset.py
-        # self.dataset_name = 'Kumar' 
         self.dataset_name = 'CoNSeP' 
 
-        # v1 mean dh on h and dv on v
-        self.log_dir = 'exp_output/consep/bce+dice+mse+msge_v1/' # log directory where checkpoints are saved
+        # TODO:  self meta tagging and hash code for exp run
+        # log directory where checkpoints are saved
+        self.log_dir = 'exp_output/consep/bce+dice+mse+msge_v1/'
 
         self.train_dir_list = [
-            'dataset/train/kumar/train/540x540_80x80/'
+            'dataset/train/consep/train/540x540_80x80/'
         ]
         self.valid_dir_list = [
-            'dataset/train/Kumar/valid_same/540x540_80x80/',
-            'dataset/train/Kumar/valid_diff/540x540_80x80/'
+            'dataset/train/consep/valid_same/540x540_80x80/',
+            'dataset/train/consep/valid_diff/540x540_80x80/'
         ]
 
         self.shape_info = {
@@ -55,5 +56,6 @@ class Config(object):
             }
         }
 
-        # dynamically set the config file into variable
+        # * parsing config to the running state and set up associated variables
+        self.dataset = get_dataset(self.dataset_name)
         self.model_config_file = importlib.import_module('model.opt')

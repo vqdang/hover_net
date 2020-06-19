@@ -5,7 +5,7 @@ import scipy.io as sio
 
 
 ####
-class Kumar(object):
+class __Kumar(object):
     """
     Defines the Kumar dataset as originally introduced in:
 
@@ -54,7 +54,7 @@ class Kumar(object):
 
 
 ####
-class CPM17(object):
+class __CPM17(object):
     """
     Defines the CPM 2017 dataset as originally introduced in:
 
@@ -104,7 +104,7 @@ class CPM17(object):
 
 
 ####
-class CoNSeP(object):
+class __CoNSeP(object):
     """
     Defines the CoNSeP dataset as originally introduced in:
 
@@ -167,3 +167,18 @@ class CoNSeP(object):
             ann = ann.astype('int32')
 
         return ann
+
+
+####
+def get_dataset(name):
+    """
+    Return a pre-defined dataset object associated with `name`
+    """
+    if name.lower() == 'kumar':
+        return __Kumar()
+    elif name.lower() == 'cpm17':
+        return __CPM17()
+    elif name.lower() == 'consep':
+        return __CoNSeP()
+    else:
+        assert False, "Unknown dataset `%s`" % name
