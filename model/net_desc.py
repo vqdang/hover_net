@@ -7,9 +7,7 @@ import torch.nn.functional as F
 
 from collections import OrderedDict
 
-from .utils import *
-from config import Config
-
+from .utils import crop_op, crop_to_shape
 
 ####
 class Net(nn.Module):
@@ -241,8 +239,7 @@ class HoVerNet(Net):
         self.d2 = ResidualBlock(512 , [1, 3, 1], [256, 256, 1024], 6, stride=2)
         self.d3 = ResidualBlock(1024, [1, 3, 1], [512, 512, 2048], 3, stride=2)
 
-        self.conv_bot = nn.Conv2d(
-            2048, 1024, 1, stride=1, padding=0, bias=False)
+        self.conv_bot = nn.Conv2d(2048, 1024, 1, stride=1, padding=0, bias=False)
 
         def create_decoder_branch(out_ch=2):
             u3 = nn.Sequential(OrderedDict([
@@ -293,19 +290,8 @@ class HoVerNet(Net):
         self.upsample2x = UpSample2x()
         # TODO: pytorch still require the channel eventhough its ignored
         self.weights_init()
-        # self.check_output_shape([3, 270, 270])
 
-
-    def check_output_shape(self, input_shape):
-        self.input_shape = input_shape
-        dummy_imgs = torch.rand(2, *input_shape).type(torch.float32)
-        dummy_output = self.forward(dummy_imgs)
-        for k, v in dummy_output.items():
-            v_size = list(v.size())
-            v_size[0] = -1 # set the batch dimension
-            print(k, v_size)
-
-    def forward(self, imgs, print_size=False):
+    def forward(self, imgs):
 
         imgs = imgs / 255.0  # to 0-1 range to match XY
 
