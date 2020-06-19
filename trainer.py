@@ -39,7 +39,7 @@ from config import Config
 import dataset
 
 from tensorboardX import SummaryWriter
-from dataloader.loader import TrainSerialLoader
+from dataloader.loader import FileLoader
 
 ####
 class Trainer(Config):
@@ -50,21 +50,22 @@ class Trainer(Config):
     def __init__(self):
         super().__init__()
         self.model_config = self.model_config_file.__getattribute__('train_config')
-        self.dataset_info = getattr(dataset, self.dataset_name)(self.type_classification)
+        self.dataset_info = getattr(dataset, self.dataset_name)()
+        return
 
     ####
     def view_dataset(self, mode='train'):
         check_manual_seed(self.seed)
         dataloader = self.get_datagen(1, mode)
         for batch_data in dataloader: # convert from Tensor to Numpy
-            # batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
-            # TrainSerialLoader.view(batch_data_np)
+            batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
+            FileLoader.view(batch_data_np)
             continue
         return
 
     ####
     def get_datagen(self, batch_size, run_mode, nr_procs=0, fold_idx=0):       
-        # TODO: flag for debug mode
+        nr_procs =  nr_procs if not self.debug else 0
 
         # ! Hard assumption on file type
         file_list = []
@@ -81,8 +82,10 @@ class Trainer(Config):
                 (run_mode, '%s_dir_list' % run_mode)
         print('Dataset %s: %d' % (run_mode, len(file_list)))
 
-        input_dataset = TrainSerialLoader(file_list, mode=run_mode, 
-                                            **self.shape_info[run_mode])
+        input_dataset = FileLoader(file_list, mode=run_mode, 
+                                    with_type=self.type_classification,
+                                    setup_augmentor=nr_procs==0,
+                                    **self.shape_info[run_mode])
 
         # * must initialize augmentor per worker, else duplicated rng generators may happen
         def worker_init_fn(worker_id):
@@ -91,8 +94,6 @@ class Trainer(Config):
             worker_info.dataset.setup_augmentor(worker_info.id)  
             return
 
-        # TODO: deal with hanging, deadlock ?
-        nr_procs =  nr_procs if not self.debug else 0
         dataloader = DataLoader(input_dataset, 
                         num_workers = nr_procs, 
                         batch_size  = batch_size, 
@@ -153,6 +154,7 @@ class Trainer(Config):
                     pretrained_path = get_last_chkpt_path(prev_log_dir, net_name)
                     net_state_dict = torch.load(pretrained_path)['desc']
                 else:
+                    # TODO: extremely slow at this conversion step, why ?
                     net_state_dict = dict(np.load(pretrained_path))
                     net_state_dict = {k : torch.from_numpy(v) for k, v in net_state_dict.items()}
                 
@@ -228,9 +230,6 @@ class Trainer(Config):
         prev_save_path = None
         for phase_idx, phase_info in enumerate(phase_list):
             save_path = self.log_dir + '/%02d' % (phase_idx)
-            if phase_idx == 0: 
-                prev_save_path = save_path
-                continue
             self.run_once(phase_info, engine_opt, save_path, prev_log_dir=prev_save_path)
             prev_save_path = save_path
 

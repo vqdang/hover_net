@@ -26,9 +26,19 @@ class Config(object):
         # is initialised in dataset.py. Refer to dataset.py for info regarding data paths. Currently 
         # implemented: 'Kumar', 'CPM17', 'CoNSeP'. If using additional datasets, an appropriate 
         # class must be added in dataset.py
-        self.dataset_name = 'Kumar' 
+        # self.dataset_name = 'Kumar' 
+        self.dataset_name = 'CoNSeP' 
 
-        self.log_dir = 'exp_output/bce+mse/' # log directory where checkpoints are saved
+        # v1 mean dh on h and dv on v
+        self.log_dir = 'exp_output/consep/bce+dice+mse+msge_v1/' # log directory where checkpoints are saved
+
+        self.train_dir_list = [
+            'dataset/train/kumar/train/540x540_80x80/'
+        ]
+        self.valid_dir_list = [
+            'dataset/train/Kumar/valid_same/540x540_80x80/',
+            'dataset/train/Kumar/valid_diff/540x540_80x80/'
+        ]
 
         self.shape_info = {
             'train': {

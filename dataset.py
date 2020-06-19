@@ -13,7 +13,7 @@ class Kumar(object):
     and Amit Sethi. "A dataset and a technique for generalized nuclear segmentation for 
     computational pathology." IEEE transactions on medical imaging 36, no. 7 (2017): 1550-1560.
     """
-    def __init__(self, type_classification=False):
+    def __init__(self):
         self.data_root = 'dataset'
         self.desc = {
             'train':
@@ -33,17 +33,10 @@ class Kumar(object):
                 },
         }
 
-        self.train_dir_list = [
-            self.data_root + '/train/Kumar/train/540x540_80x80/']
-        self.valid_dir_list = [
-            self.data_root + '/train/Kumar/valid_same/540x540_80x80/',
-            self.data_root + '/train/Kumar/valid_diff/540x540_80x80/'
-            ]
-        
         self.nr_types = None # no classification labels
 
         # used for determining the colour of contours in overlay
-        self.class_colour = {
+        self.type_colour = {
             0: (0, 0, 0),
             1: (255, 255, 0),
         }
@@ -51,8 +44,9 @@ class Kumar(object):
     def load_img(self, path):
         return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
-    def load_ann(self, path):
+    def load_ann(self, path, with_type=False):
         # assumes that ann is HxW
+        assert not with_type, "Not support"
         ann_inst = sio.loadmat(path)['inst_map']
         ann_inst = ann_inst.astype('int32')
         ann = np.expand_dims(ann_inst, -1)
@@ -68,7 +62,7 @@ class CPM17(object):
     Talha Qaiser, Navid Alemi Koohbanani et al. "Methods for segmentation and classification 
     of digital microscopy tissue images." Frontiers in bioengineering and biotechnology 7 (2019).
     """
-    def __init__(self, type_classification=False):
+    def __init__(self):
         self.data_root = 'dataset'
         self.desc = {
             'train':
@@ -91,7 +85,7 @@ class CPM17(object):
         self.nr_types = None  # no classification labels
 
         # used for determining the colour of contours in overlay
-        self.class_colour = {
+        self.type_colour = {
             0: (0, 0, 0),
             1: (255, 255, 0),
         }
@@ -100,7 +94,8 @@ class CPM17(object):
     def load_img(self, path):
         return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
-    def load_ann(self, path):
+    def load_ann(self, path, with_type=False):
+        assert not with_type, "Not support"
         # assumes that ann is HxW
         ann_inst = sio.loadmat(path)['inst_map']
         ann_inst = ann_inst.astype('int32')
@@ -117,44 +112,31 @@ class CoNSeP(object):
     and Nasir Rajpoot. "Hover-Net: Simultaneous segmentation and classification of nuclei 
     in multi-tissue histology images." Medical Image Analysis 58 (2019): 101563.
     """
-    def __init__(self, type_classification=False):
+    def __init__(self):
         self.data_root = 'dataset'
         self.desc = {
             'train':
                 {
-                    'img': ('.png', self.data_root + '/CoNSeP/train/Images/'),
-                    'ann': ('.mat', self.data_root + '/CoNSeP/train/Labels/')
+                    'img': ('.png', self.data_root + '/consep/Train/Images/'),
+                    'ann': ('.mat', self.data_root + '/consep/Train/Labels/')
                 },
             'valid':
                 {
-                    'img': ('.png', self.data_root + '/CoNSeP/test/Images/'),
-                    'ann': ('.mat', self.data_root + '/CoNSeP/test/Labels/')
+                    'img': ('.png', self.data_root + '/consep/Test/Images/'),
+                    'ann': ('.mat', self.data_root + '/consep/Test/Labels/')
                 },
         }
 
-        self.train_dir_list = [
-            self.data_root + 'CoNSeP/patches/train/']
-        self.valid_dir_list = [
-            self.data_root + 'CoNSeP/patches/valid/']
-
         self.nr_types = 5
 
-        if type_classification:
-            # used for determining the colour of contours in overlay
-            self.class_colour = {
-                0: (0, 0, 0),
-                1: (255, 0, 0),
-                2: (0, 255, 0),
-                3: (0, 0, 255),
-                4: (255, 255, 0),
-                5: (255, 165, 0)
-            }
-        else:
-            # used for determining the colour of contours in overlay
-            self.class_colour = {
-                0: (0, 0, 0),
-                1: (255, 255, 0),
-            }
+        self.type_colour = {
+            0: (  0,   0,   0),
+            1: (255,   0,   0),
+            2: (  0, 255,   0),
+            3: (  0,   0, 255),
+            4: (255, 255,   0),
+            5: (255, 165,   0)
+        }
 
         self.nuclei_type_dict = {
             'Miscellaneous': 1,
@@ -167,10 +149,10 @@ class CoNSeP(object):
     def load_img(self, path):
         return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
-    def load_ann(self, path):
+    def load_ann(self, path, with_type=False):
         # assumes that ann is HxW
         ann_inst = sio.loadmat(path)['inst_map']
-        if self.type_classification:
+        if with_type:
             ann_type = sio.loadmat(path)['type_map']
 
             # merge classes for CoNSeP (in paper we only utilise 3 nuclei classes and background)
@@ -178,19 +160,10 @@ class CoNSeP(object):
             ann_type[(ann_type == 3) | (ann_type == 4)] = 3
             ann_type[(ann_type == 5) | (ann_type == 6) | (ann_type == 7)] = 4
 
-            assert np.max(ann_type) <= self.nr_types-1, \
-                "Only %d types of nuclei are defined for training"\
-                "but there are %d types found in the input image." % (
-                    self.type_classification.nr_types, np.max(ann_type))
-
             ann = np.dstack([ann_inst, ann_type])
             ann = ann.astype('int32')
         else:
             ann = np.expand_dims(ann_inst, -1)
             ann = ann.astype('int32')
 
-            self.class_color = {
-                0: (0, 0, 0),
-                1: (255, 255, 0),
-            }
         return ann
