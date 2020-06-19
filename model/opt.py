@@ -1,8 +1,11 @@
 import torch.optim as optim
 
 from model.net_desc import HoVerNet
-from run_utils.callbacks.base import *
-from run_utils.callbacks.logging import *
+from run_utils.callbacks.base import (AccumulateRawOutput, CheckpointSaver,
+                                      ProcessAccumulatedRawOutput,
+                                      ScalarMovingAverage, ScheduleLr, TrackLr,
+                                      VisualizeOutput, TriggerEngine)
+from run_utils.callbacks.logging import LoggingEpochOutput, LoggingGradient
 from run_utils.engine import Events
 
 from .run_desc import (proc_valid_step_output, train_step, valid_step,
@@ -116,7 +119,7 @@ train_config = {
             # callbacks are run according to the list order of the event
             'callbacks': {
                 Events.STEP_COMPLETED: [
-                    # LoggingGradient(),
+                    # LoggingGradient(), # TODO: very slow, may be due to back forth of tensor/numpy ?
                     ScalarMovingAverage(),
                 ],
                 Events.EPOCH_COMPLETED: [
