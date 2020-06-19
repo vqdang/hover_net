@@ -19,7 +19,7 @@ from .augs import (add_to_brightness, add_to_contrast, add_to_hue,
                    median_blur)
 
 ####
-class TrainSerialLoader(torch.utils.data.Dataset):
+class FileLoader(torch.utils.data.Dataset):
     """
     Data Loader. Loads images from a file list and 
     performs augmentation with the albumentation library.
@@ -32,20 +32,21 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         mask_shape: shape of the output [h,w] - defined in config.py
         mode: 'train' or 'valid'
     """
-    def __init__(self, file_list, input_shape=None, mask_shape=None, mode='train'):
+    def __init__(self, file_list, input_shape=None, mask_shape=None, 
+                mode='train', setup_augmentor=True):
         assert input_shape is not None and mask_shape is not None
         self.mode = mode
         self.mask_shape = mask_shape
         self.input_shape = input_shape
         self.info_list = file_list
-        # if mode == 'train':
-        #     self.info_list = self.info_list[:256]
         self.id = 0
+        if setup_augmentor:
+            self.setup_augmentor(0)
         return
 
     def setup_augmentor(self, worker_id):
         seed = np.random.randint(0, 2**32) + worker_id
-        self.augmentor = self.__augmentation__(self.mode, seed)
+        self.augmentor = self.__get_augmentation(self.mode, seed)
         self.shape_augs = iaa.Sequential(self.augmentor[0]) 
         self.input_augs = iaa.Sequential(self.augmentor[1]) 
         self.id = self.id + worker_id
@@ -74,7 +75,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         
         feed_dict = {'img' : img}
         # * Specific on the flight processing for annotation label
-        if ann.shape[-1] == 2: # Nuclei Segmentation + Type Classification
+        if False and ann.shape[-1] == 2: # Nuclei Segmentation + Type Classification
             inst_map, type_map = np.dsplit(ann, -1)
             np_map = np.array(inst_map > 0, dtype='uint8')
             hv_map = gen_instance_hv_map(inst_map, self.mask_shape)
@@ -134,7 +135,7 @@ class TrainSerialLoader(torch.utils.data.Dataset):
         plt.savefig('dump.png', dpi=600)
         return
 
-    def __augmentation__(self, mode, rng):
+    def __get_augmentation(self, mode, rng):
         if mode == 'train':
             shape_augs = [
                 # * order = ``0`` -> ``cv2.INTER_NEAREST``
