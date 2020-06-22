@@ -223,7 +223,7 @@ class HoVerNet(Net):
     """
     Initialise HoVer-Net
     """
-    def __init__(self, input_ch, nr_types=None, freeze=False):
+    def __init__(self, input_ch=3, nr_types=None, freeze=False):
         super().__init__()
         self.freeze = freeze
 
@@ -308,7 +308,7 @@ class HoVerNet(Net):
         d[0] = crop_op(d[0], [184, 184])
         d[1] = crop_op(d[1], [72, 72])
 
-        out_dict = {}
+        out_dict = OrderedDict()
         for branch_name, branch_desc in self.decoder.items():
             u3 = self.upsample2x(d[-1]) + d[-2]
             u3 = branch_desc[0](u3)
@@ -323,3 +323,8 @@ class HoVerNet(Net):
             out_dict[branch_name] = u0
 
         return out_dict
+
+####
+def create_model(**kwargs):
+    return HoVerNet(**kwargs)
+    
