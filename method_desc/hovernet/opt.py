@@ -1,6 +1,6 @@
 import torch.optim as optim
 
-from model.net_desc import HoVerNet
+from method_desc.hovernet.net_desc import HoVerNet
 from run_utils.callbacks.base import (AccumulateRawOutput, CheckpointSaver,
                                       ProcessAccumulatedRawOutput,
                                       ScalarMovingAverage, ScheduleLr, TrackLr,

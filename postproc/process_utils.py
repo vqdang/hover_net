@@ -9,18 +9,19 @@ from scipy.ndimage.morphology import (binary_dilation, binary_erosion, binary_cl
 
 from .hover import proc_np_hv
 from misc.utils import bounding_box
-
-
+from misc.viz_utils import visualize_instances
 
 ####
-def process_instance(pred_map, is_classification, nr_types, remap_label=False, output_dtype='uint16'):
+def process_instance(pred_map, nr_types=None, overlaid_img=None, 
+                     type_colour=None, output_dtype='uint16'):
     """
     Post processing script for image tiles
 
     Args:
-        pred_map: commbined output of nc, np and hv branches
+        pred_map: commbined output of tp, np and hv branches, in the same order
         nr_types: number of types considered at output of nc branch
-        remap_label: whether to map instance labels from 1 to N (N = number of nuclei)
+        overlaid_img: img to overlay the predicted instances upon, `None` means no
+        type_colour (dict) : `None` to use random, else overlay instances of a type to colour in the dict
         output_dtype: data type of output
     
     Returns:
@@ -28,7 +29,7 @@ def process_instance(pred_map, is_classification, nr_types, remap_label=False, o
         pred_type_out: pixel-wise nuclear type prediction 
     """
 
-    if is_classification:
+    if nr_types is not None:
         pred_inst = pred_map[..., nr_types:]
         pred_type = pred_map[..., :nr_types]
         pred_type = np.argmax(pred_type, axis=-1)
@@ -40,11 +41,7 @@ def process_instance(pred_map, is_classification, nr_types, remap_label=False, o
     pred_inst = proc_np_hv(pred_inst)
     pred_inst = pred_inst.astype(output_dtype)
 
-    # remap label is very slow - only uncomment if necessary to map labels in order
-    if remap_label:
-        pred_inst = remap_label(pred_inst, by_size=True)
-    
-    if is_classification:
+    if nr_types is not None:
         pred_type_out = np.zeros([pred_type.shape[0], pred_type.shape[1]])               
         #### * Get class of each instance id, stored at index id-1
         pred_id_list = list(np.unique(pred_inst))[1:] # exclude background ID
@@ -64,7 +61,11 @@ def process_instance(pred_map, is_classification, nr_types, remap_label=False, o
     else:
         pred_type_out = None
     
-    return pred_inst, pred_type_out
+    if overlaid_img is not None:
+        overlaid_img = visualize_instances(overlaid_img, pred_inst, 
+                                pred_type_out, type_colour=type_colour)
+
+    return pred_inst, pred_type_out, overlaid_img
 
 
 ####

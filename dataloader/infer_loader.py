@@ -1,160 +1,94 @@
-
+import sys
 import math
-import os
-import glob
 import numpy as np
 import cv2
-import csv
 
 import torch
 import torch.utils.data as data
-
-from torchvision import transforms
-from torchvision.utils import make_grid
 
 # import openslide as ops
 # import glymur
 
 import matplotlib.pyplot as plt
 
-from misc import utils
-from config import Config
-
-
+import psutil
 
 ####
-class SerializeFile(data.Dataset):
+class SerializeFileList(data.IterableDataset):
     """
-    Read a single file as multiple patches of same shape- perform the padding beforehand
+    Read a single file as multiple patches of same shape, perform the padding beforehand
     """
-    def __init__(self, file_path, window_size, mask_size):
-        self.window_size = window_size
-        self.patch_info_list = []
+    def __init__(self, img_list, patch_info_list, patch_size):
+        super(SerializeFileList).__init__()
+        self.patch_size = patch_size
 
-        file_ext = os.path.basename(file_path).split('.')[-1]
-        if file_ext not in ['svs', 'ndpi']:
-            img = cv2.imread(file_path)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        img, patch_info_list = self.__get_patch_list(img, window_size, mask_size)
-
-        self.img = img
+        self.img_list = img_list
         self.patch_info_list = patch_info_list
 
-    def __get_patch_list(self, img, window_size, mask_size):
-        win_size = window_size
-        msk_size = step_size = mask_size
+        self.worker_start_img_idx = 0
+        # * for internal worker state
+        self.stop_img_idx = 0
+        self.curr_img_idx = 0
+        self.curr_patch_idx = 0
+        self.stop_patch_idx = 0
+        return
 
-        def get_last_steps(length, msk_size, step_size):
-            nr_step = math.ceil((length - msk_size) / step_size)
-            last_step = (nr_step + 1) * step_size
-            return int(last_step), int(nr_step + 1)
+    def __iter__(self):
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:  # single-process data loading, return the full iterator
+            print('hereX')
+            self.stop_img_idx = len(self.img_list)
+            return self
+        else: # in a worker process so split workload, return a reduced copy of self
+            # print('hereY', len(self.img_list), len(self.patch_info_list))
+            per_worker = len(self.patch_info_list) / float(worker_info.num_workers)
+            per_worker = int(math.ceil(per_worker))
 
-        im_h = img.shape[0]
-        im_w = img.shape[1]
+            global_curr_patch_idx = worker_info.id * per_worker
+            global_stop_patch_idx = global_curr_patch_idx + per_worker
+            self.patch_info_list = self.patch_info_list[global_curr_patch_idx:global_stop_patch_idx]
+            self.curr_patch_idx = 0
+            self.stop_patch_idx = len(self.patch_info_list)
+            # * check img indexer, implicit protocol in infer.py
+            global_curr_img_idx = self.patch_info_list[0][-1]
+            global_stop_img_idx = self.patch_info_list[-1][-1] + 1
+            self.worker_start_img_idx = global_curr_img_idx
+            self.img_list = self.img_list[global_curr_img_idx:global_stop_img_idx]
+            self.curr_img_idx = 0
+            self.stop_img_idx = len(self.img_list)
+            return self # does it mutate source copy?
 
-        last_h, _ = get_last_steps(im_h, msk_size[0], step_size[0])
-        last_w, _ = get_last_steps(im_w, msk_size[1], step_size[1])
+    def __next__(self):
 
-        diff_h = win_size[0] - step_size[0]
-        padt = diff_h // 2
-        padb = last_h + win_size[0] - im_h
+        if self.curr_patch_idx >= self.stop_patch_idx:
+            raise StopIteration # when there is nothing more to yield 
+        patch_info = self.patch_info_list[self.curr_patch_idx]
+        img_ptr = self.img_list[patch_info[-1] - self.worker_start_img_idx]
+        patch_data = img_ptr[patch_info[0] : patch_info[0] + self.patch_size,
+                             patch_info[1] : patch_info[1] + self.patch_size]
+        self.curr_patch_idx += 1
+        return patch_data, patch_info
 
-        diff_w = win_size[1] - step_size[1]
-        padl = diff_w // 2
-        padr = last_w + win_size[1] - im_w
-
-        img = np.lib.pad(img, ((padt, padb), (padl, padr), (0, 0)), 'reflect')
-
-        # generating subpatches index from orginal
-        patch_info_list = []
-        for iy, ridx in enumerate(list(range(0, last_h, step_size[0]))):
-            for ix, cidx in enumerate(list(range(0, last_w, step_size[1]))):
-                patch_info_list.append([[ridx, cidx], [iy, ix]])
-        return img, patch_info_list
-
-    def __read_region(self, coord, window_size):
-        return self.img[coord[0]: coord[0] + window_size[0],
-                        coord[1]: coord[1] + window_size[1]]
-
-    def __getitem__(self, idx):
-
-        coord, patch_idx = self.patch_info_list[idx]
-
-        img_patch = self.__read_region(coord, self.window_size)
-
-        # ! cant return list of integer, it will be turned into sthg else
-        patch_idx = np.array(patch_idx, dtype=np.int32)
-        return img_patch, patch_idx
-
-    def __len__(self):
-        return len(self.patch_info_list)
 ####
+class SerializeArray(data.Dataset):
 
+    def __init__(self, image, patch_info_list, patch_size):
+        super(SerializeArray).__init__()
+        self.patch_size = patch_size
 
-class SerializeWSI(data.Dataset):
-    def __init__(self, wsi_path, wsi_ext, tile_info, window_size, mask_size, ds_factor, magnification_level=0, tissue=None):
-        """
-        Don't do padding for the WSI because bottom and left regions are likely just background       
-        """
-        self.wsi_ext = wsi_ext
-        self.magnification_level = magnification_level
-        self.ds_factor = ds_factor
-        self.window_size = (window_size[0],window_size[1])
-        self.mask_size = (mask_size[0],mask_size[1])
-        self.patch_info_list = []
-
-        if wsi_ext == 'jp2':
-            self.wsi_open = glymur.Jp2k(wsi_path)
-            fullres = self.wsi_open[:]
-            wsi_shape = [fullres.shape[1], fullres.shape[0]]
-        else:
-            self.wsi_open = ops.OpenSlide(wsi_path)
-            wsi_shape = [self.wsi_open.dimensions[1], self.wsi_open.dimensions[0]]
-
-        if tissue is not None:
-            self.ds_factor_tiss = int(round(wsi_shape[0] / tissue.shape[0])) 
-
-        # get tile coordinate information and tile dimensions
-        start_x = tile_info[0]
-        start_y = tile_info[1]
-        tile_shape_x = tile_info[2]
-        tile_shape_y = tile_info[3]
-
-        # ! only extract the portion within the original size
-        for iy, ridx in enumerate(list(range(start_y, tile_shape_y, mask_size[0]))):
-            for ix, cidx in enumerate(list(range(start_x, tile_shape_x, mask_size[1]))):
-                # if tissue mask is provided, then only extract patches from valid tissue regions
-                if tissue is not None:
-                    win_tiss = tissue[
-                        int(round(ridx / self.ds_factor_tiss)):int(round(ridx / self.ds_factor_tiss)) + int(
-                            round(window_size[0] / self.ds_factor_tiss)),
-                        int(round(cidx / self.ds_factor_tiss)):int(round(cidx / self.ds_factor_tiss)) + int(
-                            round(window_size[1] / self.ds_factor_tiss))]
-                    if np.sum(win_tiss) > 0:
-                        self.patch_info_list.append([[cidx, ridx], [iy, ix]])
-                else:
-                    self.patch_info_list.append([[cidx, ridx], [iy, ix]])
-
-    def __read_region(self, coord, window_size):
-        if self.wsi_ext == 'jp2':
-            patch = self.wsi_open[coord[1]:coord[1] + window_size[1] * self.ds_factor:self.ds_factor,
-                                  coord[0]:coord[0] + window_size[0] * self.ds_factor:self.ds_factor, :]
-        else:
-            patch = self.wsi_open.read_region(coord, self.magnification_level, self.window_size)
-            r, g, b, _ = cv2.split(np.array(patch))
-            return cv2.merge([r, g, b])
-
-    def __getitem__(self, idx):
-        coord, patch_idx = self.patch_info_list[idx]
-        img_patch = self.__read_region(coord, self.window_size)
-
-        # ! cant return list of integer, it will be turned into sthg else
-        patch_idx = np.array(patch_idx, dtype=np.int32)
-        return img_patch, patch_idx
+        self.image = image
+        self.patch_info_list = patch_info_list
+        return
 
     def __len__(self):
         return len(self.patch_info_list)
+
+    def __getitem__(self, idx):
+        patch_info = self.patch_info_list[idx]
+        patch_data = self.image[patch_info[0] : patch_info[0] + self.patch_size[0],
+                                patch_info[1] : patch_info[1] + self.patch_size[1]]    
+        # print(patch_data.shape, patch_info[:2])
+        return patch_data, patch_info
 
 ####
 def visualize(ds, batch_size, nr_steps=100):
