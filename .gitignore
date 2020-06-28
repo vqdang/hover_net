@@ -2,8 +2,8 @@
 *__pycache__
 
 # directories
-dataset
-exp_output
+dataset/
+exp_output/
 
 # checkpoint paths
 *.npz

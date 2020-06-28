@@ -72,11 +72,14 @@ class SerializeFileList(data.IterableDataset):
 ####
 class SerializeArray(data.Dataset):
 
-    def __init__(self, image, patch_info_list, patch_size):
+    def __init__(self, mmap_array_path, patch_info_list, patch_size):
         super(SerializeArray).__init__()
         self.patch_size = patch_size
 
-        self.image = image
+        # use mmap as intermediate sharing, else variable will be duplicated
+        # accross torch worker => OOM error, open in read only mode
+        self.image = np.load(mmap_array_path, mmap_mode='r')
+
         self.patch_info_list = patch_info_list
         return
 

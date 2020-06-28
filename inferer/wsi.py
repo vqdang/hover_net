@@ -146,22 +146,40 @@ def _get_chunk_patch_info(img_shape, chunk_input_shape, patch_input_shape, patch
 
     return chunk_info_list, patch_info_list
 ####
-# def _post_proc_para_wrapper(mmap_ptr, tile_info, func, func_kwargs):
 def _post_proc_para_wrapper(pred_map_mmap_path, tile_info, func, func_kwargs):
-    # print('erex')
     idx, tile_tl, tile_br = tile_info
     wsi_pred_map_ptr = np.load(pred_map_mmap_path, mmap_mode='r')
     tile_pred_map = wsi_pred_map_ptr[tile_tl[0] : tile_br[0],
                                      tile_tl[1] : tile_br[1]]
     tile_pred_map = np.array(tile_pred_map) # from mmap to ram
-    # print('erey')
     return func(tile_pred_map, **func_kwargs), tile_info
+####
+def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
+    # write to newly created holder for this wsi
+    wsi_pred_map_ptr = np.load(wsi_pred_map_mmap_path, mmap_mode='r+')
+    chunk_pred_map = wsi_pred_map_ptr[chunk_info[1][0][0]: chunk_info[1][1][0],
+                                      chunk_info[1][0][1]: chunk_info[1][1][1]] 
+    if patch_output_list is None:
+        chunk_pred_map[:] = 0 # zero flush when there is no-results
+        print(chunk_info.flatten(), 'flush 0')
+        return
+
+    for pinfo in patch_output_list:
+        pcoord, pdata = pinfo
+        pdata = np.squeeze(pdata)
+        pcoord = np.squeeze(pcoord)[:2]
+        chunk_pred_map[pcoord[0] : pcoord[0] + pdata.shape[0],
+                       pcoord[1] : pcoord[1] + pdata.shape[1]] = pdata
+    print(chunk_info.flatten(), 'pass')
+    return
 ####
 class Inferer(base.Inferer):
 
-    def __run_model(self, array_data, patch_top_left_list):
-        dataset = SerializeArray(array_data, patch_top_left_list, self.patch_input_shape)
-        # TODO: memory sharing problem
+    def __run_model(self, patch_top_left_list):
+        # TODO: the cost of creating dataloader may not be cheap ?
+        dataset = SerializeArray('%s/cache_chunk.npy' % self.wsi_cache_path, 
+                                patch_top_left_list, self.patch_input_shape)
+
         dataloader = data.DataLoader(dataset,
                             num_workers=self.nr_worker,
                             batch_size=self.batch_size,
@@ -202,6 +220,12 @@ class Inferer(base.Inferer):
 
     def __get_raw_prediction(self, chunk_info_list, patch_info_list):
 
+        # 1 dedicated thread just to write results back to disk
+        proc_pool = Pool(processes=1, 
+                        initializer=_init_worker_child, 
+                        initargs=(thread_lock,))
+        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.wsi_cache_path
+
         masking = lambda x, a, b: (a <= x) & (x <= b)
         for chunk_info in chunk_info_list:
             # select patch basing on top left coordinate of input
@@ -217,32 +241,30 @@ class Inferer(base.Inferer):
 
             # there no valid patches, so flush 0 and skip
             if len(chunk_patch_info_list) == 0:
-                self.wsi_pred_map[chunk_info[1][0][0]: chunk_info[1][1][0],
-                                  chunk_info[1][0][1]: chunk_info[1][1][1]] = 0
+                proc_pool.apply_async(_assemble_and_flush, 
+                                    args=(wsi_pred_map_mmap_path, chunk_info, None))
                 continue
-            print(chunk_info.flatten(), 'Pass')
+
             # shift the coordinare from wrt slide to wrt chunk
             chunk_patch_info_list = np.array(chunk_patch_info_list)
             chunk_patch_info_list -= chunk_info[:,0]
             chunk_data = self.wsi_handler.read_region(chunk_info[0][0][::-1], self.wsi_proc_mag, 
-                                                    (chunk_info[0][1] - chunk_info[0][0])[::-1])
+                                                     (chunk_info[0][1] - chunk_info[0][0])[::-1])
             chunk_data = np.array(chunk_data)[...,:3]
+            np.save('%s/cache_chunk.npy' % self.wsi_cache_path, chunk_data)
 
-            patch_output_list = self.__run_model(chunk_data, chunk_patch_info_list[:,0,0])
+            patch_output_list = self.__run_model(chunk_patch_info_list[:,0,0])
 
-            chunk_pred_map = self.wsi_pred_map[chunk_info[1][0][0]: chunk_info[1][1][0],
-                                               chunk_info[1][0][1]: chunk_info[1][1][1]] 
-            for pinfo in patch_output_list:
-                pcoord, pdata = pinfo
-                pdata = np.squeeze(pdata)
-                pcoord = np.squeeze(pcoord)[:2]
-                chunk_pred_map[pcoord[0] : pcoord[0] + pdata.shape[0],
-                               pcoord[1] : pcoord[1] + pdata.shape[1]] = pdata        
+            proc_pool.apply_async(_assemble_and_flush, 
+                                    args=(wsi_pred_map_mmap_path, 
+                                        chunk_info, patch_output_list))
+   
+        proc_pool.close()
+        proc_pool.join()
         return
 
     def __dispatch_post_processing(self, tile_info_list, callback):
-        # global mmap_ptr
-        # mmap_ptr = self.wsi_pred_map
+
         if self.nr_procs > 0: 
             proc_pool = Pool(processes=self.nr_procs, 
                             initializer=_init_worker_child, 
@@ -265,7 +287,7 @@ class Inferer(base.Inferer):
                                     args=(wsi_pred_map_mmap_path, tile_info, 
                                         hover.process, func_kwargs))
             else:
-                _post_proc_para_wrapper(wsi_pred_map_mmap_path, tile_info, 
+                results = _post_proc_para_wrapper(wsi_pred_map_mmap_path, tile_info, 
                                         hover.process, func_kwargs)
                 callback(results)
         if self.nr_procs > 0:
@@ -275,11 +297,10 @@ class Inferer(base.Inferer):
 
     def process_single_file(self):
         self.nr_worker = 4
-        self.batch_size = 32
+        self.batch_size = 64 # should be 16 samples / GPU
         self.nr_procs = 4
         chunk_input_shape = [10000, 10000]
         ambiguous_size = 128
-        # tile_shape = [4096, 4096]
         tile_shape = [2048, 2048]
         patch_input_shape = [270, 270]
         patch_output_shape = [80, 80]
@@ -291,9 +312,8 @@ class Inferer(base.Inferer):
         chunk_input_shape  = np.array(chunk_input_shape)
         patch_input_shape  = np.array(patch_input_shape)
         patch_output_shape = np.array(patch_output_shape)
-        # wsi_handler = openslide.OpenSlide('dataset/home/sample.tif')
-        self.wsi_handler = openslide.OpenSlide('dataset/home/sample.tif')
 
+        self.wsi_handler = openslide.OpenSlide('dataset/home/sample.tif')
         # TODO: customize read lv
         self.wsi_proc_mag   = 0 # w.r.t source magnification
         self.wsi_proc_shape = self.wsi_handler.level_dimensions[self.wsi_proc_mag] # TODO: turn into func
@@ -317,15 +337,13 @@ class Inferer(base.Inferer):
 
         # * raw prediction
         start = time.perf_counter()
-        # cinfo, pinfo = _get_chunk_patch_info(np.array([10, 10]), np.array([6, 6]), np.array([4,4]), np.array([2,2]))
         chunk_info_list, patch_info_list = _get_chunk_patch_info(
                                                 self.wsi_proc_shape, chunk_input_shape, 
                                                 patch_input_shape, patch_output_shape)
         self.__get_raw_prediction(chunk_info_list, patch_info_list)
         end = time.perf_counter()
-        print(end - start)
+        print('Inference Time: ',  end - start)
 
-        
         # TODO: deal with error banding
         ##### * post proc
         start = time.perf_counter()
@@ -355,7 +373,6 @@ class Inferer(base.Inferer):
                 pred_inst[pred_inst > 0] += wsi_max_id
                 self.wsi_inst_map[tile_tl[0] : tile_br[0],
                                   tile_tl[1] : tile_br[1]] = pred_inst
-            print(pos_args)
             return
         ####################### * Callback can only receive 1 arg
         def post_proc_fixing_tile_callback(args):
@@ -415,7 +432,6 @@ class Inferer(base.Inferer):
                 pred_inst = roi_inst + pred_inst
                 self.wsi_inst_map[tile_tl[0] : tile_br[0],
                                   tile_tl[1] : tile_br[1]] = pred_inst
-            print(pos_args)
             return        
         #######################
         # * must be in sequential ordering
@@ -423,32 +439,16 @@ class Inferer(base.Inferer):
         self.__dispatch_post_processing(tile_boundary_info, post_proc_fixing_tile_callback)
         self.__dispatch_post_processing(tile_cross_info, post_proc_fixing_tile_callback)
         end = time.perf_counter()
-        print(end - start)
+        print('Post Proc Time: ', end - start)
 
-        # import pickle
+        import pickle
+        np.save('pred_inst.npy', self.wsi_inst_map)
+        with open("nuclei_dict.pickle", "wb") as handle:
+            pickle.dump(self.wsi_inst_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         # with open('dataset/home/holder_postproc_tile_grid.pickle', 'rb') as fp:
         #     wsi_inst_info = pickle.load(fp)
-
-        # import matplotlib.pyplot as plt
-        # cmap = plt.get_cmap('viridis')
-        # roi = self.wsi_inst_map[15000:17000,15000:17000]
-        # inst_id_list = np.unique(roi)[1:]
-        # roi = np.copy(roi)
-        # roi[roi > 0] -= np.min(roi[roi > 0])
-        # roi_color = (cmap(roi)[...,:3] * 255).astype(np.uint8)
-        # inst_contour_list = [self.wsi_inst_info[inst_id]['contour'] - np.array([15000, 15000])\
-        #                          for inst_id in (inst_id_list)]
-        # cv2.drawContours(roi_color, inst_contour_list, -1, (255, 0, 0), 4)
-        # plt.subplot(1,2,1)
-        # plt.imshow(roi)
-        # plt.subplot(1,2,2)
-        # plt.imshow(roi_color)
-        # plt.savefig('dump.png', dpi=600)
-        # plt.close()
-        # print('here')
-        
-        exit()
-        return
+        # return
 
     def process_wsi_list(self):
         return
