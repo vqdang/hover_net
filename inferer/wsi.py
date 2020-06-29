@@ -181,7 +181,7 @@ class Inferer(base.Inferer):
                                 patch_top_left_list, self.patch_input_shape)
 
         dataloader = data.DataLoader(dataset,
-                            num_workers=self.nr_worker,
+                            num_workers=self.nr_inference_workers,
                             batch_size=self.batch_size,
                             drop_last=False)
 
@@ -266,7 +266,7 @@ class Inferer(base.Inferer):
     def __dispatch_post_processing(self, tile_info_list, callback):
 
         if self.nr_procs > 0: 
-            proc_pool = Pool(processes=self.nr_procs, 
+            proc_pool = Pool(processes=self.nr_post_proc_workers, 
                             initializer=_init_worker_child, 
                             initargs=(thread_lock,))
 
@@ -295,39 +295,34 @@ class Inferer(base.Inferer):
             proc_pool.join()
         return
 
-    def process_single_file(self):
-        self.nr_worker = 4
-        self.batch_size = 64 # should be 16 samples / GPU
-        self.nr_procs = 4
-        chunk_input_shape = [10000, 10000]
-        ambiguous_size = 128
-        tile_shape = [2048, 2048]
-        patch_input_shape = [270, 270]
-        patch_output_shape = [80, 80]
-        self.patch_input_shape = patch_input_shape
+    def _parse_args(self, run_args):
+        for variable, value in run_args.items():
+            self.__setattr__(variable, value)
+        return
 
+    def process_single_file(self, wsi_path, msk_path, output_path):
         # TODO: customize universal file handler to sync the protocol
-        ambiguous_size = int(128)
-        tile_shape = (np.array(tile_shape)).astype(np.int64)
-        chunk_input_shape  = np.array(chunk_input_shape)
-        patch_input_shape  = np.array(patch_input_shape)
-        patch_output_shape = np.array(patch_output_shape)
+        ambiguous_size = self.ambiguous_size
+        tile_shape = (np.array(self.tile_shape)).astype(np.int64)
+        chunk_input_shape  = np.array(self.chunk_shape)
+        patch_input_shape  = np.array(self.patch_input_shape)
+        patch_output_shape = np.array(self.patch_output_shape)
 
-        self.wsi_handler = openslide.OpenSlide('dataset/home/sample.tif')
+        self.wsi_handler = openslide.OpenSlide(wsi_path)
         # TODO: customize read lv
         self.wsi_proc_mag   = 0 # w.r.t source magnification
         self.wsi_proc_shape = self.wsi_handler.level_dimensions[self.wsi_proc_mag] # TODO: turn into func
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1]) # to Y, X
 
-        self.wsi_mask = cv2.imread('dataset/home/sample.png')
+        # TODO: simplify / protocolize this
+        self.wsi_mask = cv2.imread(msk_path)
         self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
         self.wsi_mask[self.wsi_mask > 0] = 1
 
         # * declare holder for output
         # create a memory-mapped .npy file with the predefined dimensions and dtype
-        out_ch = 3
+        out_ch = 3 # TODO: dynamicalize this, retrieve from model?
         self.wsi_inst_info  = {} 
-        self.wsi_cache_path = 'dataset/home/'
         self.wsi_inst_map   = np.zeros(self.wsi_proc_shape, dtype=np.int32)
         # warning, the value within this is uninitialized
         self.wsi_pred_map = np.lib.format.open_memmap(
@@ -441,14 +436,19 @@ class Inferer(base.Inferer):
         end = time.perf_counter()
         print('Post Proc Time: ', end - start)
 
-        import pickle
-        np.save('pred_inst.npy', self.wsi_inst_map)
-        with open("nuclei_dict.pickle", "wb") as handle:
-            pickle.dump(self.wsi_inst_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # ! DUMMY, need to discuss
+        # import pickle
+        # np.save('pred_inst.npy', self.wsi_inst_map)
+        # with open("nuclei_dict.pickle", "wb") as handle:
+        #     pickle.dump(self.wsi_inst_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # with open('dataset/home/holder_postproc_tile_grid.pickle', 'rb') as fp:
-        #     wsi_inst_info = pickle.load(fp)
-        # return
+    def process_wsi_list(self, run_args):
+        self._parse_args(run_args) 
 
-    def process_wsi_list(self):
+        wsi_path_list = glob.glob(self.input_wsi_dir + '/*.tif')       
+        for wsi_path in wsi_path_list:
+            # may not work, such as when name is TCGA etc.
+            wsi_base_name = os.path.basename(wsi_path).split('.')[:-1]
+            msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
+            self.process_single_file(wsi_path, msk_path, self.output_path)
         return

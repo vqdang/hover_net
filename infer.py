@@ -90,11 +90,23 @@ if __name__ == '__main__':
         },
     }
     run_args = {
-        'nr_worker'  : 4,
-        'batch_size' : 32,
+        'nr_inference_workers' : 4,
+        'nr_post_proc_workers' : 4,
+        'batch_size'  : 32,
+
+        'ambiguous_size' : 128,
+        'chunk_shape' : [10000, 10000],
+        'tile_shape'  : [4096, 4096],
+        'cache_path'  : 'dataset/home/', # should be placed on SSD with at least 100Gb
+
+        # ! will parse according the extension
+        'wsi_proc_mag'  : -1, # -1 default to highest
+        # TODO: dynamic extension ?
+        'input_wsi_dir' : 'dataset/', # asumme no nested dir
+        'input_msk_dir' : 'dataset/', # should have the same name as one within 'wsi'
+        'output_dir' : 'dataset/home/',
         'patch_input_shape'  : [270, 270], # always be square RoI
         'patch_output_shape' : [80, 80], # always be square RoI
-        'save_intermediate_output' : True,        
     }
     from inferer.wsi import Inferer
     inferer = Inferer(**method_args)
