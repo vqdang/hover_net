@@ -30,7 +30,7 @@ from postproc import hover
 import openslide
 
 ####
-class Inferer(object):
+class InferManager(object):
     def __init__(self, **kwargs):
         self.run_step = None
         for variable, value in kwargs.items():
@@ -44,7 +44,7 @@ class Inferer(object):
         Create the model, load the checkpoint and define
         associated run steps to process each data batch
         """
-        model_desc = import_module('method_desc.%s.net_desc' % self.method['name'])
+        model_desc = import_module('models.%s.net_desc' % self.method['name'])
         model_creator = getattr(model_desc, 'create_model')
 
         # TODO: deal with parsing multi level model desc
@@ -53,7 +53,7 @@ class Inferer(object):
         net.load_state_dict(saved_state_dict['desc'], strict=True)
         net = torch.nn.DataParallel(net).to('cuda')
 
-        run_desc = import_module('method_desc.%s.run_desc' % self.method['name'])
+        run_desc = import_module('models.%s.run_desc' % self.method['name'])
         self.run_step = lambda input_batch : getattr(run_desc, 'infer_step')(input_batch, net)
         return
     
