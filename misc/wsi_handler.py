@@ -132,9 +132,9 @@ class JP2Handler(FileHandler):
         return self.file_ptr[coords[1]:coords[1]+read_level_size[1]*factor:factor,
                         coords[0]:coords[0]+read_level_size[0]*factor:factor,:]
         
-    def __load_thumbnail(self, magnification, read_level=3):
+    def __load_thumbnail(self, magnification, read_level=2):
         # width-height, not height-width
-        read_level_size = self.level_dimensions[read_level]
+        read_level_size = self.metadata['level_dims'][read_level]
         read_level_magnification = self.metadata['magnification'][read_level]
         img = self.read_region((0, 0), read_level, read_level_size)
         
@@ -188,7 +188,7 @@ class OpenSlideHandler(FileHandler):
             ('height'       , self.file_ptr.dimensions[1]),
             ('width'        , self.file_ptr.dimensions[0]),
             ('levels'       , self.file_ptr.level_count),
-            ('levels_dims'  , self.file_ptr.level_dimensions)
+            ('level_dims'  , self.file_ptr.level_dimensions)
         ]
         return OrderedDict(metadata)
     
@@ -204,7 +204,7 @@ class OpenSlideHandler(FileHandler):
         region = self.file_ptr.read_region(coords, read_level, read_level_size)
         return np.array(region)[...,:3]
         
-    def __load_thumbnail(self, magnification, read_level=3):
+    def __load_thumbnail(self, magnification, read_level=2):
         """
         load a thumbnail from openslide object
 
@@ -213,7 +213,7 @@ class OpenSlideHandler(FileHandler):
             read_level (int): level of pyramid to read from
         """
         # width-height, not height-width
-        read_level_size = self.file_ptr.level_dimensions[read_level]
+        read_level_size = self.metadata['level_dims'][read_level]
         read_level_magnification = self.metadata['magnification'][read_level]
         img = self.read_region((0, 0), read_level, read_level_size)
         

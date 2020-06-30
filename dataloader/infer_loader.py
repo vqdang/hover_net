@@ -2,16 +2,13 @@ import sys
 import math
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 
 import torch
 import torch.utils.data as data
 
-# import openslide as ops
-# import glymur
-
-import matplotlib.pyplot as plt
-
 import psutil
+
 
 ####
 class SerializeFileList(data.IterableDataset):
@@ -36,11 +33,9 @@ class SerializeFileList(data.IterableDataset):
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:  # single-process data loading, return the full iterator
-            print('hereX')
             self.stop_img_idx = len(self.img_list)
             return self
         else: # in a worker process so split workload, return a reduced copy of self
-            # print('hereY', len(self.img_list), len(self.patch_info_list))
             per_worker = len(self.patch_info_list) / float(worker_info.num_workers)
             per_worker = int(math.ceil(per_worker))
 
@@ -90,7 +85,6 @@ class SerializeArray(data.Dataset):
         patch_info = self.patch_info_list[idx]
         patch_data = self.image[patch_info[0] : patch_info[0] + self.patch_size[0],
                                 patch_info[1] : patch_info[1] + self.patch_size[1]]    
-        # print(patch_data.shape, patch_info[:2])
         return patch_data, patch_info
 
 ####

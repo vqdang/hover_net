@@ -436,10 +436,10 @@ class Infer(base.InferBase):
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
 
-        wsi_path_list = glob.glob(self.input_wsi_dir + '/*.tif')       
+        wsi_path_list = glob.glob(self.input_wsi_dir + '/*')       
         for wsi_path in wsi_path_list:
             # may not work, such as when name is TCGA etc.
             wsi_base_name = os.path.basename(wsi_path).split('.')[:-1]
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
-            self.process_single_file(wsi_path, msk_path, self.output_path)
+            self.process_single_file(wsi_path, msk_path, self.output_dir)
         return
