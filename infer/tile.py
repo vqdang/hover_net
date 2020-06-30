@@ -106,11 +106,10 @@ def _post_process_patches(functor, patch_info, src_info, get_overlaid=False, typ
 
     return [pred_inst, inst_info_dict , overlaid_img], args
     
-class Inferer(base.Inferer):
+class InferTile(base.InferManager):
     """
     Run inference on tiles
     """ 
-
     ####
     def process_file_list(self, 
                 nr_inference_workers=4,

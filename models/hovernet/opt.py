@@ -1,6 +1,6 @@
 import torch.optim as optim
 
-from method_desc.hovernet.net_desc import HoVerNet
+from models.hovernet.net_desc import HoVerNet
 from run_utils.callbacks.base import (AccumulateRawOutput, CheckpointSaver,
                                       ProcessAccumulatedRawOutput,
                                       ScalarMovingAverage, ScheduleLr, TrackLr,
@@ -24,7 +24,7 @@ train_config = {
             'run_info': {
                 # may need more dynamic for each network
                 'net': {
-                    'desc': lambda: HoVerNet(3, freeze=True),
+                    'desc': lambda: HoVerNet(freeze=True),
                     'optimizer': [
                         optim.Adam,
                         {  # should match keyword for parameters within the optimizer
@@ -65,7 +65,7 @@ train_config = {
             'run_info': {
                 # may need more dynamic for each network
                 'net': {
-                    'desc': lambda: HoVerNet(3, freeze=False),
+                    'desc': lambda: HoVerNet(freeze=False),
                     'optimizer': [
                         optim.Adam,
                         {  # should match keyword for parameters within the optimizer

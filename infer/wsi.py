@@ -1,24 +1,3 @@
-
-"""infer.py
-
-Usage:
-  infer.py [--gpu=<id>] [--mode=<mode>] [--model=<path>] [--batch_size=<n>] [--num_workers=<n>] [--input_dir=<path>] [--output_dir=<path>] [--tile_size=<n>] [--return_masks]
-  infer.py (-h | --help)
-  infer.py --version
-
-Options:
-  -h --help            Show this string.
-  --version            Show version.
-  --gpu=<id>           GPU list. [default: 0]
-  --mode=<mode>        Inference mode. 'tile' or 'wsi'. [default: tile]
-  --model=<path>       Path to saved checkpoint.
-  --input_dir=<path>   Directory containing input images/WSIs.
-  --output_dir=<path>  Directory where the output will be saved. [default: output/]
-  --batch_size=<n>     Batch size. [default: 25]
-  --num_workers=<n>    Number of workers. [default: 12]
-  --tile_size=<n>      Size of tiles (assumes square shape). [default: 20000]
-  --return_masks       Whether to return cropped nuclei masks
-"""
 import warnings
 warnings.filterwarnings('ignore') 
 
@@ -46,21 +25,25 @@ from dataloader.infer_loader import SerializeFileList, SerializeArray
 from functools import reduce
 
 from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
+from misc.wsi_handler import get_file_handler
 from postproc import hover
 
 from . import base
-import openslide
 
 thread_lock = Lock()
+
+
 ####
 def _init_worker_child(lock_):
     global lock
     lock = lock_
+
 ####
 def _remove_inst(inst_map, remove_id_list):
     for inst_id in remove_id_list:
         inst_map[inst_map == inst_id] = 0
     return inst_map
+
 ####
 def _get_patch_top_left_info(img_shape, input_size, output_size):
     in_out_diff = input_size - output_size
@@ -73,6 +56,7 @@ def _get_patch_top_left_info(img_shape, input_size, output_size):
     output_tl = np.stack([output_tl_y_list.flatten(), output_tl_x_list.flatten()], axis=-1)
     input_tl = output_tl - in_out_diff // 2
     return input_tl, output_tl
+
 #### all must be np.array
 def _get_tile_info(img_shape, tile_shape, ambiguous_size=128):
     # * get normal tiling set
@@ -110,7 +94,8 @@ def _get_tile_info(img_shape, tile_shape, ambiguous_size=128):
     tile_cross_bot_right = stack_coord(tile_cross_bot_right)
     tile_cross = np.stack([tile_cross_top_left, tile_cross_bot_right], axis=1)
     return tile_grid, tile_boundary, tile_cross
-### 
+
+#### 
 def _get_chunk_patch_info(img_shape, chunk_input_shape, patch_input_shape, patch_output_shape):
     round_to_multiple = lambda x, y: np.floor(x / y) * y
     patch_diff_shape = patch_input_shape - patch_output_shape
@@ -145,6 +130,7 @@ def _get_chunk_patch_info(img_shape, chunk_input_shape, patch_input_shape, patch
                          np.stack([chunk_output_tl_list, chunk_output_br_list], axis=1)], axis=1)
 
     return chunk_info_list, patch_info_list
+
 ####
 def _post_proc_para_wrapper(pred_map_mmap_path, tile_info, func, func_kwargs):
     idx, tile_tl, tile_br = tile_info
@@ -153,6 +139,7 @@ def _post_proc_para_wrapper(pred_map_mmap_path, tile_info, func, func_kwargs):
                                      tile_tl[1] : tile_br[1]]
     tile_pred_map = np.array(tile_pred_map) # from mmap to ram
     return func(tile_pred_map, **func_kwargs), tile_info
+
 ####
 def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
     # write to newly created holder for this wsi
@@ -172,8 +159,9 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
                        pcoord[1] : pcoord[1] + pdata.shape[1]] = pdata
     print(chunk_info.flatten(), 'pass')
     return
+
 ####
-class Inferer(base.Inferer):
+class InferManager(base.InferManager):
 
     def __run_model(self, patch_top_left_list):
         # TODO: the cost of creating dataloader may not be cheap ?
@@ -258,7 +246,6 @@ class Inferer(base.Inferer):
             proc_pool.apply_async(_assemble_and_flush, 
                                     args=(wsi_pred_map_mmap_path, 
                                         chunk_info, patch_output_list))
-   
         proc_pool.close()
         proc_pool.join()
         return
@@ -307,11 +294,12 @@ class Inferer(base.Inferer):
         chunk_input_shape  = np.array(self.chunk_shape)
         patch_input_shape  = np.array(self.patch_input_shape)
         patch_output_shape = np.array(self.patch_output_shape)
-
-        self.wsi_handler = openslide.OpenSlide(wsi_path)
+        
+        wsi_ext = wsi_path.split('.')[-1]
+        self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
         # TODO: customize read lv
         self.wsi_proc_mag   = 0 # w.r.t source magnification
-        self.wsi_proc_shape = self.wsi_handler.level_dimensions[self.wsi_proc_mag] # TODO: turn into func
+        self.wsi_proc_shape = self.wsi_handler.metadata['level_dims'][self.wsi_proc_mag] 
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1]) # to Y, X
 
         # TODO: simplify / protocolize this
@@ -374,6 +362,7 @@ class Inferer(base.Inferer):
                 self.wsi_inst_map[tile_tl[0] : tile_br[0],
                                   tile_tl[1] : tile_br[1]] = pred_inst
             return
+
         ####################### * Callback can only receive 1 arg
         def post_proc_fixing_tile_callback(args):
             results, pos_args = args
@@ -438,6 +427,7 @@ class Inferer(base.Inferer):
                 self.wsi_inst_map[tile_tl[0] : tile_br[0],
                                   tile_tl[1] : tile_br[1]] = pred_inst
             return        
+
         #######################
         # * must be in sequential ordering
         self.__dispatch_post_processing(tile_grid_info, post_proc_normal_tile_callback)
@@ -455,10 +445,10 @@ class Inferer(base.Inferer):
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
 
-        wsi_path_list = glob.glob(self.input_wsi_dir + '/*.tif')       
+        wsi_path_list = glob.glob(self.input_wsi_dir + '/*')       
         for wsi_path in wsi_path_list:
             # may not work, such as when name is TCGA etc.
             wsi_base_name = os.path.basename(wsi_path).split('.')[:-1]
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
-            self.process_single_file(wsi_path, msk_path, self.output_path)
+            self.process_single_file(wsi_path, msk_path, self.output_dir)
         return

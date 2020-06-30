@@ -2,16 +2,13 @@ import sys
 import math
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 
 import torch
 import torch.utils.data as data
 
-# import openslide as ops
-# import glymur
-
-import matplotlib.pyplot as plt
-
 import psutil
+
 
 ####
 class SerializeFileList(data.IterableDataset):
@@ -19,7 +16,7 @@ class SerializeFileList(data.IterableDataset):
     Read a single file as multiple patches of same shape, perform the padding beforehand
     """
     def __init__(self, img_list, patch_info_list, patch_size):
-        super(SerializeFileList).__init__()
+        super().__init__()
         self.patch_size = patch_size
 
         self.img_list = img_list
@@ -40,7 +37,6 @@ class SerializeFileList(data.IterableDataset):
             self.stop_patch_idx = len(self.patch_info_list)
             return self
         else: # in a worker process so split workload, return a reduced copy of self
-            # print('hereY', len(self.img_list), len(self.patch_info_list))
             per_worker = len(self.patch_info_list) / float(worker_info.num_workers)
             per_worker = int(math.ceil(per_worker))
 
@@ -73,7 +69,7 @@ class SerializeFileList(data.IterableDataset):
 class SerializeArray(data.Dataset):
 
     def __init__(self, mmap_array_path, patch_info_list, patch_size):
-        super(SerializeArray).__init__()
+        super().__init__()
         self.patch_size = patch_size
 
         # use mmap as intermediate sharing, else variable will be duplicated
@@ -90,7 +86,6 @@ class SerializeArray(data.Dataset):
         patch_info = self.patch_info_list[idx]
         patch_data = self.image[patch_info[0] : patch_info[0] + self.patch_size[0],
                                 patch_info[1] : patch_info[1] + self.patch_size[1]]    
-        # print(patch_data.shape, patch_info[:2])
         return patch_data, patch_info
 
 ####
