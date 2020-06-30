@@ -56,6 +56,42 @@ if __name__ == '__main__':
     if nr_types == 0:
         nr_types = None 
 
+    ################### * SAMPLE CALL FOR TILE INFER
+    # method_args = {
+    #     'method' : {
+    #         'name'       : 'micronet',
+    #         'model_args' : {
+    #             'nr_types'   : None,
+    #         },
+    #         'model_path' : 'exp_output/micronet/kumar/00/net_epoch=100.tar',
+    #     },
+    # }
+    # # run_args = {
+    # #     'nr_inference_workers' : 2,
+    # #     'nr_post_proc_workers' : 2,
+    # #     'batch_size' : 4,
+    # #     'input_dir'  : '/home/tialab-dang/workspace/dataset/NUC_HE_Kumar/train-set/orig_split/valid_same/',
+    # #     'output_dir' : 'exp_output/dump/',
+    # #     'patch_input_shape'  : 252, # always be square RoI
+    # #     'patch_output_shape' : 252, # always be square RoI
+    # # }
+    # from inferer.tile import Inferer
+    # inferer = Inferer(**method_args)
+
+    # run_args = {
+    #     'nr_inference_workers' : 2,
+    #     'nr_post_proc_workers' : 2,
+    #     'batch_size' : 4,
+    #     'input_dir'  : '/home/tialab-dang/workspace/dataset/NUC_HE_Kumar/train-set/orig_split/valid_diff/',
+    #     'output_dir' : 'exp_output/dump/',
+    #     'patch_input_shape'  : 252, # always be square RoI
+    #     'patch_output_shape' : 252, # always be square RoI
+    # }
+    # from inferer.tile import Inferer
+
+    # inferer.process_file_list(**run_args)
+    ###################
+
     method_args = {
         'method' : {
             'name'       : args['--name'],
