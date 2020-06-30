@@ -20,6 +20,8 @@ class Config(object):
         # turn on debug flag to trace some parallel processing problems more easily
         self.debug = False 
 
+        model_name = 'hovernet'
+
         # whether to predict the nuclear type, availability depending on dataset!
         self.type_classification = False
 
@@ -57,4 +59,4 @@ class Config(object):
 
         # * parsing config to the running state and set up associated variables
         self.dataset = get_dataset(self.dataset_name)
-        self.model_config_file = importlib.import_module('model.opt')
+        self.model_config_file = importlib.import_module('models.%s.opt' % model_name)

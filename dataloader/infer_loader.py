@@ -19,7 +19,7 @@ class SerializeFileList(data.IterableDataset):
     Read a single file as multiple patches of same shape, perform the padding beforehand
     """
     def __init__(self, img_list, patch_info_list, patch_size):
-        super(SerializeFileList).__init__()
+        super().__init__()
         self.patch_size = patch_size
 
         self.img_list = img_list
@@ -73,7 +73,7 @@ class SerializeFileList(data.IterableDataset):
 class SerializeArray(data.Dataset):
 
     def __init__(self, mmap_array_path, patch_info_list, patch_size):
-        super(SerializeArray).__init__()
+        super().__init__()
         self.patch_size = patch_size
 
         # use mmap as intermediate sharing, else variable will be duplicated
