@@ -26,7 +26,6 @@ from functools import reduce
 
 from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
 from misc.wsi_handler import get_file_handler
-from postproc import hover
 
 from . import base
 
@@ -272,10 +271,10 @@ class InferManager(base.InferManager):
             if self.nr_procs > 0:
                 proc_pool.apply_async(_post_proc_para_wrapper, callback=callback, 
                                     args=(wsi_pred_map_mmap_path, tile_info, 
-                                        hover.process, func_kwargs))
+                                        self.post_proc_func, func_kwargs))
             else:
                 results = _post_proc_para_wrapper(wsi_pred_map_mmap_path, tile_info, 
-                                        hover.process, func_kwargs)
+                                        self.post_proc_func, func_kwargs)
                 callback(results)
         if self.nr_procs > 0:
             proc_pool.close()
