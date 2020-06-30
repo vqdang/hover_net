@@ -1,33 +1,19 @@
-import warnings
-warnings.filterwarnings('ignore') 
-
-from multiprocessing import Pool, Lock
-import multiprocessing
-multiprocessing.set_start_method('spawn', True) # ! must be at top for VScode debugging
 import argparse
 import glob
-from importlib import import_module
 import math
+import multiprocessing
 import os
-import sys
 import re
+import sys
+import warnings
+warnings.filterwarnings('ignore') 
+from importlib import import_module
+from multiprocessing import Lock, Pool
 
-import cv2
 import numpy as np
-import scipy.io as sio
 import torch
 import torch.utils.data as data
-from docopt import docopt
 import tqdm
-import psutil
-from dataloader.infer_loader import SerializeFileList, SerializeArray
-from functools import reduce
-
-from misc.patch_extractor import prepare_patching
-from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
-from postproc import hover
-
-import openslide
 
 ####
 class Inferer(object):
@@ -49,11 +35,16 @@ class Inferer(object):
 
         # TODO: deal with parsing multi level model desc
         net = model_creator(**self.method['model_args'])
+        net = torch.nn.DataParallel(net)
         saved_state_dict = torch.load(self.method['model_path'])
+        # TODO: differentitate between dataparallel enclosed or not
         net.load_state_dict(saved_state_dict['desc'], strict=True)
-        net = torch.nn.DataParallel(net).to('cuda')
+        net = net.to('cuda')
 
-        run_desc = import_module('method_desc.%s.run_desc' % self.method['name'])
-        self.run_step = lambda input_batch : getattr(run_desc, 'infer_step')(input_batch, net)
+        module_lib = import_module('method_desc.%s.run_desc' % self.method['name'])
+        run_step = getattr(module_lib, 'infer_step')
+        self.run_step = lambda input_batch : run_step(input_batch, net)
+
+        module_lib = import_module('method_desc.%s.post_proc' % self.method['name'])
+        self.post_proc_func = getattr(module_lib, 'process')
         return
-    

@@ -144,48 +144,6 @@ class PatchExtractor(object):
             assert False, 'Unknown Patch Type [%s]' % patch_type
         return
 
-####
-def prepare_patching(img, window_size, mask_size, return_src_top_corner=False):
-    win_size = window_size
-    msk_size = step_size = mask_size
-
-    def get_last_steps(length, msk_size, step_size):
-        nr_step = math.ceil((length - msk_size) / step_size)
-        last_step = (nr_step + 1) * step_size
-        return int(last_step), int(nr_step + 1)
-
-    im_h = img.shape[0]
-    im_w = img.shape[1]
-
-    last_h, _ = get_last_steps(im_h, msk_size, step_size)
-    last_w, _ = get_last_steps(im_w, msk_size, step_size)
-
-    diff = win_size - step_size
-    padt = padl = diff // 2
-    padb = last_h + win_size - im_h
-    padr = last_w + win_size - im_w
-
-    img = np.lib.pad(img, ((padt, padb), (padl, padr), (0, 0)), 'reflect')
-
-    # generating subpatches index from orginal
-    coord_y = np.arange(0, last_h, step_size, dtype=np.int32)
-    coord_x = np.arange(0, last_w, step_size, dtype=np.int32)
-    row_idx = np.arange(0, coord_y.shape[0], dtype=np.int32)
-    col_idx = np.arange(0, coord_x.shape[0], dtype=np.int32)
-    coord_y, coord_x = np.meshgrid(coord_y, coord_x)
-    row_idx, col_idx = np.meshgrid(row_idx, col_idx)
-    coord_y = coord_y.flatten() 
-    coord_x = coord_x.flatten()
-    row_idx = row_idx.flatten() 
-    col_idx = col_idx.flatten()
-    #
-    patch_info = np.stack([coord_y, coord_x, 
-                           row_idx, col_idx], axis=-1)
-    if not return_src_top_corner:
-        return img, patch_info
-    else:
-        return img, patch_info, [padt, padl]
-
 #----------------------------------------------------------------------------
 
 if __name__ == '__main__':

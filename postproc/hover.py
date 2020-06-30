@@ -139,8 +139,9 @@ def process(pred_map, nr_types=None, return_centroids=False):
             if inst_type == 0: # ! pick the 2nd most dominant if exist
                 if len(type_list) > 1:
                     inst_type = type_list[1][0]
-            inst_info_dict[idx]['type'] = inst_type
+            inst_info_dict[inst_id]['type'] = inst_type
     
     # print('here')
+    # ! WARNING: ID MAY NOT BE CONTIGUOUS
     return pred_inst, inst_info_dict
     

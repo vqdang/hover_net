@@ -27,8 +27,8 @@ class SerializeFileList(data.IterableDataset):
 
         self.worker_start_img_idx = 0
         # * for internal worker state
-        self.stop_img_idx = 0
         self.curr_img_idx = 0
+        self.stop_img_idx = 0
         self.curr_patch_idx = 0
         self.stop_patch_idx = 0
         return
@@ -36,8 +36,8 @@ class SerializeFileList(data.IterableDataset):
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()
         if worker_info is None:  # single-process data loading, return the full iterator
-            print('hereX')
             self.stop_img_idx = len(self.img_list)
+            self.stop_patch_idx = len(self.patch_info_list)
             return self
         else: # in a worker process so split workload, return a reduced copy of self
             # print('hereY', len(self.img_list), len(self.patch_info_list))

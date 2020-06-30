@@ -8,7 +8,7 @@ import itertools
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-from .utils import bounding_box
+from .utils import get_bounding_box
 
 ####
 def random_colors(N, bright=True):
@@ -24,7 +24,7 @@ def random_colors(N, bright=True):
     return colors
 
 ####
-def visualize_instances(input_image, inst_map, type_map=None, type_colour=None, line_thickness=2):
+def visualize_instances_map(input_image, inst_map, type_map=None, type_colour=None, line_thickness=2):
     """
     Overlays segmentation results on image as contours
 
@@ -49,7 +49,7 @@ def visualize_instances(input_image, inst_map, type_map=None, type_colour=None, 
 
     for inst_idx, inst_id in enumerate(inst_list):
         inst_map_mask = np.array(inst_map == inst_id, np.uint8)  # get single object
-        y1, y2, x1, x2 = bounding_box(inst_map_mask)
+        y1, y2, x1, x2 = get_bounding_box(inst_map_mask)
         y1 = y1 - 2 if y1 - 2 >= 0 else y1
         x1 = x1 - 2 if x1 - 2 >= 0 else x1
         x2 = x2 + 2 if x2 + 2 <= inst_map.shape[1] - 1 else x2
@@ -68,7 +68,23 @@ def visualize_instances(input_image, inst_map, type_map=None, type_colour=None, 
         cv2.drawContours(overlay, [contours_crop], -1, inst_colour, line_thickness)
     return overlay
 
+####
+def visualize_instances_dict(input_image, inst_dict, type_colour=None, line_thickness=2):
+    overlay = np.copy((input_image).astype(np.uint8))
 
+    inst_rng_colors = random_colors(len(inst_dict))
+    inst_rng_colors = np.array(inst_rng_colors) * 255
+    inst_rng_colors = inst_rng_colors.astype(np.uint8)
+
+    for idx, [inst_id, inst_info] in enumerate(inst_dict.items()):
+        inst_contour = inst_info['contour']
+        if 'type' in inst_info and type_colour is not None:
+            inst_colour = type_colour[inst_info['type']]
+        else:
+            inst_colour = (inst_rng_colors[idx]).tolist()
+        cv2.drawContours(overlay, [inst_contour], -1, inst_colour, line_thickness)
+    return overlay
+    
 ####
 def gen_figure(imgs_list, titles, fig_inch, shape=None,
                share_ax='all', show=False, colormap=plt.get_cmap('jet')):

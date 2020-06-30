@@ -357,6 +357,11 @@ class Inferer(base.Inferer):
             top_left = pos_args[1][::-1]
             with thread_lock:
                 wsi_max_id = 0 
+
+                # ! WARNING: 
+                # ! inst ID may not be contiguous, 
+                # ! hence must use max as safeguard
+
                 if len(self.wsi_inst_info) > 0:
                     wsi_max_id = max(self.wsi_inst_info.keys()) 
                 for inst_id, inst_info in inst_info_dict.items():
@@ -382,6 +387,11 @@ class Inferer(base.Inferer):
             with thread_lock:
                 # for fixing the boundary, keep all nuclei split at boundary (i.e within unambigous region)
                 # of the existing prediction map, and replace all nuclei within the region with newly predicted
+
+                # ! WARNING: 
+                # ! inst ID may not be contiguous, 
+                # ! hence must use max as safeguard
+
                 # ! must get before the removal happened
                 wsi_max_id = 0 
                 if len(self.wsi_inst_info) > 0:
@@ -436,7 +446,7 @@ class Inferer(base.Inferer):
         end = time.perf_counter()
         print('Post Proc Time: ', end - start)
 
-        # ! DUMMY, need to discuss
+
         # import pickle
         # np.save('pred_inst.npy', self.wsi_inst_map)
         # with open("nuclei_dict.pickle", "wb") as handle:
