@@ -29,7 +29,6 @@ from misc.wsi_handler import get_file_handler
 from postproc import hover
 
 from . import base
-import openslide
 
 thread_lock = Lock()
 
@@ -162,7 +161,7 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
     return
 
 ####
-class Infer(base.InferBase):
+class InferManager(base.InferManager):
 
     def __run_model(self, patch_top_left_list):
         # TODO: the cost of creating dataloader may not be cheap ?

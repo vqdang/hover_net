@@ -41,7 +41,7 @@ from tensorboardX import SummaryWriter
 from dataloader.train_loader import FileLoader
 
 ####
-class Trainer(Config):
+class TrainManager(Config):
     """
     Either used to view the dataset or
     to initialise the main training loop. 
@@ -235,7 +235,7 @@ class Trainer(Config):
 ####
 if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net v1.0')
-    trainer = Trainer()
+    trainer = TrainManager()
 
     if args['--view'] and args['--gpu']:
         raise Exception(

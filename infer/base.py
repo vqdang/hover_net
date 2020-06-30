@@ -30,7 +30,7 @@ from postproc import hover
 import openslide
 
 ####
-class InferBase(object):
+class InferManager(object):
     def __init__(self, **kwargs):
         self.run_step = None
         for variable, value in kwargs.items():

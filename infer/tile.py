@@ -27,13 +27,13 @@ from misc.patch_extractor import prepare_patching
 from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
 from postproc import hover
 
-from .base import InferBase
+from . import base
 
-class InferTile(InferBase):
+
+class InferTile(base.InferManager):
     """
     Run inference on tiles
     """ 
-
     ####
     def process_file_list(self, 
                         nr_worker=None, 

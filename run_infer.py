@@ -85,8 +85,8 @@ if __name__ == '__main__':
 
     #! Need to implement also for tile mode
     if args['--mode'] == 'wsi':
-        from infer.wsi import Infer
+        from infer.wsi import InferManager
     else:
         assert False, "Unknown mode `%s`" % args['--mode']
-    infer = Infer(**method_args)
+    infer = InferManager(**method_args)
     infer.process_wsi_list(run_args)
