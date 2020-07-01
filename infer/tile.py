@@ -126,7 +126,7 @@ class InferTile(base.InferManager):
         # * depend on the number of samples and their size, this may be less efficient
         file_path_list = glob.glob('%s/*' % input_dir)
         file_path_list.sort()  # ensure same order
-        file_path_list = file_path_list[:4]
+        file_path_list = file_path_list
 
         rm_n_mkdir(output_dir)
 
