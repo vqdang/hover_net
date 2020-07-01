@@ -158,6 +158,7 @@ def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True
     print(np.array(results_list))
     return
 
+
 def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
     # print stats of each image
     print(pred_dir)
@@ -170,10 +171,10 @@ def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
         filename = os.path.basename(filename)
         basename = filename.split('.')[0]
 
-        true = sio.loadmat(true_dir + basename + '.mat')
+        true = sio.loadmat(os.path.join(true_dir, basename + '.mat'))
         true = (true['inst_map']).astype('int32')
 
-        pred = sio.loadmat(pred_dir + basename + '.mat')
+        pred = sio.loadmat(os.path.join(pred_dir, basename + '.mat'))
         pred = (pred['inst_map']).astype('int32')
 
         # to ensure that the instance numbering is contiguous
