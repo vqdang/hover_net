@@ -43,8 +43,8 @@ def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True
     for file_idx, filename in enumerate(file_list[:]):
         filename = os.path.basename(filename)
         basename = filename.split('.')[0]
-
-        true_info = sio.loadmat(true_dir + basename + '.mat')
+        
+        true_info = sio.loadmat(os.path.join(true_dir, basename + '.mat'))
         # dont squeeze, may be 1 instance exist
         true_centroid  = (true_info['inst_centroid']).astype('float32')
         true_inst_type = (true_info['inst_type']).astype('int32')
@@ -58,8 +58,8 @@ def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True
         # * for converting the GT type in CoNSeP
         # true_inst_type[(true_inst_type == 3) | (true_inst_type == 4)] = 3
         # true_inst_type[(true_inst_type == 5) | (true_inst_type == 6) | (true_inst_type == 7)] = 4
-
-        pred_info = sio.loadmat(pred_dir + basename + '.mat')
+        
+        pred_info = sio.loadmat(os.path.join(pred_dir, basename + '.mat'))
         # dont squeeze, may be 1 instance exist
         pred_centroid  = (pred_info['inst_centroid']).astype('float32')
         pred_inst_type = (pred_info['inst_type']).astype('int32')
