@@ -34,6 +34,7 @@ Options:
 """
 
 import os
+import copy
 from docopt import docopt
 
 #-------------------------------------------------------------------------------------------------------
@@ -41,57 +42,19 @@ from docopt import docopt
 if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net Pytorch Inference v1.0')
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
+    if args['--gpu']:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
 
     # raise exceptions for invalid / missing arguments
-    if args['--model_path'] == None:
-        raise Exception('A model path must be supplied as an argument with --model_path.')
-    if args['--mode'] != 'tile' and args['--mode'] != 'wsi':
+    if args['--run-mode'] != 'tile' and args['--mode'] != 'wsi':
         raise Exception('Mode not recognised. Use either "tile" or "wsi"')
-    if args['--input_wsi_dir'] == None:
-        raise Exception('An input directory must be supplied as an argument with --input_wsi_dir.')
-    if args['--input_wsi_dir'] == args['--output_dir']:
-        raise Exception('Input and output directories should not be the same- otherwise input directory will be overwritten.')
-    nr_types = int(args['--nr_types'])
-    if nr_types == 0:
-        nr_types = None 
 
-    ################### * SAMPLE CALL FOR TILE INFER
-    # method_args = {
-    #     'method' : {
-    #         'name'       : 'micronet',
-    #         'model_args' : {
-    #             'nr_types'   : None,
-    #         },
-    #         'model_path' : 'exp_output/micronet/kumar/00/net_epoch=100.tar',
-    #     },
-    # }
-    # # run_args = {
-    # #     'nr_inference_workers' : 2,
-    # #     'nr_post_proc_workers' : 2,
-    # #     'batch_size' : 4,
-    # #     'input_dir'  : '/home/tialab-dang/workspace/dataset/NUC_HE_Kumar/train-set/orig_split/valid_same/',
-    # #     'output_dir' : 'exp_output/dump/',
-    # #     'patch_input_shape'  : 252, # always be square RoI
-    # #     'patch_output_shape' : 252, # always be square RoI
-    # # }
-    # from inferer.tile import Inferer
-    # inferer = Inferer(**method_args)
-
-    # run_args = {
-    #     'nr_inference_workers' : 2,
-    #     'nr_post_proc_workers' : 2,
-    #     'batch_size' : 4,
-    #     'input_dir'  : '/home/tialab-dang/workspace/dataset/NUC_HE_Kumar/train-set/orig_split/valid_diff/',
-    #     'output_dir' : 'exp_output/dump/',
-    #     'patch_input_shape'  : 252, # always be square RoI
-    #     'patch_output_shape' : 252, # always be square RoI
-    # }
-    # from inferer.tile import Inferer
-
-    # inferer.process_file_list(**run_args)
-    ###################
-
+    # TODO: exposed model kwargs ?
+    if args['--method-model_path'] == None:
+        raise Exception('A model path must be supplied as an argument with --model_path.')
+    if args['--method-name'] == None:
+        raise Exception('A model path must be supplied as an argument with --model_path.')
+    nr_types = int(args['--nr_types']) if nr_types > 0 else None
     method_args = {
         'method' : {
             'name'       : args['--name'],
@@ -101,28 +64,53 @@ if __name__ == '__main__':
             'model_path' : args['--model_path'],
         },
     }
-    run_args = {
-        'nr_inference_workers' : int(args['--nr_inference_workers']),
-        'nr_post_proc_workers' : int(args['--nr_inference_workers']),
-        'batch_size'  : int(args['--batch_size']),
 
-        'ambiguous_size' : int(args['--ambiguous_size']),
-        'chunk_shape' : [int(args['--chunk_shape']),int(args['--chunk_shape'])],
-        'tile_shape'  : [int(args['--tile_shape']),int(args['--tile_shape'])],
-        'cache_path'  : args['--cache_path'], 
-
-        'wsi_proc_mag'  : int(args['--wsi_proc_mag']), 
-        'input_wsi_dir' : args['--input_wsi_dir'], 
-        'input_msk_dir' : args['--input_msk_dir'], 
-        'output_dir' : args['--output_dir'],
-        'patch_input_shape'  : [int(args['--patch_input_shape']),int(args['--patch_input_shape'])], 
-        'patch_output_shape' : [int(args['--patch_output_shape']),int(args['--patch_output_shape'])], 
-    }
-
-    #! Need to implement also for tile mode
-    if args['--mode'] == 'wsi':
-        from infer.wsi import InferManager
+    if args['--run-mode'] == 'tile':
+        default_run_args = {
+            'nr_inference_workers' : 4,
+            'nr_post_proc_workers' : 16,
+            'batch_size' : 4,
+            'tile_input_dir'  : None,
+            'tile_output_dir' : None,
+            'patch_input_shape'  : None, # always be square RoI
+            'patch_output_shape' : None, # always be square RoI
+        }
     else:
-        assert False, "Unknown mode `%s`" % args['--mode']
-    infer = InferManager(**method_args)
-    infer.process_wsi_list(run_args)
+        default_run_args = {
+            'nr_inference_workers' : 4,
+            'nr_post_proc_workers' : 16,
+            'batch_size'  : 4,
+
+            'ambiguous_size' : 128,
+            'chunk_shape' : 10000,
+            'tile_shape'  : 2048,
+            'wsi_cache_path' : '', 
+
+            'wsi_proc_mag'  : -1, # -1 default to highest
+            'input_wsi_dir' : None, # asumme no nested dir
+            'input_msk_dir' : None, # should have the same name as one within 'wsi'
+            'output_dir' : '',
+            'patch_input_shape'  : None, 
+            'patch_output_shape' : None,
+        }        
+
+    run_args = copy.deepcopy(default_run_args)
+    for k, v in args.items():
+        k = k[2:] # exclude the append `--`
+        if k[2:] in run_args:
+            run_args[k[2:]] = v
+        else:
+            raise Exception('Unknown CLI arg `%s`' % k)
+    for k, v in run_args.items():
+        if v == None:
+            raise Exception('Must supply value for `--%s`.' % k)
+
+    if args['--run-mode'] == 'tile':
+        from infer.tile import InferManager
+        infer = InferManager(**method_args)
+        infer.process_file_list(run_args)
+    else:
+        from infer.wsi import InferManager
+        infer = InferManager(**method_args)
+        infer.process_wsi_list(run_args)
+
