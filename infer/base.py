@@ -35,12 +35,15 @@ class InferManager(object):
 
         # TODO: deal with parsing multi level model desc
         net = model_creator(**self.method['model_args'])
-        net = torch.nn.DataParallel(net)
         saved_state_dict = torch.load(self.method['model_path'])
-        # TODO: differentitate between dataparallel enclosed or not
-        net.load_state_dict(saved_state_dict['desc'], strict=True)
+        if list(saved_state_dict.keys())[0].split('.') == 'module':
+            net = torch.nn.DataParallel(net)
+            net.load_state_dict(saved_state_dict['desc'], strict=True)
+        else:
+            net.load_state_dict(saved_state_dict['desc'], strict=True)
+            net = torch.nn.DataParallel(net)
         net = net.to('cuda')
-
+    
         module_lib = import_module('models.%s.run_desc' % self.method['name'])
         run_step = getattr(module_lib, 'infer_step')
         self.run_step = lambda input_batch : run_step(input_batch, net)

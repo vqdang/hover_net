@@ -1,6 +1,8 @@
 import warnings
-warnings.filterwarnings('ignore') 
+def noop(*args, **kargs): pass
+warnings.warn = noop
 
+import shutil
 import time
 from multiprocessing import Pool, Lock
 import multiprocessing as mp
@@ -12,6 +14,7 @@ import math
 import os
 import sys
 import re
+import json
 
 import cv2
 import numpy as np
@@ -25,7 +28,7 @@ from dataloader.infer_loader import SerializeFileList, SerializeArray
 from functools import reduce
 
 from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
-from misc.wsi_handler import get_file_handler
+from misc.wsi_handler import get_file_handler 
 
 from . import base
 
@@ -250,8 +253,10 @@ class InferManager(base.InferManager):
         return
 
     def __dispatch_post_processing(self, tile_info_list, callback):
+        down_sample_ratio = self.wsi_mask.shape[0] / self.wsi_proc_shape[0]
 
-        if self.nr_procs > 0: 
+        proc_pool = None
+        if self.nr_post_proc_workers > 0: 
             proc_pool = Pool(processes=self.nr_post_proc_workers, 
                             initializer=_init_worker_child, 
                             initargs=(thread_lock,))
@@ -260,15 +265,25 @@ class InferManager(base.InferManager):
         for idx in list(range(tile_info_list.shape[0])):
             tile_tl = tile_info_list[idx][0]
             tile_br = tile_info_list[idx][1]
+
+            tile_tl_lores = np.rint(tile_tl * down_sample_ratio).astype(np.int64)
+            tile_br_lores = np.rint(tile_br * down_sample_ratio).astype(np.int64)
+            tile_mask = self.wsi_mask[tile_tl_lores[0]:tile_br_lores[0],
+                                      tile_tl_lores[1]:tile_br_lores[1]]
+            # TODO: defer to callback ?
+            if np.sum(tile_mask) == 0: 
+                # self.wsi_inst_map[tile_tl[0]:tile_br[0],
+                #                   tile_tl[1]:tile_br[1]] = 0
+                continue
+
             tile_info = (idx, tile_tl, tile_br)
             func_kwargs = {
                 'nr_types' : None,
                 'return_centroids' : True
             }
 
-            # mp.Array()
             # TODO: standarize protocol
-            if self.nr_procs > 0:
+            if proc_pool is not None:
                 proc_pool.apply_async(_post_proc_para_wrapper, callback=callback, 
                                     args=(wsi_pred_map_mmap_path, tile_info, 
                                         self.post_proc_func, func_kwargs))
@@ -276,7 +291,7 @@ class InferManager(base.InferManager):
                 results = _post_proc_para_wrapper(wsi_pred_map_mmap_path, tile_info, 
                                         self.post_proc_func, func_kwargs)
                 callback(results)
-        if self.nr_procs > 0:
+        if proc_pool is not None:
             proc_pool.close()
             proc_pool.join()
         return
@@ -284,6 +299,11 @@ class InferManager(base.InferManager):
     def _parse_args(self, run_args):
         for variable, value in run_args.items():
             self.__setattr__(variable, value)
+        # to tuple
+        self.chunk_shape = [self.chunk_shape, self.chunk_shape]
+        self.tile_shape = [self.tile_shape, self.tile_shape]
+        self.patch_input_shape = [self.patch_input_shape, self.patch_input_shape]
+        self.patch_output_shape = [self.patch_output_shape, self.patch_output_shape]
         return
 
     def process_single_file(self, wsi_path, msk_path, output_path):
@@ -295,28 +315,43 @@ class InferManager(base.InferManager):
         patch_output_shape = np.array(self.patch_output_shape)
         
         wsi_ext = wsi_path.split('.')[-1]
+        wsi_name = os.path.basename(wsi_path).split('.')[0] # TODO: better way to handle compound namme
+
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
         # TODO: customize read lv
         self.wsi_proc_mag   = 0 # w.r.t source magnification
         self.wsi_proc_shape = self.wsi_handler.metadata['level_dims'][self.wsi_proc_mag] 
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1]) # to Y, X
 
-        # TODO: simplify / protocolize this
-        self.wsi_mask = cv2.imread(msk_path)
-        self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
-        self.wsi_mask[self.wsi_mask > 0] = 1
+        if os.path.isfile(msk_path):
+            self.wsi_mask = cv2.imread(msk_path)
+            self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
+            self.wsi_mask[self.wsi_mask > 0] = 1
+        else:
+            print('WARNING: No mask found, run on entire WSI !!!')
+            # create a dummy array to use the entire wsi
+            scaled_wsi_shape = self.wsi_proc_shape * 0.25 # at least will be 10x when doing 40x
+            scaled_wsi_shape = scaled_wsi_shape.astype(np.int32)
+            self.wsi_mask = np.ones(scaled_wsi_shape, dtype=np.uint8)
 
         # * declare holder for output
         # create a memory-mapped .npy file with the predefined dimensions and dtype
         out_ch = 3 # TODO: dynamicalize this, retrieve from model?
         self.wsi_inst_info  = {} 
-        self.wsi_inst_map   = np.zeros(self.wsi_proc_shape, dtype=np.int32)
+        # TODO: option to use entire RAM if users have too much available, would be faster than mmap
+        self.wsi_inst_map = np.lib.format.open_memmap(
+                                            '%s/pred_inst.npy' % self.wsi_cache_path, mode='w+',
+                                            shape=tuple(self.wsi_proc_shape), 
+                                            dtype=np.int32)
+        self.wsi_inst_map[:] = 0 # flush fill
+
         # warning, the value within this is uninitialized
         self.wsi_pred_map = np.lib.format.open_memmap(
                                             '%s/pred_map.npy' % self.wsi_cache_path, mode='w+',
                                             shape=tuple(self.wsi_proc_shape) + (out_ch,), 
                                             dtype=np.float32)
-
+        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.wsi_cache_path, mmap_mode='r')
+        
         # * raw prediction
         start = time.perf_counter()
         chunk_info_list, patch_info_list = _get_chunk_patch_info(
@@ -360,6 +395,8 @@ class InferManager(base.InferManager):
                 pred_inst[pred_inst > 0] += wsi_max_id
                 self.wsi_inst_map[tile_tl[0] : tile_br[0],
                                   tile_tl[1] : tile_br[1]] = pred_inst
+            
+            pbar.update() # external
             return
 
         ####################### * Callback can only receive 1 arg
@@ -425,29 +462,54 @@ class InferManager(base.InferManager):
                 pred_inst = roi_inst + pred_inst
                 self.wsi_inst_map[tile_tl[0] : tile_br[0],
                                   tile_tl[1] : tile_br[1]] = pred_inst
+            pbar.update() # external
             return        
 
         #######################
+        pbar_creator = lambda x, y: tqdm.tqdm(desc=y, leave=True, 
+                                    total=int(len(x)), ncols=80, ascii=True, position=0)
+        pbar = pbar_creator(tile_grid_info, 'Post Proc Phase 1')
         # * must be in sequential ordering
+        # ? its possible to further hide Phase 1 runtime underneath the inference
+        # ? however, it would be at the cost of messier code: 
+        # ? 1. chunks -> tiles -> patches must be divisible 
+        # ? 2. caching for debugging would be harder
         self.__dispatch_post_processing(tile_grid_info, post_proc_normal_tile_callback)
+        pbar.close()
+
+        pbar = pbar_creator(tile_boundary_info, 'Post Proc Phase 2')
         self.__dispatch_post_processing(tile_boundary_info, post_proc_fixing_tile_callback)
+        pbar.close()
+
+        pbar = pbar_creator(tile_cross_info, 'Post Proc Phase 3')
         self.__dispatch_post_processing(tile_cross_info, post_proc_fixing_tile_callback)
+        pbar.close()
+
         end = time.perf_counter()
         print('Post Proc Time: ', end - start)
 
-
-        # import pickle
-        # np.save('pred_inst.npy', self.wsi_inst_map)
-        # with open("nuclei_dict.pickle", "wb") as handle:
-        #     pickle.dump(self.wsi_inst_info, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        # ! cant possiblt save the inst map at high res, too large
+        json_dict = {}
+        for inst_id, inst_info in self.wsi_inst_info.items():
+            new_inst_info = {}
+            for info_name, info_value in inst_info.items():
+                # convert to jsonable
+                if isinstance(info_value, np.ndarray):
+                    info_value = info_value.tolist()
+                new_inst_info[info_name] = info_value
+            json_dict[int(inst_id)] = new_inst_info
+        with open('%s/%s_nuclei_dict.json' % (output_path, wsi_name), 'w') as handle:
+            json.dump(json_dict, handle)
 
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
 
         wsi_path_list = glob.glob(self.input_wsi_dir + '/*')       
+        wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list:
-            # may not work, such as when name is TCGA etc.
-            wsi_base_name = os.path.basename(wsi_path).split('.')[:-1]
+            print(wsi_path)
+            # TODO: may not work, such as when name is TCGA etc.
+            wsi_base_name = os.path.basename(wsi_path).split('.')[0]
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
             self.process_single_file(wsi_path, msk_path, self.output_dir)
         return

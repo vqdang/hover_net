@@ -1,12 +1,18 @@
 
 import cv2
 import numpy as np
+
 from scipy.ndimage import filters, measurements
 from scipy.ndimage.morphology import (binary_dilation, binary_fill_holes,
                                       distance_transform_cdt,
                                       distance_transform_edt)
+
 from skimage.morphology import remove_small_objects, watershed
 from misc.utils import get_bounding_box
+
+import warnings
+def noop(*args, **kargs): pass
+warnings.warn = noop
 
 ####
 def __proc_np_hv(pred):
