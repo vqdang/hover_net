@@ -167,7 +167,7 @@ class InferManager(base.InferManager):
 
     def __run_model(self, patch_top_left_list):
         # TODO: the cost of creating dataloader may not be cheap ?
-        dataset = SerializeArray('%s/cache_chunk.npy' % self.wsi_cache_path, 
+        dataset = SerializeArray('%s/cache_chunk.npy' % self.cache_path, 
                                 patch_top_left_list, self.patch_input_shape)
 
         dataloader = data.DataLoader(dataset,
@@ -214,7 +214,7 @@ class InferManager(base.InferManager):
         proc_pool = Pool(processes=1, 
                         initializer=_init_worker_child, 
                         initargs=(thread_lock,))
-        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.wsi_cache_path
+        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.cache_path
 
         masking = lambda x, a, b: (a <= x) & (x <= b)
         for chunk_info in chunk_info_list:
@@ -241,7 +241,7 @@ class InferManager(base.InferManager):
             chunk_data = self.wsi_handler.read_region(chunk_info[0][0][::-1], self.wsi_proc_mag, 
                                                      (chunk_info[0][1] - chunk_info[0][0])[::-1])
             chunk_data = np.array(chunk_data)[...,:3]
-            np.save('%s/cache_chunk.npy' % self.wsi_cache_path, chunk_data)
+            np.save('%s/cache_chunk.npy' % self.cache_path, chunk_data)
 
             patch_output_list = self.__run_model(chunk_patch_info_list[:,0,0])
 
@@ -261,7 +261,7 @@ class InferManager(base.InferManager):
                             initializer=_init_worker_child, 
                             initargs=(thread_lock,))
 
-        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.wsi_cache_path
+        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.cache_path
         for idx in list(range(tile_info_list.shape[0])):
             tile_tl = tile_info_list[idx][0]
             tile_br = tile_info_list[idx][1]
@@ -340,17 +340,17 @@ class InferManager(base.InferManager):
         self.wsi_inst_info  = {} 
         # TODO: option to use entire RAM if users have too much available, would be faster than mmap
         self.wsi_inst_map = np.lib.format.open_memmap(
-                                            '%s/pred_inst.npy' % self.wsi_cache_path, mode='w+',
+                                            '%s/pred_inst.npy' % self.cache_path, mode='w+',
                                             shape=tuple(self.wsi_proc_shape), 
                                             dtype=np.int32)
         self.wsi_inst_map[:] = 0 # flush fill
 
         # warning, the value within this is uninitialized
         self.wsi_pred_map = np.lib.format.open_memmap(
-                                            '%s/pred_map.npy' % self.wsi_cache_path, mode='w+',
+                                            '%s/pred_map.npy' % self.cache_path, mode='w+',
                                             shape=tuple(self.wsi_proc_shape) + (out_ch,), 
                                             dtype=np.float32)
-        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.wsi_cache_path, mmap_mode='r')
+        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
         
         # * raw prediction
         start = time.perf_counter()
@@ -504,7 +504,7 @@ class InferManager(base.InferManager):
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
 
-        wsi_path_list = glob.glob(self.input_wsi_dir + '/*')       
+        wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list:
             print(wsi_path)

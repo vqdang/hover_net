@@ -106,7 +106,7 @@ def _post_process_patches(functor, patch_info, src_info, get_overlaid=False, typ
 
     return [pred_inst, inst_info_dict , overlaid_img], args
     
-class InferTile(base.InferManager):
+class InferManager(base.InferManager):
     """
     Run inference on tiles
     """ 
