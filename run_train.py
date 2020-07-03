@@ -40,8 +40,9 @@ from config import Config
 from tensorboardX import SummaryWriter
 from dataloader.train_loader import FileLoader
 
+
 ####
-class Trainer(Config):
+class TrainManager(Config):
     """
     Either used to view the dataset or
     to initialise the main training loop. 
@@ -235,18 +236,17 @@ class Trainer(Config):
 ####
 if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net v1.0')
-    trainer = Trainer()
+    trainer = TrainManager()
 
     if args['--view'] and args['--gpu']:
         raise Exception(
             'Supply only one of --view and --gpu.')
 
-    # if args['--view']:
-    #     if args['--view'] != 'train' and args['--view'] != 'valid':
-    #         raise Exception(
-    #             'Use "train" or "valid" for --view.')
-    #     trainer.view_dataset(args['--view'])
-    # else:
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    # trainer.view_dataset()
-    trainer.run()
+    if args['--view']:
+        if args['--view'] != 'train' and args['--view'] != 'valid':
+            raise Exception(
+                'Use "train" or "valid" for --view.')
+        trainer.view_dataset(args['--view'])
+    else:
+        os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
+        trainer.run()
