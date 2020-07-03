@@ -71,7 +71,7 @@ def _prepare_patching(img, window_size, mask_size, return_src_top_corner=False):
         return img, patch_info, [padt, padl]
 
 #### 
-def _post_process_patches(functor, patch_info, src_info, get_overlaid=False, type_colour=None, *args):
+def _post_process_patches(post_proc_func, patch_info, src_info, get_overlaid=False, type_colour=None, *args):
     # re-assemble the prediction, sort according to the patch location within the original image
     patch_info = sorted(patch_info, key=lambda x: [x[0][0], x[0][1]]) 
     patch_info, patch_data = zip(*patch_info)
@@ -96,7 +96,8 @@ def _post_process_patches(functor, patch_info, src_info, get_overlaid=False, typ
     # * a prediction map with instance of ID 1-N
     # * and a dict contain the instance info, access via its ID
     # * each instance may have type
-    pred_inst, inst_info_dict = functor(pred_map) 
+    functor, func_kwargs = post_proc_func
+    pred_inst, inst_info_dict = functor(pred_map, **func_kwargs) 
 
     overlaid_img = None
     if get_overlaid:
@@ -254,7 +255,9 @@ class InferManager(base.InferManager):
                 base_name = os.path.basename(file_path).split('.')[0]
 
                 # TODO: retrieve the color ?
-                func_args = [self.post_proc_func, file_ouput_data, file_info, True, None, base_name]
+                post_proc_kwargs = {'nr_types' : None, 'return_centroids' : True} # dynamicalize this
+                func_args = [[self.post_proc_func, post_proc_kwargs], 
+                                file_ouput_data, file_info, True, None, base_name]
 
                 # dispatch for parallel post-processing
                 if proc_pool is not None:
