@@ -111,24 +111,21 @@ class InferManager(base.InferManager):
     Run inference on tiles
     """ 
     ####
-    def process_file_list(self, 
-                nr_inference_workers=4,
-                nr_post_proc_workers=4,
-                batch_size=None,
-                input_dir=None,
-                output_dir=None,
-                patch_input_shape=None,
-                patch_output_shape=None,
-                save_intermediate_output=True,):
+    def process_file_list(self, run_args):
         """
         Process a single image tile < 5000x5000 in size.
         """
+
+        for variable, value in run_args.items():
+            self.__setattr__(variable, value)
+
+
         # * depend on the number of samples and their size, this may be less efficient
-        file_path_list = glob.glob('%s/*' % input_dir)
+        file_path_list = glob.glob('%s/*' % self.input_dir)
         file_path_list.sort()  # ensure same order
         file_path_list = file_path_list
 
-        rm_n_mkdir(output_dir)
+        rm_n_mkdir(self.output_dir)
 
         def proc_callback(args):
             """
@@ -140,10 +137,10 @@ class InferManager(base.InferManager):
             base_name = args[0]
             if overlaid is not None:
                 overlaid = cv2.cvtColor(overlaid, cv2.COLOR_RGB2BGR)
-                cv2.imwrite('%s/%s.png' % (output_dir, base_name), overlaid)
-            sio.savemat('%s/%s.mat' % (output_dir, base_name), {'inst_map': pred_inst})
+                cv2.imwrite('%s/%s.png' % (self.output_dir, base_name), overlaid)
+            sio.savemat('%s/%s.mat' % (self.output_dir, base_name), {'inst_map': pred_inst})
             # TODO: human readable ? but JSON is not good for large files
-            with open('%s/%s.pickle' % (output_dir, base_name), 'wb') as handle:
+            with open('%s/%s.pickle' % (self.output_dir, base_name), 'wb') as handle:
                 pickle.dump(inst_info_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
@@ -165,8 +162,8 @@ class InferManager(base.InferManager):
             return detached_items_list, remained_items_list
 
         proc_pool = None
-        if nr_post_proc_workers != 0:            
-            proc_pool = Pool(processes=nr_post_proc_workers)
+        if self.nr_post_proc_workers != 0:            
+            proc_pool = Pool(processes=self.nr_post_proc_workers)
 
         while len(file_path_list) > 0:
   
@@ -193,8 +190,8 @@ class InferManager(base.InferManager):
                 src_shape = img.shape
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 img, patch_info, top_corner = _prepare_patching(img, 
-                                                    patch_input_shape, 
-                                                    patch_output_shape, True)
+                                                    self.patch_input_shape, 
+                                                    self.patch_output_shape, True)
                 self_idx = np.full(patch_info.shape[0], file_idx, dtype=np.int32)
                 patch_info = np.concatenate([patch_info, self_idx[:,None]], axis=-1)
                 # ? may be expensive op
@@ -217,15 +214,15 @@ class InferManager(base.InferManager):
             # * apply neural net on cached data
             dataset = SerializeFileList(cache_image_list, 
                                 cache_patch_info_list, 
-                                patch_input_shape)
+                                self.patch_input_shape)
 
             dataloader = data.DataLoader(dataset,
-                                num_workers=nr_inference_workers,
-                                batch_size=batch_size,
+                                num_workers=self.nr_inference_workers,
+                                batch_size=self.batch_size,
                                 drop_last=False)
 
             pbar = tqdm.tqdm(desc='Process Patches', leave=True,
-                        total=int(len(cache_patch_info_list) / batch_size) + 1, 
+                        total=int(len(cache_patch_info_list) / self.batch_size) + 1, 
                         ncols=80, ascii=True, position=0)
 
             accumulated_patch_output = []

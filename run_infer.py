@@ -75,7 +75,7 @@ if __name__ == '__main__':
 
     if args['--run_mode'] == 'wsi':
         wsi_run_args = {
-            'input_msk_dir' : args['--input_msk_dir']
+            'input_msk_dir' : args['--input_msk_dir'],
             'ambiguous_size': int(args['--ambiguous_size']),
             'chunk_shape': int(args['--chunk_shape']),
             'tile_shape': int(args['--tile_shape']),

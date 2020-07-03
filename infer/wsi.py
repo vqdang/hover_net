@@ -328,7 +328,7 @@ class InferManager(base.InferManager):
             self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
             self.wsi_mask[self.wsi_mask > 0] = 1
         else:
-            print('WARNING: No mask found, run on entire WSI !!!')
+            print('WARNING: No mask found, processing entire WSI including background !!')
             # create a dummy array to use the entire wsi
             scaled_wsi_shape = self.wsi_proc_shape * 0.25 # at least will be 10x when doing 40x
             scaled_wsi_shape = scaled_wsi_shape.astype(np.int32)
@@ -503,7 +503,10 @@ class InferManager(base.InferManager):
 
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
-
+        
+        if os.path.exists(self.cache_path) == False:
+            rm_n_mkdir(self.cache_path)
+            
         wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list:
