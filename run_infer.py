@@ -20,7 +20,7 @@ Options:
   --batch_size=<n>            Batch size. [default: 8]
   --ambiguous_size=<n>        Ambiguous size. [default: 128]
   --chunk_shape=<n>           Shape of chunk for processing. [default: 10000]
-  --tile_shape=<n>            Shape of tiles for processing. [default: 4096]
+  --tile_shape=<n>            Shape of tiles for processing. [default: 2048]
   --wsi_proc_mag=<n>          Magnification level used for WSI processing. [default: -1]
   --cache_path=<path>         Path for cache. Should be placed on SSD with at least 100GB. [default: cache]
   --input_dir=<path>          Path to input data directory. Assumes the files are not nested within directory.
