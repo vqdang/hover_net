@@ -193,20 +193,25 @@ class InferManager(base.InferManager):
         pbar.close()
         return accumulated_patch_output
 
-    def __select_valid_patches(self, patch_info_list):
+    def __select_valid_patches(self, patch_info_list, has_output_info=True):
         down_sample_ratio = self.wsi_mask.shape[0] / self.wsi_proc_shape[0]
-        for _ in range(len(patch_info_list)):
-            patch_info = patch_info_list.pop(0)
+        selected_indices = []
+        for idx in range(patch_info_list.shape[0]):
+            patch_info = patch_info_list[idx]
             patch_info = np.squeeze(patch_info)
             # get the box at corresponding mag of the mask
-            output_bbox = patch_info[1] * down_sample_ratio
+            if has_output_info:
+                output_bbox = patch_info[1] * down_sample_ratio
+            else:
+                output_bbox = patch_info * down_sample_ratio
             output_bbox = np.rint(output_bbox).astype(np.int64)
             # coord of the output of the patch (i.e center regions)
             output_roi = self.wsi_mask[output_bbox[0][0]:output_bbox[1][0],
                                        output_bbox[0][1]:output_bbox[1][1]]
             if np.sum(output_roi) > 0:
-                patch_info_list.append(patch_info)
-        return patch_info_list
+                selected_indices.append(idx)
+        sub_patch_info_list = patch_info_list[selected_indices]
+        return sub_patch_info_list
 
     def __get_raw_prediction(self, chunk_info_list, patch_info_list):
 
@@ -222,19 +227,17 @@ class InferManager(base.InferManager):
             selection = masking(patch_info_list[:,0,0,0], start_coord[0], end_coord[0]) \
                       & masking(patch_info_list[:,0,0,1], start_coord[1], end_coord[1])
             chunk_patch_info_list = np.array(patch_info_list[selection]) # * do we need copy ?
-            chunk_patch_info_list = np.split(chunk_patch_info_list, chunk_patch_info_list.shape[0], axis=0)
 
             # further select only the patches within the provided mask
             chunk_patch_info_list = self.__select_valid_patches(chunk_patch_info_list)
 
             # there no valid patches, so flush 0 and skip
-            if len(chunk_patch_info_list) == 0:
+            if chunk_patch_info_list.shape[0] == 0:
                 proc_pool.apply_async(_assemble_and_flush, 
                                     args=(wsi_pred_map_mmap_path, chunk_info, None))
                 continue
 
             # shift the coordinare from wrt slide to wrt chunk
-            chunk_patch_info_list = np.array(chunk_patch_info_list)
             chunk_patch_info_list -= chunk_info[:,0]
             chunk_data = self.wsi_handler.read_region(chunk_info[0][0][::-1], self.wsi_proc_mag, 
                                                      (chunk_info[0][1] - chunk_info[0][0])[::-1])
@@ -251,7 +254,6 @@ class InferManager(base.InferManager):
         return
 
     def __dispatch_post_processing(self, tile_info_list, callback):
-        down_sample_ratio = self.wsi_mask.shape[0] / self.wsi_proc_shape[0]
 
         proc_pool = None
         if self.nr_post_proc_workers > 0: 
@@ -261,16 +263,6 @@ class InferManager(base.InferManager):
         for idx in list(range(tile_info_list.shape[0])):
             tile_tl = tile_info_list[idx][0]
             tile_br = tile_info_list[idx][1]
-
-            tile_tl_lores = np.rint(tile_tl * down_sample_ratio).astype(np.int64)
-            tile_br_lores = np.rint(tile_br * down_sample_ratio).astype(np.int64)
-            tile_mask = self.wsi_mask[tile_tl_lores[0]:tile_br_lores[0],
-                                      tile_tl_lores[1]:tile_br_lores[1]]
-            # TODO: defer to callback ?
-            if np.sum(tile_mask) == 0: 
-                # self.wsi_inst_map[tile_tl[0]:tile_br[0],
-                #                   tile_tl[1]:tile_br[1]] = 0
-                continue
 
             tile_info = (idx, tile_tl, tile_br)
             func_kwargs = {
@@ -362,6 +354,9 @@ class InferManager(base.InferManager):
         start = time.perf_counter()
         tile_coord_set = _get_tile_info(self.wsi_proc_shape, tile_shape, ambiguous_size)
         tile_grid_info, tile_boundary_info, tile_cross_info = tile_coord_set
+        tile_grid_info = self.__select_valid_patches(tile_grid_info, False)
+        tile_boundary_info = self.__select_valid_patches(tile_boundary_info, False)
+        tile_cross_info = self.__select_valid_patches(tile_cross_info, False)
 
         ####################### * Callback can only receive 1 arg
         def post_proc_normal_tile_callback(args):
