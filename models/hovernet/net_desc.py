@@ -115,7 +115,6 @@ class DenseBlock(Net):
 
         return prev_feat
 
-
 ####
 class ResidualBlock(Net):
     """
@@ -185,7 +184,10 @@ class ResidualBlock(Net):
 
         for idx in range(0, len(self.units)):
             new_feat = prev_feat
-            with torch.set_grad_enabled(not freeze):
+            if self.training:
+                with torch.set_grad_enabled(not freeze):
+                    new_feat = self.units[idx](new_feat)
+            else:
                 new_feat = self.units[idx](new_feat)
             prev_feat = new_feat + shortcut
             shortcut = prev_feat
@@ -295,14 +297,23 @@ class HoVerNet(Net):
 
         imgs = imgs / 255.0  # to 0-1 range to match XY
 
-        d0 = self.conv0(imgs)
-        d0 = self.d0(d0, self.freeze)
-        with torch.set_grad_enabled(not self.freeze):
+        if self.training:
+            d0 = self.conv0(imgs)
+            d0 = self.d0(d0, self.freeze)
+            with torch.set_grad_enabled(not self.freeze):
+                d1 = self.d1(d0)
+                d2 = self.d2(d1)
+                d3 = self.d3(d2)
+            d3 = self.conv_bot(d3)
+            d = [d0, d1, d2, d3]
+        else:
+            d0 = self.conv0(imgs)
+            d0 = self.d0(d0)
             d1 = self.d1(d0)
             d2 = self.d2(d1)
             d3 = self.d3(d2)
-        d3 = self.conv_bot(d3)
-        d = [d0, d1, d2, d3]
+            d3 = self.conv_bot(d3)
+            d = [d0, d1, d2, d3]
 
         # TODO: switch to `crop_to_shape` ?
         d[0] = crop_op(d[0], [184, 184])

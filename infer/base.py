@@ -30,7 +30,7 @@ class InferManager(object):
         Create the model, load the checkpoint and define
         associated run steps to process each data batch
         """
-        model_desc = import_module('models.%s.net_desc' % self.method['name'])
+        model_desc = import_module('models.%s.net_desc' % self.method['model_name'])
         model_creator = getattr(model_desc, 'create_model')
 
         # TODO: deal with parsing multi level model desc
@@ -44,10 +44,10 @@ class InferManager(object):
             net = torch.nn.DataParallel(net)
         net = net.to('cuda')
     
-        module_lib = import_module('models.%s.run_desc' % self.method['name'])
+        module_lib = import_module('models.%s.run_desc' % self.method['model_name'])
         run_step = getattr(module_lib, 'infer_step')
         self.run_step = lambda input_batch : run_step(input_batch, net)
 
-        module_lib = import_module('models.%s.post_proc' % self.method['name'])
+        module_lib = import_module('models.%s.post_proc' % self.method['model_name'])
         self.post_proc_func = getattr(module_lib, 'process')
         return

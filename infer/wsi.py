@@ -167,7 +167,7 @@ class InferManager(base.InferManager):
 
     def __run_model(self, patch_top_left_list):
         # TODO: the cost of creating dataloader may not be cheap ?
-        dataset = SerializeArray('%s/cache_chunk.npy' % self.wsi_cache_path, 
+        dataset = SerializeArray('%s/cache_chunk.npy' % self.cache_path, 
                                 patch_top_left_list, self.patch_input_shape)
 
         dataloader = data.DataLoader(dataset,
@@ -193,28 +193,31 @@ class InferManager(base.InferManager):
         pbar.close()
         return accumulated_patch_output
 
-    def __select_valid_patches(self, patch_info_list):
+    def __select_valid_patches(self, patch_info_list, has_output_info=True):
         down_sample_ratio = self.wsi_mask.shape[0] / self.wsi_proc_shape[0]
-        for _ in range(len(patch_info_list)):
-            patch_info = patch_info_list.pop(0)
+        selected_indices = []
+        for idx in range(patch_info_list.shape[0]):
+            patch_info = patch_info_list[idx]
             patch_info = np.squeeze(patch_info)
             # get the box at corresponding mag of the mask
-            output_bbox = patch_info[1] * down_sample_ratio
+            if has_output_info:
+                output_bbox = patch_info[1] * down_sample_ratio
+            else:
+                output_bbox = patch_info * down_sample_ratio
             output_bbox = np.rint(output_bbox).astype(np.int64)
             # coord of the output of the patch (i.e center regions)
             output_roi = self.wsi_mask[output_bbox[0][0]:output_bbox[1][0],
                                        output_bbox[0][1]:output_bbox[1][1]]
             if np.sum(output_roi) > 0:
-                patch_info_list.append(patch_info)
-        return patch_info_list
+                selected_indices.append(idx)
+        sub_patch_info_list = patch_info_list[selected_indices]
+        return sub_patch_info_list
 
     def __get_raw_prediction(self, chunk_info_list, patch_info_list):
 
         # 1 dedicated thread just to write results back to disk
-        proc_pool = Pool(processes=1, 
-                        initializer=_init_worker_child, 
-                        initargs=(thread_lock,))
-        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.wsi_cache_path
+        proc_pool = Pool(processes=1)
+        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.cache_path
 
         masking = lambda x, a, b: (a <= x) & (x <= b)
         for chunk_info in chunk_info_list:
@@ -224,24 +227,22 @@ class InferManager(base.InferManager):
             selection = masking(patch_info_list[:,0,0,0], start_coord[0], end_coord[0]) \
                       & masking(patch_info_list[:,0,0,1], start_coord[1], end_coord[1])
             chunk_patch_info_list = np.array(patch_info_list[selection]) # * do we need copy ?
-            chunk_patch_info_list = np.split(chunk_patch_info_list, chunk_patch_info_list.shape[0], axis=0)
 
             # further select only the patches within the provided mask
             chunk_patch_info_list = self.__select_valid_patches(chunk_patch_info_list)
 
             # there no valid patches, so flush 0 and skip
-            if len(chunk_patch_info_list) == 0:
+            if chunk_patch_info_list.shape[0] == 0:
                 proc_pool.apply_async(_assemble_and_flush, 
                                     args=(wsi_pred_map_mmap_path, chunk_info, None))
                 continue
 
             # shift the coordinare from wrt slide to wrt chunk
-            chunk_patch_info_list = np.array(chunk_patch_info_list)
             chunk_patch_info_list -= chunk_info[:,0]
             chunk_data = self.wsi_handler.read_region(chunk_info[0][0][::-1], self.wsi_proc_mag, 
                                                      (chunk_info[0][1] - chunk_info[0][0])[::-1])
             chunk_data = np.array(chunk_data)[...,:3]
-            np.save('%s/cache_chunk.npy' % self.wsi_cache_path, chunk_data)
+            np.save('%s/cache_chunk.npy' % self.cache_path, chunk_data)
 
             patch_output_list = self.__run_model(chunk_patch_info_list[:,0,0])
 
@@ -253,28 +254,15 @@ class InferManager(base.InferManager):
         return
 
     def __dispatch_post_processing(self, tile_info_list, callback):
-        down_sample_ratio = self.wsi_mask.shape[0] / self.wsi_proc_shape[0]
 
         proc_pool = None
         if self.nr_post_proc_workers > 0: 
-            proc_pool = Pool(processes=self.nr_post_proc_workers, 
-                            initializer=_init_worker_child, 
-                            initargs=(thread_lock,))
+            proc_pool = Pool(processes=self.nr_post_proc_workers)
 
-        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.wsi_cache_path
+        wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.cache_path
         for idx in list(range(tile_info_list.shape[0])):
             tile_tl = tile_info_list[idx][0]
             tile_br = tile_info_list[idx][1]
-
-            tile_tl_lores = np.rint(tile_tl * down_sample_ratio).astype(np.int64)
-            tile_br_lores = np.rint(tile_br * down_sample_ratio).astype(np.int64)
-            tile_mask = self.wsi_mask[tile_tl_lores[0]:tile_br_lores[0],
-                                      tile_tl_lores[1]:tile_br_lores[1]]
-            # TODO: defer to callback ?
-            if np.sum(tile_mask) == 0: 
-                # self.wsi_inst_map[tile_tl[0]:tile_br[0],
-                #                   tile_tl[1]:tile_br[1]] = 0
-                continue
 
             tile_info = (idx, tile_tl, tile_br)
             func_kwargs = {
@@ -328,7 +316,7 @@ class InferManager(base.InferManager):
             self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
             self.wsi_mask[self.wsi_mask > 0] = 1
         else:
-            print('WARNING: No mask found, run on entire WSI !!!')
+            print('WARNING: No mask found, processing entire WSI including background !!')
             # create a dummy array to use the entire wsi
             scaled_wsi_shape = self.wsi_proc_shape * 0.25 # at least will be 10x when doing 40x
             scaled_wsi_shape = scaled_wsi_shape.astype(np.int32)
@@ -340,17 +328,17 @@ class InferManager(base.InferManager):
         self.wsi_inst_info  = {} 
         # TODO: option to use entire RAM if users have too much available, would be faster than mmap
         self.wsi_inst_map = np.lib.format.open_memmap(
-                                            '%s/pred_inst.npy' % self.wsi_cache_path, mode='w+',
+                                            '%s/pred_inst.npy' % self.cache_path, mode='w+',
                                             shape=tuple(self.wsi_proc_shape), 
                                             dtype=np.int32)
         self.wsi_inst_map[:] = 0 # flush fill
 
         # warning, the value within this is uninitialized
         self.wsi_pred_map = np.lib.format.open_memmap(
-                                            '%s/pred_map.npy' % self.wsi_cache_path, mode='w+',
+                                            '%s/pred_map.npy' % self.cache_path, mode='w+',
                                             shape=tuple(self.wsi_proc_shape) + (out_ch,), 
                                             dtype=np.float32)
-        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.wsi_cache_path, mmap_mode='r')
+        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
         
         # * raw prediction
         start = time.perf_counter()
@@ -366,6 +354,9 @@ class InferManager(base.InferManager):
         start = time.perf_counter()
         tile_coord_set = _get_tile_info(self.wsi_proc_shape, tile_shape, ambiguous_size)
         tile_grid_info, tile_boundary_info, tile_cross_info = tile_coord_set
+        tile_grid_info = self.__select_valid_patches(tile_grid_info, False)
+        tile_boundary_info = self.__select_valid_patches(tile_boundary_info, False)
+        tile_cross_info = self.__select_valid_patches(tile_cross_info, False)
 
         ####################### * Callback can only receive 1 arg
         def post_proc_normal_tile_callback(args):
@@ -377,25 +368,24 @@ class InferManager(base.InferManager):
                 return # when there is nothing to do
 
             top_left = pos_args[1][::-1]
-            with thread_lock:
-                wsi_max_id = 0 
 
-                # ! WARNING: 
-                # ! inst ID may not be contiguous, 
-                # ! hence must use max as safeguard
+            # ! WARNING: 
+            # ! inst ID may not be contiguous, 
+            # ! hence must use max as safeguard
 
-                if len(self.wsi_inst_info) > 0:
-                    wsi_max_id = max(self.wsi_inst_info.keys()) 
-                for inst_id, inst_info in inst_info_dict.items():
-                    # now correct the coordinate wrt to wsi
-                    inst_info['bbox']     += top_left
-                    inst_info['contour']  += top_left
-                    inst_info['centroid'] += top_left
-                    self.wsi_inst_info[inst_id + wsi_max_id] = inst_info
-                pred_inst[pred_inst > 0] += wsi_max_id
-                self.wsi_inst_map[tile_tl[0] : tile_br[0],
-                                  tile_tl[1] : tile_br[1]] = pred_inst
-            
+            wsi_max_id = 0 
+            if len(self.wsi_inst_info) > 0:
+                wsi_max_id = max(self.wsi_inst_info.keys()) 
+            for inst_id, inst_info in inst_info_dict.items():
+                # now correct the coordinate wrt to wsi
+                inst_info['bbox']     += top_left
+                inst_info['contour']  += top_left
+                inst_info['centroid'] += top_left
+                self.wsi_inst_info[inst_id + wsi_max_id] = inst_info
+            pred_inst[pred_inst > 0] += wsi_max_id
+            self.wsi_inst_map[tile_tl[0] : tile_br[0],
+                              tile_tl[1] : tile_br[1]] = pred_inst
+
             pbar.update() # external
             return
 
@@ -409,59 +399,60 @@ class InferManager(base.InferManager):
                 return # when there is nothing to do
 
             top_left = pos_args[1][::-1]
-            with thread_lock:
-                # for fixing the boundary, keep all nuclei split at boundary (i.e within unambigous region)
-                # of the existing prediction map, and replace all nuclei within the region with newly predicted
 
-                # ! WARNING: 
-                # ! inst ID may not be contiguous, 
-                # ! hence must use max as safeguard
+            # for fixing the boundary, keep all nuclei split at boundary (i.e within unambigous region)
+            # of the existing prediction map, and replace all nuclei within the region with newly predicted
 
-                # ! must get before the removal happened
-                wsi_max_id = 0 
-                if len(self.wsi_inst_info) > 0:
-                    wsi_max_id = max(self.wsi_inst_info.keys()) 
+            # ! WARNING: 
+            # ! inst ID may not be contiguous, 
+            # ! hence must use max as safeguard
 
-                # * exclude ambiguous out from old prediction map
-                # check 1 pix of 4 edges to find nuclei split at boundary
-                roi_inst = self.wsi_inst_map[tile_tl[0] : tile_br[0],
-                                             tile_tl[1] : tile_br[1]]
-                roi_inst = np.copy(roi_inst)
-                roi_edge = np.concatenate([roi_inst[[0,-1],:].flatten(),
-                                           roi_inst[:,[0,-1]].flatten()])
-                roi_boundary_inst_list = np.unique(roi_edge)[1:] # exclude background
-                roi_inner_inst_list = np.unique(roi_inst)[1:]  
-                roi_inner_inst_list = np.setdiff1d(roi_inner_inst_list, 
-                                                roi_boundary_inst_list, 
-                                                assume_unique=True)
-                roi_inst = _remove_inst(roi_inst, roi_inner_inst_list)
-                self.wsi_inst_map[tile_tl[0] : tile_br[0],
-                             tile_tl[1] : tile_br[1]] = roi_inst
-                for inst_id in roi_inner_inst_list:
-                    self.wsi_inst_info.pop(inst_id, None)
+            # ! must get before the removal happened
+            wsi_max_id = 0 
+            if len(self.wsi_inst_info) > 0:
+                wsi_max_id = max(self.wsi_inst_info.keys()) 
 
-                # * exclude unambiguous out from new prediction map
-                # check 1 pix of 4 edges to find nuclei split at boundary
-                roi_edge = pred_inst[roi_inst > 0] # remove all overlap
-                boundary_inst_list = np.unique(roi_edge) # no background to exclude                
-                inner_inst_list = np.unique(pred_inst)[1:]  
-                inner_inst_list = np.setdiff1d(inner_inst_list, 
-                                            boundary_inst_list, 
-                                            assume_unique=True)              
-                pred_inst = _remove_inst(pred_inst, boundary_inst_list)
+            # * exclude ambiguous out from old prediction map
+            # check 1 pix of 4 edges to find nuclei split at boundary
+            roi_inst = self.wsi_inst_map[tile_tl[0] : tile_br[0],
+                                            tile_tl[1] : tile_br[1]]
+            roi_inst = np.copy(roi_inst)
+            roi_edge = np.concatenate([roi_inst[[0,-1],:].flatten(),
+                                        roi_inst[:,[0,-1]].flatten()])
+            roi_boundary_inst_list = np.unique(roi_edge)[1:] # exclude background
+            roi_inner_inst_list = np.unique(roi_inst)[1:]  
+            roi_inner_inst_list = np.setdiff1d(roi_inner_inst_list, 
+                                            roi_boundary_inst_list, 
+                                            assume_unique=True)
+            roi_inst = _remove_inst(roi_inst, roi_inner_inst_list)
+            self.wsi_inst_map[tile_tl[0] : tile_br[0],
+                            tile_tl[1] : tile_br[1]] = roi_inst
+            for inst_id in roi_inner_inst_list:
+                self.wsi_inst_info.pop(inst_id, None)
 
-                # * proceed to overwrite
-                for inst_id in inner_inst_list:
-                    inst_info = inst_info_dict[inst_id]
-                    # now correct the coordinate wrt to wsi
-                    inst_info['bbox']     += top_left
-                    inst_info['contour']  += top_left
-                    inst_info['centroid'] += top_left
-                    self.wsi_inst_info[inst_id + wsi_max_id] = inst_info
-                pred_inst[pred_inst > 0] += wsi_max_id
-                pred_inst = roi_inst + pred_inst
-                self.wsi_inst_map[tile_tl[0] : tile_br[0],
-                                  tile_tl[1] : tile_br[1]] = pred_inst
+            # * exclude unambiguous out from new prediction map
+            # check 1 pix of 4 edges to find nuclei split at boundary
+            roi_edge = pred_inst[roi_inst > 0] # remove all overlap
+            boundary_inst_list = np.unique(roi_edge) # no background to exclude                
+            inner_inst_list = np.unique(pred_inst)[1:]  
+            inner_inst_list = np.setdiff1d(inner_inst_list, 
+                                        boundary_inst_list, 
+                                        assume_unique=True)              
+            pred_inst = _remove_inst(pred_inst, boundary_inst_list)
+
+            # * proceed to overwrite
+            for inst_id in inner_inst_list:
+                inst_info = inst_info_dict[inst_id]
+                # now correct the coordinate wrt to wsi
+                inst_info['bbox']     += top_left
+                inst_info['contour']  += top_left
+                inst_info['centroid'] += top_left
+                self.wsi_inst_info[inst_id + wsi_max_id] = inst_info
+            pred_inst[pred_inst > 0] += wsi_max_id
+            pred_inst = roi_inst + pred_inst
+            self.wsi_inst_map[tile_tl[0] : tile_br[0],
+                              tile_tl[1] : tile_br[1]] = pred_inst
+
             pbar.update() # external
             return        
 
@@ -503,8 +494,13 @@ class InferManager(base.InferManager):
 
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
+        
+        if not os.path.exists(self.cache_path):
+            rm_n_mkdir(self.cache_path)
+        if not os.path.exists(self.output_dir):
+            rm_n_mkdir(self.output_dir)
 
-        wsi_path_list = glob.glob(self.input_wsi_dir + '/*')       
+        wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list:
             print(wsi_path)
