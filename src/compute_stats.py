@@ -183,11 +183,11 @@ def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
 
         pq_info = get_fast_pq(true, pred, match_iou=0.5)[0]
         metrics[0].append(get_dice_1(true, pred))
-        metrics[1].append(pq_info[0]) # dq
-        metrics[2].append(pq_info[1]) # sq
-        metrics[3].append(pq_info[2]) # pq
-        metrics[4].append(get_fast_aji_plus(true, pred))
-        metrics[5].append(get_fast_aji(true, pred))
+        metrics[1].append(get_fast_aji(true, pred))
+        metrics[2].append(pq_info[0]) # dq
+        metrics[3].append(pq_info[1]) # sq
+        metrics[4].append(pq_info[2]) # pq
+        metrics[5].append(get_fast_aji_plus(true, pred))
 
         if print_img_stats:
             print(basename, end="\t")
