@@ -51,7 +51,7 @@ def visualize_instances(mask, canvas=None, color=None):
         inst_map_crop = inst_map[y1:y2, x1:x2]
         inst_canvas_crop = canvas[y1:y2, x1:x2]
         contours = cv2.findContours(inst_map_crop, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(inst_canvas_crop, contours[1], -1, inst_color, 2)
+        cv2.drawContours(inst_canvas_crop, contours[0], -1, inst_color, 2)
         canvas[y1:y2, x1:x2] = inst_canvas_crop        
     return canvas
 
