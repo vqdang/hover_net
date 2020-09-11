@@ -151,7 +151,7 @@ def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True
     results_list = [f1_d, acc_type]
     for type_uid in type_uid_list:
         f1_type = _f1_type(paired_true_type, paired_pred_type, 
-                        unpaired_pred_type, unpaired_true_type, type_uid, w)
+                        unpaired_true_type, unpaired_pred_type, type_uid, w)
         results_list.append(f1_type)
 
     np.set_printoptions(formatter={'float': '{: 0.5f}'.format})
