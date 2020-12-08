@@ -95,17 +95,6 @@ class FileLoader(torch.utils.data.Dataset):
 
         return feed_dict
 
-    @staticmethod
-    def view(batch_data, prep_sample):
-        batch_size = list(batch_data.values())[0].shape[0]
-        for sample_idx in range(batch_size):
-            sample_data = {k: v[sample_idx] for k, v in batch_data.items()}
-            displayed_sample = prep_sample[0](sample_data, **prep_sample[1])
-            plt.subplot(batch_size, 1, sample_idx+1)
-            plt.imshow(displayed_sample)
-        plt.savefig('dump.png', dpi=600)
-        return
-
     def __get_augmentation(self, mode, rng):
         if mode == 'train':
             shape_augs = [
@@ -115,25 +104,25 @@ class FileLoader(torch.utils.data.Dataset):
                 # * order = ``3`` -> ``cv2.INTER_CUBIC``
                 # * order = ``4`` -> ``cv2.INTER_CUBIC``
                 # ! for pannuke v0, no rotation or translation, just flip to avoid mirror padding
-                # iaa.Affine(
-                #     # scale images to 80-120% of their size, individually per axis
-                #     scale={"x": (0.8, 1.2),
-                #            "y": (0.8, 1.2)},
-                #     # translate by -A to +A percent (per axis)
-                #     translate_percent={"x": (-0.01, 0.01),
-                #                        "y": (-0.01, 0.01)},
-                #     shear=(-5, 5),  # shear by -5 to +5 degrees
-                #     rotate=(-179, 179),  # rotate by -179 to +179 degrees
-                #     order=0,    # use nearest neighbour
-                #     backend='cv2',  # opencv for fast processing
-                #     seed=rng
-                # ),
-                # # set position to 'center' for center crop
-                # # else 'uniform' for random crop
-                # iaa.CropToFixedSize(self.input_shape[0],
-                #                     self.input_shape[1],
-                #                     position='center'
-                #                     ),
+                iaa.Affine(
+                    # scale images to 80-120% of their size, individually per axis
+                    scale={"x": (0.8, 1.2),
+                           "y": (0.8, 1.2)},
+                    # translate by -A to +A percent (per axis)
+                    translate_percent={"x": (-0.01, 0.01),
+                                       "y": (-0.01, 0.01)},
+                    shear=(-5, 5),  # shear by -5 to +5 degrees
+                    rotate=(-179, 179),  # rotate by -179 to +179 degrees
+                    order=0,    # use nearest neighbour
+                    backend='cv2',  # opencv for fast processing
+                    seed=rng
+                ),
+                # set position to 'center' for center crop
+                # else 'uniform' for random crop
+                iaa.CropToFixedSize(self.input_shape[0],
+                                    self.input_shape[1],
+                                    position='center'
+                                    ),
                 iaa.Fliplr(0.5, seed=rng),
                 iaa.Flipud(0.5, seed=rng),
             ]

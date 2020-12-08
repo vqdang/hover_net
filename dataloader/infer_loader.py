@@ -15,7 +15,7 @@ class SerializeFileList(data.IterableDataset):
     """
     Read a single file as multiple patches of same shape, perform the padding beforehand
     """
-    def __init__(self, img_list, patch_info_list, patch_size):
+    def __init__(self, img_list, patch_info_list, patch_size, preproc=None):
         super().__init__()
         self.patch_size = patch_size
 
@@ -28,6 +28,7 @@ class SerializeFileList(data.IterableDataset):
         self.stop_img_idx = 0
         self.curr_patch_idx = 0
         self.stop_patch_idx = 0
+        self.preproc = preproc
         return
 
     def __iter__(self):
@@ -63,12 +64,14 @@ class SerializeFileList(data.IterableDataset):
         patch_data = img_ptr[patch_info[0] : patch_info[0] + self.patch_size,
                              patch_info[1] : patch_info[1] + self.patch_size]
         self.curr_patch_idx += 1
+        if self.preproc is not None:
+            patch_data = self.preproc(patch_data)
         return patch_data, patch_info
 
 ####
 class SerializeArray(data.Dataset):
 
-    def __init__(self, mmap_array_path, patch_info_list, patch_size):
+    def __init__(self, mmap_array_path, patch_info_list, patch_size, preproc=None):
         super().__init__()
         self.patch_size = patch_size
 
@@ -77,6 +80,7 @@ class SerializeArray(data.Dataset):
         self.image = np.load(mmap_array_path, mmap_mode='r')
 
         self.patch_info_list = patch_info_list
+        self.preproc = preproc
         return
 
     def __len__(self):
@@ -86,22 +90,6 @@ class SerializeArray(data.Dataset):
         patch_info = self.patch_info_list[idx]
         patch_data = self.image[patch_info[0] : patch_info[0] + self.patch_size[0],
                                 patch_info[1] : patch_info[1] + self.patch_size[1]]    
+        if self.preproc is not None:
+            patch_data = self.preproc(patch_data)
         return patch_data, patch_info
-
-####
-def visualize(ds, batch_size, nr_steps=100):
-    data_idx = 0
-    cmap = plt.get_cmap('jet')
-    for i in range(0, nr_steps):
-        if data_idx >= len(ds) - 1:
-            data_idx = 0
-        nr_feed = len(ds[0])
-
-        pos_counter = 0
-        for j in range(0, batch_size):
-            sample = ds[data_idx + j]
-            for k in range(1, nr_feed + 1):
-                plt.subplot(nr_feed, batch_size, k + j * nr_feed)
-                plt.imshow(np.squeeze(sample[k - 1]))
-        plt.show()
-        data_idx += batch_size

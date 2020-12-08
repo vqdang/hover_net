@@ -34,10 +34,19 @@ def to_qupath(file_path, nuc_pos_list, nuc_type_list, type_info_dict):
 ####
 if __name__ == '__main__':
     target_format = 'qupath'
-    scale_factor = 0.5
-
+    scale_factor = 0.5 # to rescale the coordinate set
     root_dir = 'dataset/rmt/continual_v0.0/pred/clf=[densenet-mini_v0.2.2]/'
-    
+
+    # to define the name, and color conversion code for each target format
+    type_info_dict = {
+        0 : ('nolabe', (0  ,   0,   0), -1), # no label
+        1 : ('neopla', (255,   0,   0), -65536), # neoplastic
+        2 : ('inflam', (0  , 255,   0), -16711936), # inflamm
+        3 : ('connec', (0  ,   0, 255), -16776961), # connective
+        4 : ('necros', (255, 255,   0), -1), # dead
+        5 : ('no-neo', (255, 165,   0), -1), # non-neoplastic epithelial
+    }
+
     patterning = lambda x : re.sub('([\[\]])', '[\\1]', x)
     code_name_list = glob.glob(patterning('%s/*.json' % root_dir))
     code_name_list = [os.path.basename(v).split('.')[0] for v in code_name_list]
@@ -51,10 +60,9 @@ if __name__ == '__main__':
         print(code_name)
 
         with open(nuc_info_path, "r") as handle:
-            # TODO: reconcile format between tile mode and wsi mode
-            # info_dict = json.load(handle)['nuc']
-            info_dict = json.load(handle)
+            info_dict = json.load(handle)['nuc']
 
+        # from json to array
         new_info_dict = {}
         for inst_id, inst_info in info_dict.items():
             new_inst_info = {}
@@ -69,15 +77,6 @@ if __name__ == '__main__':
         centroid_list = np.array([v['centroid'] for v in list(new_info_dict.values())])
         type_list = np.array([v['type'] for v in list(new_info_dict.values())])
 
-        type_info_dict = {
-            0 : ('nolabe', (0  ,   0,   0), -1), # no label
-            1 : ('neopla', (255,   0,   0), -65536), # neoplastic
-            2 : ('inflam', (0  , 255,   0), -16711936), # inflamm
-            3 : ('connec', (0  ,   0, 255), -16776961), # connective
-            4 : ('necros', (255, 255,   0), -1), # dead
-            5 : ('no-neo', (255, 165,   0), -1), # non-neoplastic epithelial
-        }
         save_path = '%s/%s.tsv' % (output_dir, code_name)
         to_qupath(save_path, centroid_list, type_list, type_info_dict)
             
-        # break

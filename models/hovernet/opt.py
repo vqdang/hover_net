@@ -166,6 +166,7 @@ train_config = {
                     AccumulateRawOutput(),
                 ],
                 Events.EPOCH_COMPLETED: [
+                    # TODO: is there way to preload these ?
                     ProcessAccumulatedRawOutput(lambda a : proc_valid_step_output(a, nr_types=6)),
                     LoggingEpochOutput(),
                 ]

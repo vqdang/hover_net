@@ -11,16 +11,17 @@ Options:
   -h --help                   Show this string.
   --version                   Show version.
   --gpu=<id>                  GPU list. [default: 0]
-  --model_name=<name>         Method name. [default: hovernet]
   --run_mode=<mode>           Inference mode. 'tile' or 'wsi'. [default: tile]
   --nr_types=<n>              Number of nuclei types to predict. [default: 0]
   --model_path=<path>         Path to saved checkpoint.
+  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke. 'None' or 'pannuke' [default: 'pannuke']
   --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
   --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
   --batch_size=<n>            Batch size. [default: 128]
   --ambiguous_size=<n>        Ambiguous size. [default: 128]
   --chunk_shape=<n>           Shape of chunk for processing. [default: 10000]
   --tile_shape=<n>            Shape of tiles for processing. [default: 2048]
+  --save_raw_map=<n>          For `run_mode`=`tile`. To save raw prediction or not. [default: False]
   --wsi_proc_mag=<n>          Magnification level used for WSI processing. [default: -1]
   --cache_path=<path>         Path for cache. Should be placed on SSD with at least 100GB. [default: cache]
   --input_dir=<path>          Path to input data directory. Assumes the files are not nested within directory.
@@ -39,34 +40,6 @@ from docopt import docopt
 if __name__ == '__main__':
     args = docopt(__doc__, version='HoVer-Net Pytorch Inference v1.0')
 
-    # model_code = 'data=[pseudo_v0.5+kumar_train]'
-    # model_code = 'pannuke_src'
-    # model_code = 'pannuke_full_v0'
-    # model_code = 'pannuke_full_v0_merge_epi'
-    args['--gpu'] = '0,1,2,3'
-    args['--nr_types'] = 5
-    args['--model_name'] = 'hovernet'
-    # args['--model_path'] = '../pretrained/pecan-hover-net-pytorch.tar'
-    # args['--model_path'] = 'exp_output/models/hovernet/%s/01/net_epoch=50.tar' % model_code
-    # args['--model_path'] = 'exp_output/models/hovernet/%s/01/net_epoch=50.tar' % model_code
-
-    # args['--run_mode'] = 'wsi'
-    # args['--cache_path'] = '/home/tialab-dang/cache/'
-    # args['--input_dir']     = '../../dataset/RMT_mIHC_HE_Correlation/v1_scan/HE_Scans/'
-    # args['--input_msk_dir'] = '../../dataset/RMT_mIHC_HE_Correlation/v1_scan/HE_masks/'
-    # args['--output_dir'] = 'exp_output/prediction/RMT/%s/base/' % model_code
-
-    model_code = 'continual_data=[v0.0]_run=[v0.0]'
-    args['--run_mode'] = 'tile'
-    args['--model_path'] = 'exp_output/models/hovernet/%s/net_best=[valid-tp_dice_2].tar' % model_code
-    # args['--model_path'] = 'exp_output/models/hovernet/%s/net_epoch=120.tar' % model_code
-    args['--cache_path'] = '/home/tialab-dang/cache/'
-    args['--input_dir']     = 'dataset/rmt/sample/imgs/'
-    args['--output_dir'] = 'dataset/rmt/continual_v0.0/pred/%s/' % model_code
-
-    args['--patch_input_shape'] = 256
-    args['--patch_output_shape'] = 164
-
     if args['--gpu']:
         os.environ['CUDA_VISIBLE_DEVICES'] = args['--gpu']
 
@@ -74,7 +47,6 @@ if __name__ == '__main__':
     if args['--run_mode'] != 'tile' and args['--run_mode'] != 'wsi':
         raise Exception('Mode not recognised. Use either "tile" or "wsi"')
 
-    # TODO: exposed model kwargs ?
     if args['--model_path'] == None:
         raise Exception('A model path must be supplied as an argument with --model_path.')
     if args['--model_name'] == None:
