@@ -1,39 +1,37 @@
-import warnings
-def noop(*args, **kargs): pass
-warnings.warn = noop
 
+
+import multiprocessing as mp
+from multiprocessing import Lock, Pool
+mp.set_start_method('spawn', True) # ! must be at top for VScode debugging
+
+import pathlib
 import shutil
 import time
-from multiprocessing import Pool, Lock
-import multiprocessing as mp
-mp.set_start_method('spawn', True) # ! must be at top for VScode debugging
 import argparse
 import glob
-from importlib import import_module
+import json
 import math
 import os
-import sys
 import re
-import json
+import sys
+from functools import reduce
+from importlib import import_module
 
 import cv2
 import numpy as np
+import psutil
 import scipy.io as sio
 import torch
 import torch.utils.data as data
-from docopt import docopt
 import tqdm
-import psutil
-from dataloader.infer_loader import SerializeFileList, SerializeArray
-from functools import reduce
-
-from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
-from misc.wsi_handler import get_file_handler 
+from dataloader.infer_loader import SerializeArray, SerializeFileList
+from docopt import docopt
+from misc.utils import cropping_center, get_bounding_box, rm_n_mkdir
+from misc.wsi_handler import get_file_handler
 
 from . import base
 
 thread_lock = Lock()
-
 
 ####
 def _init_worker_child(lock_):
@@ -304,11 +302,12 @@ class InferManager(base.InferManager):
         patch_input_shape  = np.array(self.patch_input_shape)
         patch_output_shape = np.array(self.patch_output_shape)
         
-        wsi_ext = wsi_path.split('.')[-1]
-        wsi_name = os.path.basename(wsi_path).split('.')[0] # TODO: better way to handle compound namme
+        path_obj = pathlib.Path(wsi_path) 
+        wsi_ext = path_obj.suffix
+        wsi_name = path_obj.stem
 
         start = time.perf_counter()
-        self.wsi_proc_mag = 40
+        # self.wsi_proc_mag = 40
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
         self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.wsi_proc_mag)
         self.wsi_handler.prepare_reading(read_mag=self.wsi_proc_mag, 
@@ -323,6 +322,7 @@ class InferManager(base.InferManager):
             print('WARNING: No mask found, processing entire WSI including background !!')
 
             from skimage import morphology
+
             # simple method to extract tissue regions using intensity thresholding and morphological operations
             def simple_get_mask():
                 wsi_thumb_rgb = self.wsi_handler.get_full_img(read_mag=scaled_wsi_mag)
@@ -502,24 +502,10 @@ class InferManager(base.InferManager):
         end = time.perf_counter()
         print('Post Proc Time: ', end - start)
 
-        # ! cant possiblt save the inst map at high res, too large
+        # ! cant possibly save the inst map at high res, too large
         start = time.perf_counter()
-        json_dict = {}
-        for inst_id, inst_info in self.wsi_inst_info.items():
-            new_inst_info = {}
-            for info_name, info_value in inst_info.items():
-                # convert to jsonable
-                if isinstance(info_value, np.ndarray):
-                    info_value = info_value.tolist()
-                new_inst_info[info_name] = info_value
-            json_dict[int(inst_id)] = new_inst_info
-        json_dict = {
-            'mag' : self.wsi_proc_mag,
-            'nuc' : json_dict
-        }
-
-        with open('%s/%s.json' % (output_path, wsi_name), 'w') as handle:
-            json.dump(json_dict, handle)
+        json_path = '%s/%s.json' % (output_path, base_name)
+        self.__save_json(json_path, self.wsi_inst_info, mag=self.wsi_proc_mag)
         end = time.perf_counter()
         print('Post Proc Time: ', end - start)
 
@@ -534,11 +520,9 @@ class InferManager(base.InferManager):
         wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list[:]:
-            # TODO: may not work, such as when name is TCGA etc.
-            wsi_base_name = os.path.basename(wsi_path).split('.')[0]
+            wsi_base_name = pathlib.Path(wsi_path).stem
             # if wsi_base_name not in name_list: continue
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
-            print(wsi_path)
             output_file = '%s/%s.json' % (self.output_dir, wsi_base_name)
             if os.path.exists(output_file): continue
             self.process_single_file(wsi_path, msk_path, self.output_dir)
