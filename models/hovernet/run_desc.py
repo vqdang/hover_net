@@ -6,9 +6,12 @@ import torch.nn.functional as F
 from misc.utils import center_pad_to_shape, cropping_center
 from .utils import crop_to_shape, dice_loss, mse_loss, msge_loss, xentropy_loss
 
+from collections import OrderedDict
+
 ####
 def train_step(batch_data, run_info):
     # TODO: synchronize the attach protocol
+    run_info, state_info = run_info
     loss_func_dict = {
         'bce'  : xentropy_loss,
         'dice' : dice_loss,
@@ -18,6 +21,10 @@ def train_step(batch_data, run_info):
     # use 'ema' to add for EMA calculation, must be scalar!
     result_dict = {'EMA' : {}} 
     track_value = lambda name, value: result_dict['EMA'].update({name: value})
+
+    ####
+    model     = run_info['net']['desc']
+    optimizer = run_info['net']['optimizer']
 
     ####
     imgs = batch_data['img']
@@ -37,16 +44,22 @@ def train_step(batch_data, run_info):
         'hv' : true_hv,
     }
 
-    ####
-    model     = run_info['net']['desc']
-    optimizer = run_info['net']['optimizer']
+    if model.module.nr_types is not None:
+        true_tp = batch_data['tp_map']
+        true_tp = torch.squeeze(true_tp).to('cuda').type(torch.int64)
+        true_tp_onehot = F.one_hot(true_tp, num_classes=model.module.nr_types)
+        true_tp_onehot = true_tp_onehot.type(torch.float32)
+        true_dict['tp'] = true_tp_onehot
+
     ####
     model.train() 
     model.zero_grad() # not rnn so not accumulate
 
     pred_dict = model(imgs)
-    pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}
+    pred_dict = OrderedDict([[k, v.permute(0, 2, 3 ,1).contiguous()] for k, v in pred_dict.items()])
     pred_dict['np'] = F.softmax(pred_dict['np'], dim=-1) 
+    if model.module.nr_types is not None:
+        pred_dict['tp'] = F.softmax(pred_dict['tp'], dim=-1)
 
     ####
     loss = 0
@@ -92,6 +105,10 @@ def train_step(batch_data, run_info):
 
 ####
 def valid_step(batch_data, run_info):
+    run_info, state_info = run_info
+    ####
+    model = run_info['net']['desc']
+    model.eval() # infer mode
 
     ####
     imgs = batch_data['img']
@@ -109,15 +126,22 @@ def valid_step(batch_data, run_info):
         'np' : true_np,
         'hv' : true_hv,
     }
-    ####
-    model = run_info['net']['desc']
-    model.eval() # infer mode
+
+    if model.module.nr_types is not None:
+        true_tp = batch_data['tp_map']
+        true_tp = torch.squeeze(true_tp).to('cuda').type(torch.int64)
+        true_dict['tp'] = true_tp
 
     # --------------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
         pred_dict = model(imgs_gpu)
-        pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}
+        pred_dict = OrderedDict([[k, v.permute(0, 2, 3 ,1).contiguous()] for k, v in pred_dict.items()])
         pred_dict['np'] = F.softmax(pred_dict['np'], dim=-1)[...,1] 
+        if model.module.nr_types is not None:
+            type_map = F.softmax(pred_dict['tp'], dim=-1)
+            type_map = torch.argmax(type_map, dim=-1, keepdim=False)
+            type_map = type_map.type(torch.float32)
+            pred_dict['tp'] = type_map
 
     # * Its up to user to define the protocol to process the raw output per step!
     result_dict = { # protocol for contents exchange within `raw`
@@ -129,6 +153,9 @@ def valid_step(batch_data, run_info):
             'pred_hv' : pred_dict['hv'].cpu().numpy()
         }
     }
+    if model.module.nr_types is not None:
+        result_dict['raw']['true_tp'] = true_dict['tp'].cpu().numpy()
+        result_dict['raw']['pred_tp'] = pred_dict['tp'].cpu().numpy()
     return result_dict
 
 ####
@@ -146,15 +173,20 @@ def infer_step(batch_data, model):
     # --------------------------------------------------------------
     with torch.no_grad(): # dont compute gradient
         pred_dict = model(patch_imgs_gpu)
-        pred_dict = {k : v.permute(0, 2, 3 ,1).contiguous() for k, v in pred_dict.items()}
+        pred_dict = OrderedDict([[k, v.permute(0, 2, 3 ,1).contiguous()] for k, v in pred_dict.items()])
         pred_dict['np'] = F.softmax(pred_dict['np'], dim=-1)[...,1:] 
+        if 'tp' in pred_dict:
+            type_map = F.softmax(pred_dict['tp'], dim=-1)
+            type_map = torch.argmax(type_map, dim=-1, keepdim=True)
+            type_map = type_map.type(torch.float32)
+            pred_dict['tp'] = type_map
         pred_output = torch.cat(list(pred_dict.values()), -1)
 
     # * Its up to user to define the protocol to process the raw output per step!
     return pred_output.cpu().numpy()
     
 ####
-def viz_step_output(raw_data):
+def viz_step_output(raw_data, nr_types=None):
     """
     `raw_data` will be implicitly provided in the similar format as the 
     return dict from train/valid step, but may have been accumulated across N running step
@@ -163,6 +195,8 @@ def viz_step_output(raw_data):
     imgs = raw_data['img']
     true_np, pred_np = raw_data['np']
     true_hv, pred_hv = raw_data['hv']
+    if nr_types is not None:
+        true_tp, pred_tp = raw_data['tp']
 
     aligned_shape = [list(imgs.shape), list(true_np.shape), list(pred_np.shape)]
     aligned_shape = np.min(np.array(aligned_shape), axis=0)[1:3]
@@ -192,6 +226,8 @@ def viz_step_output(raw_data):
         true_viz_list.append(colorize(true_np[idx], 0, 1))
         true_viz_list.append(colorize(true_hv[idx][...,0], -1, 1))
         true_viz_list.append(colorize(true_hv[idx][...,1], -1, 1))
+        if nr_types is not None: # TODO: a way to pass through external info
+            true_viz_list.append(colorize(true_tp[idx], 0, nr_types))
         true_viz_list = np.concatenate(true_viz_list, axis=1)
 
         pred_viz_list = [img]
@@ -199,6 +235,8 @@ def viz_step_output(raw_data):
         pred_viz_list.append(colorize(pred_np[idx], 0, 1))
         pred_viz_list.append(colorize(pred_hv[idx][...,0], -1, 1))
         pred_viz_list.append(colorize(pred_hv[idx][...,1], -1, 1))
+        if nr_types is not None:
+            pred_viz_list.append(colorize(pred_tp[idx], 0, nr_types))
         pred_viz_list = np.concatenate(pred_viz_list, axis=1)
 
         viz_list.append(
@@ -209,35 +247,11 @@ def viz_step_output(raw_data):
 
 ####
 from itertools import chain
-def proc_valid_step_output(raw_data):
+def proc_valid_step_output(raw_data, nr_types=None):
     # TODO: add auto populate from main state track list
     track_dict = {'scalar': {}, 'image' : {}}
     def track_value(name, value, vtype): return track_dict[vtype].update({name: value})
 
-    def longlist2array(longlist):
-        tmp = list(chain.from_iterable(longlist))
-        return np.array(tmp).reshape((len(longlist),) + longlist[0].shape)
-
-    # ! factor this out
-    # def _dice(true, pred, label):
-    #     true = np.array(true == label, np.int32)
-    #     pred = np.array(pred == label, np.int32)
-    #     inter = (pred * true).sum()
-    #     total = (pred + true).sum()
-    #     return 2 * inter / (total + 1.0e-8)
-
-    # ! paging / caching problem when merging huge list ?
-    # pred_np = longlist2array(raw_data['prob_np'])
-    # true_np = longlist2array(raw_data['true_np'])
-    # nr_pixels = np.size(true_np)
-    # * NP segmentation statistic
-    # pred_np[pred_np > 0.5]  = 1.0
-    # pred_np[pred_np <= 0.5] = 0.0
-
-    # acc_np = (pred_np == true_np).sum() / nr_pixels
-    # dice_np = _dice(true_np, pred_np, 1)
-    # track_value('np_acc', acc_np, 'scalar')
-    # track_value('np_dice', dice_np, 'scalar')
     def _dice_info(true, pred, label):
         true = np.array(true == label, np.int32)
         pred = np.array(pred == label, np.int32)
@@ -265,6 +279,22 @@ def proc_valid_step_output(raw_data):
     track_value('np_acc', acc_np, 'scalar')
     track_value('np_dice', dice_np, 'scalar')
 
+    # * TP statistic
+    if nr_types is not None:
+        pred_tp = raw_data['pred_tp']
+        true_tp = raw_data['true_tp']
+        for type_id in range(0, nr_types):
+            over_inter = 0
+            over_total = 0
+            for idx in range(len(raw_data['true_np'])):
+                patch_pred_tp = pred_tp[idx]
+                patch_true_tp = true_tp[idx]
+                inter, total = _dice_info(patch_true_tp, patch_pred_tp, type_id)
+                over_inter += inter
+                over_total += total
+            dice_tp = 2 * over_inter / (over_total + 1.0e-8)
+            track_value('tp_dice_%d' % type_id, dice_tp, 'scalar')
+
     # * HV regression statistic
     pred_hv = raw_data['pred_hv']
     true_hv = raw_data['true_hv']
@@ -279,12 +309,6 @@ def proc_valid_step_output(raw_data):
     mse = over_squared_error / nr_pixels
     track_value('hv_mse', mse, 'scalar')
 
-    # pred_hv = longlist2array(raw_data['pred_hv'])
-    # true_hv = longlist2array(raw_data['true_hv'])
-    # error = pred_hv - true_hv
-    # mse = np.sum(error * error) / nr_pixels
-    # track_value('hv_mse', mse, 'scalar')
-
     # *
     imgs = raw_data['imgs']
     selected_idx = np.random.randint(0, len(imgs), size=(8,)).tolist()
@@ -298,7 +322,12 @@ def proc_valid_step_output(raw_data):
         'np' : (true_np, prob_np),
         'hv' : (true_hv, pred_hv)
     }
-    viz_fig = viz_step_output(viz_raw_data)
+
+    if nr_types is not None:
+        true_tp = np.array([true_tp[idx] for idx in selected_idx])
+        pred_tp = np.array([pred_tp[idx] for idx in selected_idx])
+        viz_raw_data['tp'] = (true_tp, pred_tp) 
+    viz_fig = viz_step_output(viz_raw_data, nr_types)
     track_dict['image']['output'] = viz_fig
 
     return track_dict

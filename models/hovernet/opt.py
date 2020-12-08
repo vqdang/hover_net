@@ -1,6 +1,5 @@
 import torch.optim as optim
 
-from models.hovernet.net_desc import HoVerNet
 from run_utils.callbacks.base import (AccumulateRawOutput, CheckpointSaver,
                                       ProcessAccumulatedRawOutput,
                                       ScalarMovingAverage, ScheduleLr, TrackLr,
@@ -8,6 +7,8 @@ from run_utils.callbacks.base import (AccumulateRawOutput, CheckpointSaver,
 from run_utils.callbacks.logging import LoggingEpochOutput, LoggingGradient
 from run_utils.engine import Events
 
+from .targets import gen_targets, prep_sample
+from .net_desc import create_model
 from .run_desc import (proc_valid_step_output, train_step, valid_step,
                        viz_step_output)
 
@@ -24,7 +25,8 @@ train_config = {
             'run_info': {
                 # may need more dynamic for each network
                 'net': {
-                    'desc': lambda: HoVerNet(freeze=True),
+                    'desc': lambda: create_model(input_ch=3, nr_types=5,
+                                                 freeze=True, mode='pannuke'),
                     'optimizer': [
                         optim.Adam,
                         {  # should match keyword for parameters within the optimizer
@@ -34,6 +36,7 @@ train_config = {
                     ],
                     # learning rate scheduler
                     'lr_scheduler': lambda x: optim.lr_scheduler.StepLR(x, 25),
+                    
                     'extra_info' : {
                         'loss' : {
                             'np' : {
@@ -44,6 +47,10 @@ train_config = {
                                 'mse'  : 1, 
                                 'msge' : 1
                             },
+                            'tp' : {
+                                'bce'  : 1, 
+                                'dice' : 1
+                            }, 
                         },
                     },
 
@@ -53,10 +60,14 @@ train_config = {
                     # 'pretrained': None,
                 },
             },
+            'target_info': { 
+                'gen' : (gen_targets, {}), 
+                'viz' : (prep_sample, {})
+            },
 
             'batch_size' : { # engine name : value
-                'train' : 16,
-                'valid' : 16,
+                'train' : 32,
+                'valid' : 32,
             },
             'nr_epochs': 50,
         },
@@ -65,7 +76,8 @@ train_config = {
             'run_info': {
                 # may need more dynamic for each network
                 'net': {
-                    'desc': lambda: HoVerNet(freeze=False),
+                    'desc': lambda: create_model(input_ch=3, nr_types=5, 
+                                                 freeze=False, mode='pannuke'),
                     'optimizer': [
                         optim.Adam,
                         {  # should match keyword for parameters within the optimizer
@@ -75,6 +87,7 @@ train_config = {
                     ],
                     # learning rate scheduler
                     'lr_scheduler': lambda x: optim.lr_scheduler.StepLR(x, 25),
+   
                     'extra_info' : {
                         'loss' : {
                             'np' : {
@@ -85,6 +98,10 @@ train_config = {
                                 'mse'  : 1, 
                                 'msge' : 1
                             },
+                            'tp' : {
+                                'bce'  : 1, 
+                                'dice' : 1
+                            }, 
                         },
                     },
 
@@ -93,10 +110,14 @@ train_config = {
                     'pretrained': -1,
                 },
             },
+            'target_info': { 
+                'gen' : (gen_targets, {}), 
+                'viz' : (prep_sample, {})
+            },
 
             'batch_size' : {
-                'train' : 8,
-                'valid' : 16,
+                'train' : 16,
+                'valid' : 32,
             },
             'nr_epochs': 50,
         }
@@ -145,7 +166,7 @@ train_config = {
                     AccumulateRawOutput(),
                 ],
                 Events.EPOCH_COMPLETED: [
-                    ProcessAccumulatedRawOutput(proc_valid_step_output),
+                    ProcessAccumulatedRawOutput(lambda a : proc_valid_step_output(a, nr_types=6)),
                     LoggingEpochOutput(),
                 ]
             },

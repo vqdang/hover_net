@@ -23,40 +23,39 @@ class Config(object):
         model_name = 'hovernet'
 
         # whether to predict the nuclear type, availability depending on dataset!
-        self.type_classification = False
+        self.type_classification = True
 
-        # determines which dataset to be used during training / inference. The appropriate class
-        # is initialised in dataset.py. Refer to dataset.py for info regarding data paths. Currently 
-        # implemented: 'Kumar', 'CPM17', 'CoNSeP'. If using additional datasets, an appropriate 
-        # class must be added in dataset.py
-        self.dataset_name = 'CoNSeP' 
+        aug_shape = [540, 540]
+        act_shape = [256, 256]
+        out_shape = [164, 164]
 
-        # TODO:  self meta tagging and hash code for exp run
-        # log directory where checkpoints are saved
-        self.log_dir = 'exp_output/dump/'
+        self.dataset_name = 'pannuke_full_v0' 
+        self.log_dir = 'exp_output/models/hovernet/continual_data=[v0.0]_run=[v0.1]/'
+        # self.log_dir = 'exp_output/models/dump/'
 
         self.train_dir_list = [
-            'dataset/train/consep/train/540x540_80x80/'
+            # 'dataset/training_data/pannuke_full_v0/fold_1/540x540_164x164/',
+            # 'dataset/training_data/pannuke_full_v0/fold_2/540x540_164x164/'
+
+            'dataset/training_data/continual_v0.0/rmt/train/540x540_164x164'
         ]
         self.valid_dir_list = [
-            'dataset/train/consep/valid/540x540_80x80/'
+            # 'dataset/training_data/pannuke_full_v0/fold_3/540x540_164x164/'
+
+            'dataset/training_data/continual_v0.0/rmt/valid/540x540_164x164'
         ]
 
         self.shape_info = {
             'train': {
-                'input_shape': [270, 270],
-                'mask_shape': [80, 80],
+                'input_shape': act_shape,
+                'mask_shape' : out_shape,
             },
             'valid': {
-                'input_shape': [270, 270],
-                'mask_shape': [80, 80],
+                'input_shape': act_shape,
+                'mask_shape' : out_shape,
             },
-            'test': {
-                'input_shape': [270, 270],
-                'mask_shape': [80, 80],
-            }
         }
 
         # * parsing config to the running state and set up associated variables
         self.dataset = get_dataset(self.dataset_name)
-        self.model_config_file = importlib.import_module('models.%s.opt' % model_name)
+        self.model_config_file = importlib.import_module('models.%s.opt_continual_v00' % model_name)

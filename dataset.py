@@ -51,60 +51,71 @@ class __Kumar(object):
         ann_inst = ann_inst.astype('int32')
         ann = np.expand_dims(ann_inst, -1)
         return ann
-
-
 ####
-class __CPM17(object):
+class __RMT(object):
     """
-    Defines the CPM 2017 dataset as originally introduced in:
+    Defines the CoNSeP dataset as originally introduced in:
 
-    Vu, Quoc Dang, Simon Graham, Tahsin Kurc, Minh Nguyen Nhat To, Muhammad Shaban, 
-    Talha Qaiser, Navid Alemi Koohbanani et al. "Methods for segmentation and classification 
-    of digital microscopy tissue images." Frontiers in bioengineering and biotechnology 7 (2019).
+    Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Ayesha Azam, Yee Wah Tsang, Jin Tae Kwak, 
+    and Nasir Rajpoot. "Hover-Net: Simultaneous segmentation and classification of nuclei 
+    in multi-tissue histology images." Medical Image Analysis 58 (2019): 101563.
     """
-    def __init__(self):
-        self.data_root = 'dataset'
+    def __init__(self, version_code=''):
+
+        self.data_root = 'dataset/rmt/'
         self.desc = {
             'train':
                 {
-                    'img': ('.png', self.data_root + '/cpm17/train/Images/'),
-                    'ann': ('.mat', self.data_root + '/cpm17/train/Labels/')
+                    'img': ('.png', self.data_root + 'sample/imgs/'),
+                    'ann': ('.npy', self.data_root + '%s/split/train/' % version_code)
                 },
             'valid':
                 {
-                    'img': ('.png', self.data_root + '/cpm17/test/Images/'),
-                    'ann': ('.mat', self.data_root + '/cpm17/test/Labels/')
+                    'img': ('.png', self.data_root + 'sample/imgs/'),
+                    'ann': ('.npy', self.data_root + '%s/split/valid/' % version_code)
                 },
         }
 
-        self.train_dir_list = [
-            self.data_root + '/cpm17/patches/train/']
-        self.valid_dir_list = [
-            self.data_root + '/cpm17/patches/valid/']
+        self.nr_types = 4
 
-        self.nr_types = None  # no classification labels
-
-        # used for determining the colour of contours in overlay
         self.type_colour = {
-            0: (0, 0, 0),
-            1: (255, 255, 0),
+            0 : (0  ,   0,   0), 
+            1 : (255,   0,   0), # neoplastic
+            2 : (0  , 255,   0), # inflamm
+            3 : (0  ,   0, 255), # connective
+            4 : (255, 255,   0), # dead
+            5 : (255, 165,   0), # non-neoplastic epithelial
         }
 
+        self.nuclei_type_dict = {
+            'Epithelium'     : 1,
+            'Inflammatory'   : 2,
+            'Connective'     : 3,
+            'Dead'           : 4,
+        }
 
-    def load_img(self, path):
-        return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
+    def load_img(self, path): # to ensure x40
+        try:
+            img = cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
+            img = cv2.resize(img, (0, 0), fx=2.0, fy=2.0)
+        except:
+            print('Error:', path)
+            assert False
+        return img
 
     def load_ann(self, path, with_type=False):
-        assert not with_type, "Not support"
-        # assumes that ann is HxW
-        ann_inst = sio.loadmat(path)['inst_map']
-        ann_inst = ann_inst.astype('int32')
-        ann = np.expand_dims(ann_inst, -1)
+        # assumes that ann is HxWx2
+        ann = np.load(path) 
+        # print(np.unique(ann[...,1]))
+        if not with_type:
+            ann = ann[...,:0]
+            ann = np.expand_dims(ann, -1)
+            ann = ann.astype('int32')
+        ann = cv2.resize(ann, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_NEAREST)
         return ann
 
-
 ####
-class __CoNSeP(object):
+class __Pannuke(object):
     """
     Defines the CoNSeP dataset as originally introduced in:
 
@@ -113,36 +124,42 @@ class __CoNSeP(object):
     in multi-tissue histology images." Medical Image Analysis 58 (2019): 101563.
     """
     def __init__(self):
-        self.data_root = 'dataset'
+        self.data_root = '../../dataset/pannuke_full/'
         self.desc = {
-            'train':
+            'fold_1':
                 {
-                    'img': ('.png', self.data_root + '/consep/Train/Images/'),
-                    'ann': ('.mat', self.data_root + '/consep/Train/Labels/')
+                    'img': ('.jpg', self.data_root + 'fold_1/imgs/'),
+                    'ann': ('.npy', self.data_root + 'fold_1/anns/')
                 },
-            'valid':
+            'fold_2':
                 {
-                    'img': ('.png', self.data_root + '/consep/Test/Images/'),
-                    'ann': ('.mat', self.data_root + '/consep/Test/Labels/')
+                    'img': ('.jpg', self.data_root + 'fold_2/imgs/'),
+                    'ann': ('.npy', self.data_root + 'fold_2/anns/')
+                },
+            'fold_3':
+                {
+                    'img': ('.jpg', self.data_root + 'fold_3/imgs/'),
+                    'ann': ('.npy', self.data_root + 'fold_3/anns/')
                 },
         }
 
-        self.nr_types = 5
+        self.nr_types = 6
 
         self.type_colour = {
-            0: (  0,   0,   0),
-            1: (255,   0,   0),
-            2: (  0, 255,   0),
-            3: (  0,   0, 255),
-            4: (255, 255,   0),
-            5: (255, 165,   0)
+            0 : (0  ,   0,   0), 
+            1 : (255,   0,   0), # neoplastic
+            2 : (0  , 255,   0), # inflamm
+            3 : (0  ,   0, 255), # connective
+            4 : (255, 255,   0), # dead
+            5 : (255, 165,   0), # non-neoplastic epithelial
         }
 
         self.nuclei_type_dict = {
-            'Miscellaneous': 1,
-            'Inflammatory': 2,
-            'Epithelial': 3,
-            'Spindle': 4,
+            'Neoplastic'     : 1,
+            'Inflammatory'   : 2,
+            'Connective'     : 3,
+            'Dead'           : 4,
+            'Non-Neoplastic' : 5,
         }
         assert len(self.nuclei_type_dict.values()) == self.nr_types - 1
 
@@ -151,34 +168,23 @@ class __CoNSeP(object):
 
     def load_ann(self, path, with_type=False):
         # assumes that ann is HxW
-        ann_inst = sio.loadmat(path)['inst_map']
-        if with_type:
-            ann_type = sio.loadmat(path)['type_map']
-
-            # merge classes for CoNSeP (in paper we only utilise 3 nuclei classes and background)
-            # If own dataset is used, then the below may need to be modified
-            ann_type[(ann_type == 3) | (ann_type == 4)] = 3
-            ann_type[(ann_type == 5) | (ann_type == 6) | (ann_type == 7)] = 4
-
-            ann = np.dstack([ann_inst, ann_type])
+        ann = np.load(path) 
+        if not with_type:
+            ann = ann[...,:0]
+            ann = np.expand_dims(ann, -1)
             ann = ann.astype('int32')
-        else:
-            ann = np.expand_dims(ann_inst, -1)
-            ann = ann.astype('int32')
-
         return ann
 
-
 ####
-def get_dataset(name):
+def get_dataset(name, **kwargs):
     """
     Return a pre-defined dataset object associated with `name`
     """
     if name.lower() == 'kumar':
         return __Kumar()
-    elif name.lower() == 'cpm17':
-        return __CPM17()
-    elif name.lower() == 'consep':
-        return __CoNSeP()
+    if name.lower() == 'rmt':
+        return __RMT(**kwargs)
+    elif 'pannuke' in name.lower():
+        return __Pannuke()
     else:
         assert False, "Unknown dataset `%s`" % name

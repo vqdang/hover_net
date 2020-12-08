@@ -3,7 +3,7 @@
 Patch extraction script.
 """
 
-
+import re
 import glob
 import os
 import tqdm
@@ -21,24 +21,30 @@ if __name__ == '__main__':
     # Determines whether to extract type map (only applicable to datasets with class labels).
     type_classification = True 
 
-    save_root = ""
-    win_size = [540, 540]    # Size of patch to extract. Should be at least twice time larger than
-                            # self.train_base_shape(config.py) to reduce the padding effect during augmentation. 
-    step_size = [80, 80]     # Step size for patch extraction. Should match network output size. 
-    dataset_name = 'consep'   # Name of dataset - use Kumar, CPM17 or CoNSeP. Pulls dataset info from dataset.py
+    # save_root = ""
+    # win_size = [540, 540]    # Size of patch to extract. Should be at least twice time larger than
+    #                          # self.train_base_shape(config.py) to reduce the padding effect during augmentation. 
+    # step_size = [80, 80]     # Step size for patch extraction. Should match network output size. 
+    # dataset_name = 'consep'   # Name of dataset - use Kumar, CPM17 or CoNSeP. Pulls dataset info from dataset.py
+    # extract_type = 'mirror'  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
+
+    win_size  = [540, 540]         
+    step_size = [164, 164]        
     extract_type = 'mirror'  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
+    dataset_name = 'rmt' # Name of dataset - use Kumar, CPM17 or CoNSeP. Pulls dataset info from dataset.py
+    dataset_kwargs = {'version_code' : 'continual_v0.0'}
+    save_root = "dataset/training_data/%s/" % dataset_kwargs['version_code']
 
     xtractor = PatchExtractor(win_size, step_size)
-
-    dataset_info = get_dataset(dataset_name)
+    dataset_info = get_dataset(dataset_name, **dataset_kwargs)
     for dir_codename, dir_desc in dataset_info.desc.items():
         img_ext, img_dir = dir_desc['img']
         ann_ext, ann_dir = dir_desc['ann']
 
-        out_dir = "%s/train/%s/%s/%dx%d_%dx%d/" % \
+        out_dir = "%s/%s/%s/%dx%d_%dx%d/" % \
                     (save_root, dataset_name, dir_codename,
                     win_size[0], win_size[1], step_size[0], step_size[1])
-        file_list = glob.glob('%s/*%s' % (img_dir, img_ext))
+        file_list = glob.glob('%s/*%s' % (ann_dir, ann_ext))
         file_list.sort() # ensure same ordering across platform
 
         rm_n_mkdir(out_dir)
@@ -49,10 +55,11 @@ if __name__ == '__main__':
         for file_idx, filename in enumerate(file_list):
             filename = os.path.basename(filename)
             basename = filename.split('.')[0]
-
+            
             img = dataset_info.load_img(img_dir + basename + img_ext)
             ann = dataset_info.load_ann(ann_dir + basename + ann_ext, type_classification)
 
+            # *
             img = np.concatenate([img, ann], axis=-1)
             sub_patches = xtractor.extract(img, extract_type)
 
@@ -63,6 +70,7 @@ if __name__ == '__main__':
                 np.save("{0}/{1}_{2:03d}.npy".format(out_dir, basename, idx), patch)
                 pbar.update()
             pbar.close()
+            # *
 
             pbarx.update()
         pbarx.close()

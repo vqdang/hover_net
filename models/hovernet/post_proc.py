@@ -91,10 +91,9 @@ def process(pred_map, nr_types=None, return_centroids=False):
     """
 
     if nr_types is not None:
-        pred_inst = pred_map[..., nr_types:]
-        pred_type = pred_map[..., :nr_types]
-        pred_type = np.argmax(pred_type, axis=-1)
-        pred_type = np.squeeze(pred_type)
+        pred_type = pred_map[..., :1]
+        pred_inst = pred_map[..., 1:]
+        pred_type = pred_type.astype(np.int32)
     else:
         pred_inst = pred_map
 
@@ -133,10 +132,10 @@ def process(pred_map, nr_types=None, return_centroids=False):
     if nr_types is not None:
         #### * Get class of each instance id, stored at index id-1
         for idx, inst_id in enumerate(inst_id_list):
-            rmin, cmin, rmax, cmax = (inst_info_dict[idx]['bbox']).flatten()
+            rmin, cmin, rmax, cmax = (inst_info_dict[inst_id]['bbox']).flatten()
             inst_map_crop  = pred_inst[rmin:rmax, cmin:cmax] 
             inst_type_crop = pred_type[rmin:rmax, cmin:cmax]
-            inst_map_crop = inst_map_crop == inst_id
+            inst_map_crop = inst_map_crop == inst_id # TODO: duplicated operation, may be expensive
             inst_type = inst_type_crop[inst_map_crop]
             type_list, type_pixels = np.unique(inst_type, return_counts=True)
             type_list = list(zip(type_list, type_pixels))
@@ -145,7 +144,7 @@ def process(pred_map, nr_types=None, return_centroids=False):
             if inst_type == 0: # ! pick the 2nd most dominant if exist
                 if len(type_list) > 1:
                     inst_type = type_list[1][0]
-            inst_info_dict[inst_id]['type'] = inst_type
+            inst_info_dict[inst_id]['type'] = int(inst_type)
     
     # print('here')
     # ! WARNING: ID MAY NOT BE CONTIGUOUS

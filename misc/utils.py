@@ -45,6 +45,10 @@ def rm_n_mkdir(dir_path):
         shutil.rmtree(dir_path)
     os.makedirs(dir_path)
 
+####
+def mkdir(dir_path):
+    if (not os.path.isdir(dir_path)):
+        os.makedirs(dir_path)
 
 ####
 def get_files(data_dir_list, data_ext):
@@ -88,3 +92,27 @@ def center_pad_to_shape(img, size, cval=255):
         pad_shape = (pad_h, pad_w, (0, 0))
     img = np.pad(img, pad_shape, 'constant', constant_values=cval)
     return img
+
+####
+def color_deconvolution(rgb, stain_mat):
+    log255 = np.log(255) # to base 10, not base e
+    rgb_float = rgb.astype(np.float64)
+    log_rgb = -((255.0 * np.log((rgb_float+1) / 255.0)) / log255)
+    output = np.exp(-(log_rgb @ stain_mat - 255.0) * log255 / 255.0)
+    output[output > 255] = 255
+    output = np.floor(output + 0.5).astype('uint8')
+    return output
+
+####
+def check_available_subject(listA, listB):
+    subject_code_setA = set(listA)
+    subject_code_setB = set(listB)
+    subject_code_list = set.intersection(subject_code_setA, subject_code_setB)
+    subject_code_list = list(subject_code_list)
+    subject_code_list.sort()
+    in_A_not_in_B = list(subject_code_setA - subject_code_setB)
+    in_B_not_in_A = list(subject_code_setB - subject_code_setA)
+    in_A_not_in_B.sort()
+    in_B_not_in_A.sort()
+    # in_A_not_in_B, in_B_not_in_A, intersection
+    return in_A_not_in_B, in_B_not_in_A, subject_code_list

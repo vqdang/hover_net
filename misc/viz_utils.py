@@ -11,6 +11,22 @@ from matplotlib import cm
 from .utils import get_bounding_box
 
 ####
+def colorize(ch, vmin, vmax):
+    """
+    Will clamp value value outside the provided range to vmax and vmin
+    """
+    cmap = plt.get_cmap('jet')
+    ch = np.squeeze(ch.astype('float32'))
+    vmin = vmin if vmin is not None else ch.min()
+    vmax = vmax if vmax is not None else ch.max()
+    ch[ch > vmax] = vmax # clamp value
+    ch[ch < vmin] = vmin
+    ch = (ch - vmin) / (vmax - vmin + 1.0e-16)
+    # take RGB from RGBA heat map
+    ch_cmap = (cmap(ch)[...,:3] * 255).astype('uint8')
+    return ch_cmap
+    
+####
 def random_colors(N, bright=True):
     """
     Generate random colors.
@@ -69,8 +85,10 @@ def visualize_instances_map(input_image, inst_map, type_map=None, type_colour=No
     return overlay
 
 ####
-def visualize_instances_dict(input_image, inst_dict, type_colour=None, line_thickness=2):
-    overlay = np.copy((input_image).astype(np.uint8))
+def visualize_instances_dict(input_image, inst_dict, 
+                    draw_dot=False, id_as_color=False,
+                    type_colour=None, line_thickness=2):
+    overlay = np.copy((input_image))
 
     inst_rng_colors = random_colors(len(inst_dict))
     inst_rng_colors = np.array(inst_rng_colors) * 255
@@ -82,7 +100,14 @@ def visualize_instances_dict(input_image, inst_dict, type_colour=None, line_thic
             inst_colour = type_colour[inst_info['type']]
         else:
             inst_colour = (inst_rng_colors[idx]).tolist()
+        if id_as_color:
+            inst_colour = idx+1
         cv2.drawContours(overlay, [inst_contour], -1, inst_colour, line_thickness)
+
+        if draw_dot:
+            inst_centroid = inst_info['centroid']
+            inst_centroid = tuple([int(v) for v in inst_centroid])
+            overlay = cv2.circle(overlay, inst_centroid, 3, (255, 0, 0), -1)
     return overlay
     
 ####

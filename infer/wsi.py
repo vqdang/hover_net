@@ -149,7 +149,7 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
     chunk_pred_map = wsi_pred_map_ptr[chunk_info[1][0][0]: chunk_info[1][1][0],
                                       chunk_info[1][0][1]: chunk_info[1][1][1]] 
     if patch_output_list is None:
-        chunk_pred_map[:] = 0 # zero flush when there is no-results
+        # chunk_pred_map[:] = 0 # zero flush when there is no-results
         print(chunk_info.flatten(), 'flush 0')
         return
 
@@ -165,7 +165,7 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
 ####
 class InferManager(base.InferManager):
 
-    def __run_model(self, patch_top_left_list):
+    def __run_model(self, patch_top_left_list, pbar_desc):
         # TODO: the cost of creating dataloader may not be cheap ?
         dataset = SerializeArray('%s/cache_chunk.npy' % self.cache_path, 
                                 patch_top_left_list, self.patch_input_shape)
@@ -175,7 +175,7 @@ class InferManager(base.InferManager):
                             batch_size=self.batch_size,
                             drop_last=False)
 
-        pbar = tqdm.tqdm(desc='Process Patches', leave=True,
+        pbar = tqdm.tqdm(desc=pbar_desc, leave=True,
                     total=int(len(dataloader)), 
                     ncols=80, ascii=True, position=0)
 
@@ -220,7 +220,8 @@ class InferManager(base.InferManager):
         wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.cache_path
 
         masking = lambda x, a, b: (a <= x) & (x <= b)
-        for chunk_info in chunk_info_list:
+        for idx in range(0, chunk_info_list.shape[0]): 
+            chunk_info = chunk_info_list[idx]
             # select patch basing on top left coordinate of input
             start_coord = chunk_info[0,0]
             end_coord = chunk_info[0,1] - self.patch_input_shape
@@ -239,12 +240,13 @@ class InferManager(base.InferManager):
 
             # shift the coordinare from wrt slide to wrt chunk
             chunk_patch_info_list -= chunk_info[:,0]
-            chunk_data = self.wsi_handler.read_region(chunk_info[0][0][::-1], self.wsi_proc_mag, 
-                                                     (chunk_info[0][1] - chunk_info[0][0])[::-1])
+            chunk_data = self.wsi_handler.read_region(chunk_info[0][0][::-1], 
+                                        (chunk_info[0][1] - chunk_info[0][0])[::-1])
             chunk_data = np.array(chunk_data)[...,:3]
             np.save('%s/cache_chunk.npy' % self.cache_path, chunk_data)
 
-            patch_output_list = self.__run_model(chunk_patch_info_list[:,0,0])
+            pbar_desc = 'Process Chunk %d/%d' % (idx, chunk_info_list.shape[0])
+            patch_output_list = self.__run_model(chunk_patch_info_list[:,0,0], pbar_desc)
 
             proc_pool.apply_async(_assemble_and_flush, 
                                     args=(wsi_pred_map_mmap_path, 
@@ -266,7 +268,7 @@ class InferManager(base.InferManager):
 
             tile_info = (idx, tile_tl, tile_br)
             func_kwargs = {
-                'nr_types' : None,
+                'nr_types' : self.method['model_args']['nr_types'],
                 'return_centroids' : True
             }
 
@@ -305,33 +307,50 @@ class InferManager(base.InferManager):
         wsi_ext = wsi_path.split('.')[-1]
         wsi_name = os.path.basename(wsi_path).split('.')[0] # TODO: better way to handle compound namme
 
+        start = time.perf_counter()
+        self.wsi_proc_mag = 40
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
-        # TODO: customize read lv
-        self.wsi_proc_mag   = 0 # w.r.t source magnification
-        self.wsi_proc_shape = self.wsi_handler.metadata['level_dims'][self.wsi_proc_mag] 
+        self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.wsi_proc_mag)
+        self.wsi_handler.prepare_reading(read_mag=self.wsi_proc_mag, 
+                            cache_path='%s/src_wsi.npy' % self.cache_path)
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1]) # to Y, X
 
-        if os.path.isfile(msk_path):
+        if msk_path is not None and os.path.isfile(msk_path):
             self.wsi_mask = cv2.imread(msk_path)
             self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
             self.wsi_mask[self.wsi_mask > 0] = 1
         else:
             print('WARNING: No mask found, processing entire WSI including background !!')
+
+            from skimage import morphology
+            # simple method to extract tissue regions using intensity thresholding and morphological operations
+            def simple_get_mask():
+                wsi_thumb_rgb = self.wsi_handler.get_full_img(read_mag=scaled_wsi_mag)
+                gray = cv2.cvtColor(wsi_thumb_rgb, cv2.COLOR_RGB2GRAY)
+                _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU)
+                mask = morphology.remove_small_objects(mask == 0, min_size=16 * 16, connectivity=2)
+                mask = morphology.remove_small_holes(mask, area_threshold=128 * 128)
+                mask = morphology.binary_dilation(mask, morphology.disk(16))
+                return mask
+            # scaled_wsi_mag = 5
+            scaled_wsi_mag = 1.25
             # create a dummy array to use the entire wsi
-            scaled_wsi_shape = self.wsi_proc_shape * 0.25 # at least will be 10x when doing 40x
-            scaled_wsi_shape = scaled_wsi_shape.astype(np.int32)
-            self.wsi_mask = np.ones(scaled_wsi_shape, dtype=np.uint8)
+            # scaled_wsi_shape = self.wsi_handler.get_dimensions(scaled_wsi_mag)[::-1]
+            # self.wsi_mask = np.ones(scaled_wsi_shape, dtype=np.uint8)
+            self.wsi_mask = np.array(simple_get_mask() > 0, dtype=np.uint8)
+        cv2.imwrite('%s/%s.png' % (output_path, wsi_name), self.wsi_mask * 255)
 
         # * declare holder for output
         # create a memory-mapped .npy file with the predefined dimensions and dtype
-        out_ch = 3 # TODO: dynamicalize this, retrieve from model?
+        # TODO: dynamicalize this, retrieve from model?
+        out_ch = 3 if self.method['model_args']['nr_types'] is None else 4
         self.wsi_inst_info  = {} 
         # TODO: option to use entire RAM if users have too much available, would be faster than mmap
         self.wsi_inst_map = np.lib.format.open_memmap(
                                             '%s/pred_inst.npy' % self.cache_path, mode='w+',
                                             shape=tuple(self.wsi_proc_shape), 
                                             dtype=np.int32)
-        self.wsi_inst_map[:] = 0 # flush fill
+        # self.wsi_inst_map[:] = 0 # flush fill
 
         # warning, the value within this is uninitialized
         self.wsi_pred_map = np.lib.format.open_memmap(
@@ -339,6 +358,8 @@ class InferManager(base.InferManager):
                                             shape=tuple(self.wsi_proc_shape) + (out_ch,), 
                                             dtype=np.float32)
         # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
+        end = time.perf_counter()
+        print('Preparing Input Output Placement: ', end - start)
         
         # * raw prediction
         start = time.perf_counter()
@@ -365,6 +386,7 @@ class InferManager(base.InferManager):
             pred_inst, inst_info_dict = results
 
             if len(inst_info_dict) == 0:
+                pbar.update() # external
                 return # when there is nothing to do
 
             top_left = pos_args[1][::-1]
@@ -396,6 +418,7 @@ class InferManager(base.InferManager):
             pred_inst, inst_info_dict = results
 
             if len(inst_info_dict) == 0:
+                pbar.update() # external
                 return # when there is nothing to do
 
             top_left = pos_args[1][::-1]
@@ -480,6 +503,7 @@ class InferManager(base.InferManager):
         print('Post Proc Time: ', end - start)
 
         # ! cant possiblt save the inst map at high res, too large
+        start = time.perf_counter()
         json_dict = {}
         for inst_id, inst_info in self.wsi_inst_info.items():
             new_inst_info = {}
@@ -489,8 +513,15 @@ class InferManager(base.InferManager):
                     info_value = info_value.tolist()
                 new_inst_info[info_name] = info_value
             json_dict[int(inst_id)] = new_inst_info
-        with open('%s/%s_nuclei_dict.json' % (output_path, wsi_name), 'w') as handle:
+        json_dict = {
+            'mag' : self.wsi_proc_mag,
+            'nuc' : json_dict
+        }
+
+        with open('%s/%s.json' % (output_path, wsi_name), 'w') as handle:
             json.dump(json_dict, handle)
+        end = time.perf_counter()
+        print('Post Proc Time: ', end - start)
 
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
@@ -502,10 +533,14 @@ class InferManager(base.InferManager):
 
         wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
-        for wsi_path in wsi_path_list:
-            print(wsi_path)
+        for wsi_path in wsi_path_list[:]:
             # TODO: may not work, such as when name is TCGA etc.
             wsi_base_name = os.path.basename(wsi_path).split('.')[0]
+            # if wsi_base_name not in name_list: continue
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
+            print(wsi_path)
+            output_file = '%s/%s.json' % (self.output_dir, wsi_base_name)
+            if os.path.exists(output_file): continue
             self.process_single_file(wsi_path, msk_path, self.output_dir)
+        rm_n_mkdir(self.cache_path) # clean up all cache
         return

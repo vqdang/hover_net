@@ -1,30 +1,32 @@
-import warnings
-warnings.filterwarnings('ignore') 
-
-from multiprocessing import Pool, Lock
 import multiprocessing
+from multiprocessing import Lock, Pool
 multiprocessing.set_start_method('spawn', True) # ! must be at top for VScode debugging
+
 import argparse
 import glob
-from importlib import import_module
+import json
 import math
 import os
-import sys
+import pickle
 import re
+import sys
+import warnings
+from functools import reduce
+from importlib import import_module
 
 import cv2
 import numpy as np
+import psutil
 import scipy.io as sio
 import torch
 import torch.utils.data as data
 import tqdm
-import psutil
-from dataloader.infer_loader import SerializeFileList, SerializeArray
-from functools import reduce
-import pickle
+from skimage import color
 
-from misc.utils import rm_n_mkdir, cropping_center, get_bounding_box
-from misc.viz_utils import visualize_instances_dict
+from dataloader.infer_loader import SerializeArray, SerializeFileList
+from misc.utils import (color_deconvolution, cropping_center, get_bounding_box,
+                        rm_n_mkdir)
+from misc.viz_utils import colorize, visualize_instances_dict
 
 from . import base
 
@@ -101,11 +103,12 @@ def _post_process_patches(post_proc_func, patch_info, src_info, get_overlaid=Fal
 
     overlaid_img = None
     if get_overlaid:
-        overlaid_img = visualize_instances_dict(src_image, 
-                                            inst_info_dict, 
-                                            type_colour=type_colour)
+        overlaid_img = visualize_instances_dict(src_image.copy(), inst_info_dict, draw_dot=True,
+                                            type_colour=type_colour, line_thickness=1)
+    canvas = np.zeros(src_image.shape, dtype=np.uint8)
+    color_inst_map = visualize_instances_dict(canvas, inst_info_dict, type_colour=None, line_thickness=-1)
 
-    return [pred_inst, inst_info_dict , overlaid_img], args
+    return [pred_inst, inst_info_dict , overlaid_img, pred_map, color_inst_map], args
     
 class InferManager(base.InferManager):
     """
@@ -133,16 +136,37 @@ class InferManager(base.InferManager):
             output format is implicit assumption
             """
             results, args = args # TODO: args is not very intuitive
-            pred_inst, inst_info_dict, overlaid = results
+            pred_inst, inst_info_dict, overlaid, pred_raw, color_inst_map = results
 
             base_name = args[0]
+            # value_range = [(0, 1), (-1, 1), (-1, 1)]
+            # for idx in range(pred_raw.shape[-1]):
+            #     pred_ch = pred_raw[...,idx]
+            #     ch_range = value_range[idx]
+            #     pred_ch = colorize(pred_ch, value_range[idx][0], value_range[idx][1])            
+            #     pred_ch = cv2.cvtColor(pred_ch, cv2.COLOR_RGB2BGR)
+            #     cv2.imwrite('%s/%s_ch%d.png' % (self.output_dir, base_name, idx), pred_ch)
+
             if overlaid is not None:
                 overlaid = cv2.cvtColor(overlaid, cv2.COLOR_RGB2BGR)
                 cv2.imwrite('%s/%s.png' % (self.output_dir, base_name), overlaid)
+            color_inst_map = cv2.cvtColor(color_inst_map, cv2.COLOR_RGB2BGR)
+            cv2.imwrite('%s/%s-inst.png' % (self.output_dir, base_name), color_inst_map)
+            np.save('%s/%s_raw.npy' % (self.output_dir, base_name), pred_raw)
             sio.savemat('%s/%s.mat' % (self.output_dir, base_name), {'inst_map': pred_inst})
-            # TODO: human readable ? but JSON is not good for large files
-            with open('%s/%s.pickle' % (self.output_dir, base_name), 'wb') as handle:
-                pickle.dump(inst_info_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            # TODO: refactor out to sync with WSI code
+            json_dict = {}
+            for inst_id, inst_info in inst_info_dict.items():
+                new_inst_info = {}
+                for info_name, info_value in inst_info.items():
+                    # convert to jsonable
+                    if isinstance(info_value, np.ndarray):
+                        info_value = info_value.tolist()
+                    new_inst_info[info_name] = info_value
+                json_dict[int(inst_id)] = new_inst_info
+            with open('%s/%s.json' % (self.output_dir, base_name), 'w') as handle:
+                json.dump(json_dict, handle)
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
             item_counter = 0
@@ -188,8 +212,15 @@ class InferManager(base.InferManager):
                 file_path = file_path_list.pop(0)
 
                 img = cv2.imread(file_path)
-                src_shape = img.shape
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+                # he_ch = 255 - color_deconvolution(img, color.hdx_from_rgb)[...,0]
+                # img = np.concatenate([img, he_ch[...,None]], axis=-1)
+
+                # TODO: provide external resize or sthg !
+                img = cv2.resize(img, (0, 0), fx=2.0, fy=2.0)
+                src_shape = img.shape
+
                 img, patch_info, top_corner = _prepare_patching(img, 
                                                     self.patch_input_shape, 
                                                     self.patch_output_shape, True)
@@ -206,6 +237,7 @@ class InferManager(base.InferManager):
                     break
                 
                 file_idx += 1
+                # if file_idx == 4: break
                 use_path_list.append(file_path)
                 cache_image_list.append(img)
                 cache_patch_info_list.extend(patch_info)
@@ -241,6 +273,7 @@ class InferManager(base.InferManager):
             
             # * parallely assemble the processed cache data for each file if possible
             for file_idx, file_path in enumerate(use_path_list):
+                print(file_path)
                 image_info = cache_image_info_list[file_idx]
                 file_ouput_data, accumulated_patch_output = detach_items_of_uid(
                                                                 accumulated_patch_output, 
@@ -249,15 +282,15 @@ class InferManager(base.InferManager):
                 # * detach this into func and multiproc dispatch it
                 src_pos = image_info[2] # src top left corner within padded image
                 src_image = cache_image_list[file_idx]
-                src_image = src_image[src_pos[0]:src_pos[0]+src_shape[0],
-                                      src_pos[1]:src_pos[1]+src_shape[1]]
+                src_image = src_image[src_pos[0]:src_pos[0]+image_info[0][0],
+                                      src_pos[1]:src_pos[1]+image_info[0][1]]
                 file_info = {'src_shape' : image_info[0], 'src_image' : src_image}
                 base_name = os.path.basename(file_path).split('.')[0]
 
-                # TODO: retrieve the color ?
-                post_proc_kwargs = {'nr_types' : None, 'return_centroids' : True} # dynamicalize this
-                func_args = [[self.post_proc_func, post_proc_kwargs], 
-                                file_ouput_data, file_info, True, None, base_name]
+                post_proc_kwargs = {'nr_types' : self.method['model_args']['nr_types'], 
+                                    'return_centroids' : True} # dynamicalize this
+                func_args = ([self.post_proc_func, post_proc_kwargs], 
+                                file_ouput_data, file_info, True, None, base_name)
 
                 # dispatch for parallel post-processing
                 if proc_pool is not None:

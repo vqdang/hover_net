@@ -36,7 +36,7 @@ class InferManager(object):
         # TODO: deal with parsing multi level model desc
         net = model_creator(**self.method['model_args'])
         saved_state_dict = torch.load(self.method['model_path'])
-        if list(saved_state_dict.keys())[0].split('.') == 'module':
+        if list(saved_state_dict['desc'].keys())[0].split('.')[0] == 'module':
             net = torch.nn.DataParallel(net)
             net.load_state_dict(saved_state_dict['desc'], strict=True)
         else:

@@ -5,27 +5,20 @@ import os
 
 import cv2
 import numpy as np
-import scipy.io as sio
 import pandas as pd
+import scipy.io as sio
 
-from metrics.stats_utils import *
+from metrics.stats_utils import (get_dice_1, get_fast_aji, get_fast_aji_plus,
+                                 get_fast_pq, pair_coordinates)
 
 
 ####
-def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True):
+def run_nuclei_type_stat(
+        pred_df_list, # centroid, type, df frame 
+        true_df_list, # column should match between pred and true
+        type_uid_list=None, exhaustive=True):
     """
     GT must be exhaustively annotated for instance location (detection)
-
-    Args:
-        true_dir, pred_dir: Directory contains .mat annotation for each image. 
-                            Each .mat must contain:
-
-                    --`inst_centroid`: Nx2, contains N instance centroid
-                                       of mass coordinates (X, Y)
-                    --`inst_type`    : Nx1: type of each instance at each index
-
-                    `inst_centroid` and `inst_type` must be aligned and each
-                    index must be associated to the same instance
 
         type_uid_list : list of id for nuclei type which the score should be calculated.
                         Default to `None` means available nuclei type in GT.
@@ -34,44 +27,30 @@ def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True
                      for instance types
     """
     ###
-    file_list = glob.glob(pred_dir + '*.mat')
-    file_list.sort()  # ensure same order [1]
+    assert len(pred_df_list) == len(true_df_list)
+    nr_img = len(pred_df_list)
 
     paired_all = []  # unique matched index pair
     unpaired_true_all = []  # the index must exist in `true_inst_type_all` and unique
     unpaired_pred_all = []  # the index must exist in `pred_inst_type_all` and unique
     true_inst_type_all = []  # each index is 1 independent data point
     pred_inst_type_all = []  # each index is 1 independent data point
-    for file_idx, filename in enumerate(file_list[:]):
-        filename = os.path.basename(filename)
-        basename = filename.split('.')[0]
 
-        true_info = sio.loadmat(true_dir + basename + '.mat')
+    for idx in range(nr_img):
         # dont squeeze, may be 1 instance exist
-        true_centroid = (true_info['inst_centroid']).astype('float32')
-        true_inst_type = (true_info['inst_type']).astype('int32')
+        true_df = true_df_list[idx]
+        true_centroid  = true_df[['x', 'y']].to_numpy().astype('int32')
+        true_inst_type = true_df['type'].to_numpy().astype('int32')
 
-        if true_centroid.shape[0] != 0:
-            # true_inst_type = true_inst_type[0] # local i.e old format
-            true_inst_type = true_inst_type[:, 0]  # current format on github
-        else:  # no instance at all
+        if true_centroid.shape[0] == 0: # no instance at all
             true_centroid = np.array([[0, 0]])
             true_inst_type = np.array([0])
 
-        # * for converting the GT type in CoNSeP
-        true_inst_type[(true_inst_type == 3) | (true_inst_type == 4)] = 3
-        true_inst_type[(true_inst_type == 5) | (
-            true_inst_type == 6) | (true_inst_type == 7)] = 4
+        pred_df = pred_df_list[idx]
+        pred_centroid  = pred_df[['x', 'y']].to_numpy().astype('int32')
+        pred_inst_type = pred_df['type'].to_numpy().astype('int32')
 
-        pred_info = sio.loadmat(pred_dir + basename + '.mat')
-        # dont squeeze, may be 1 instance exist
-        pred_centroid = (pred_info['inst_centroid']).astype('float32')
-        pred_inst_type = (pred_info['inst_type']).astype('int32')
-
-        if pred_centroid.shape[0] != 0:
-            # pred_inst_type = pred_inst_type[0] # local i.e old format
-            pred_inst_type = pred_inst_type[:, 0]  # current format on github
-        else:  # no instance at all
+        if pred_centroid.shape[0] == 0: # no instance at all
             pred_centroid = np.array([[0, 0]])
             pred_inst_type = np.array([0])
 
@@ -82,9 +61,9 @@ def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True
         # * Aggreate information
         # get the offset as each index represent 1 independent instance
         true_idx_offset = true_idx_offset + \
-            true_inst_type_all[-1].shape[0] if file_idx != 0 else 0
+            true_inst_type_all[-1].shape[0] if idx != 0 else 0
         pred_idx_offset = pred_idx_offset + \
-            pred_inst_type_all[-1].shape[0] if file_idx != 0 else 0
+            pred_inst_type_all[-1].shape[0] if idx != 0 else 0
         true_inst_type_all.append(true_inst_type)
         pred_inst_type_all.append(pred_inst_type)
 
@@ -217,45 +196,73 @@ def run_nuclei_inst_stat(pred_dir, true_dir, print_img_stats=False, ext='.mat'):
     metrics_avg = list(metrics_avg)
     return metrics
 
-
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', help="mode to run the measurement,"
-                        "`type` for nuclei instance type classification or"
-                        "`instance` for nuclei instance segmentation",
-                        nargs='?', default='instance', const='instance')
-    parser.add_argument('--pred_dir', help="point to output dir",
-                        nargs='?', default='', const='')
-    parser.add_argument(
-        '--true_dir', help="point to ground truth dir", nargs='?', default='', const='')
-    args = parser.parse_args()
+    import glob
+    import os
+    import pandas as pd
+    import pathlib
+    from misc.utils import check_available_subject
 
-    # if args.mode == 'instance':
-    #     run_nuclei_inst_stat(args.pred_dir, args.true_dir, print_img_stats=False)
-    # if args.mode == 'type':
-    #     run_nuclei_type_stat(args.pred_dir, args.true_dir)
-    # print(args.mode)
-    # exit()
 
-    args.true_dir = '../../../dataset/NUC_HE_Kumar/train-set/msks_fixed/imgs_all/'
+    def map_pred_type(df):
+        df = df.copy()
+        df.insert(3, 'type', df['name'])
+        type_info_dict = {
+            'nolabe' : 0, 
+            'neopla' : 1, 
+            'inflam' : 2, 
+            'connec' : 3, 
+            'necros' : 4, 
+            'no-neo' : 5, 
+        }
+        for k, v in type_info_dict.items():
+            df.loc[df['name'] == k, 'type'] = v
+        return df
+    def map_true_type(df):
+        df = df.copy()
+        df.insert(3, 'type', df['name'])
+        return df
 
-    args.pred_dir = 'exp_output/bce+mse/output_42x/valid_same/'
-    run_nuclei_inst_stat(args.pred_dir, args.true_dir)
+    true_dir = 'dataset/rmt/continual_v0.0/anns_katharina_fix/'
 
-    args.pred_dir = 'exp_output/bce+mse/output_42x/valid_diff/'
-    run_nuclei_inst_stat(args.pred_dir, args.true_dir)
+    name_list = [
+        'BR3804063_Scan1@007112-003616@008112-004616',
+        'CH3804018_Scan1@018149-019387@018757-020004',
+        'CH3804020_Scan1@011708-017926@012316-018543',
+        'CH3804031_Scan1@008580-010101@009188-010718',
+        'CH3804077_Scan1@008538-014007@009146-014624',
 
-    # if args.mode == 'instance':
-    #     run_nuclei_inst_stat(args.pred_dir, args.true_dir)
-    # if args.mode == 'type':
-    #     run_nuclei_type_stat(args.pred_dir, args.true_dir)
+        # 'ES3804019_Scan2@011411-016061@012019-016678',
+        # 'NO3804023_Scan1@003696-003172@004696-004172',
+        # 'WP3804008_Scan1@008129-018279@009129-019279',
+        # 'WP3804008_Scan1@008722-011217@009722-012217',
+        # 'WP3804020_Scan1@009703-010517@010703-011517',
+    ]
 
-# exp_output/bce+mse/output_42x/valid_same/
-# [ 0.81851  0.78892  0.76237  0.60234  0.63421  0.61689]
-# exp_output/bce+mse/output_42x/valid_diff/
-# [ 0.81939  0.71354  0.77806  0.55995  0.62261  0.59034]
+    pred_dir_list = [
+        'dataset/rmt/continual_v0.0/pred/base/',
+        'dataset/rmt/continual_v0.0/pred/continual_data=[v0.0]_run=[v0.0]/',
+        'dataset/rmt/continual_v0.0/pred/continual_data=[v0.0]_run=[v0.1]/',
+        'dataset/rmt/continual_v0.0/pred/clf=[densenet-mini_v0.2]/',
+        'dataset/rmt/continual_v0.0/pred/clf=[densenet-mini_v0.2.1]/',
+        'dataset/rmt/continual_v0.0/pred/clf=[densenet-mini_v0.2.2]/',
+    ]
 
-# exp_output/bce+mse/output_42/valid_same/
-# [ 0.82047  0.79253  0.76447  0.60655  0.63437  0.61639]
-# exp_output/bce+mse/output_42/valid_diff/
-# [ 0.82247  0.71354  0.77569  0.55881  0.62197  0.58520]
+    # true_file_list = glob.glob('%s/*.tsv' % true_dir)
+    # pred_file_list = glob.glob('%s/*.tsv' % pred_dir)
+    # true_file_list = [pathlib.Path(v).stem.replace('.png-points','') for v in true_file_list]
+    # pred_file_list = [pathlib.Path(v).stem.replace('_nuclei_dict','') for v in pred_file_list]
+    # _, _, name_list = check_available_subject(true_file_list, pred_file_list) 
+
+    # [ 0.95638  0.92664  0.80346  0.80888  0.90647]
+    for pred_dir in pred_dir_list:
+        print(pred_dir)
+        true_df_list = ['%s/%s.png-points.tsv' % (true_dir, v) for v in name_list]    
+        pred_df_list = ['%s/%s.tsv' % (pred_dir, v) for v in name_list]
+        true_df_list = [pd.read_csv(v, sep='\t') for v in true_df_list]   
+        pred_df_list = [pd.read_csv(v, sep='\t') for v in pred_df_list]   
+        true_df_list = [map_true_type(v) for v in true_df_list]   
+        pred_df_list = [map_pred_type(v) for v in pred_df_list]   
+        run_nuclei_type_stat(pred_df_list, true_df_list)
+
+    print('here')

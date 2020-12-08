@@ -1,12 +1,14 @@
 
+import operator
+import json
+
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from misc.utils import center_pad_to_shape, cropping_center
 from scipy.stats import mode as major_value
 from sklearn.metrics import confusion_matrix
-
-from misc.utils import center_pad_to_shape, cropping_center
 
 
 ####
@@ -67,14 +69,24 @@ class TriggerEngine(BaseCallbacks):
                                   shared_state=state)
         return
 ####
-class CheckpointSaver(BaseCallbacks):
+class PeriodicSaver(BaseCallbacks):
     """
     Must declare save dir first in the shared global state of the
     attached engine
     """
+    def __init__(self, per_n_epoch=1, per_n_step=None):
+        super().__init__()
+        self.per_n_epoch = per_n_epoch
+        self.per_n_step = per_n_step
+
     def run(self, state, event):
         if not state.logging:
             return
+
+        # TODO: add switch so that only one of [per_n_epoch / per_n_step] can run
+        if state.curr_epoch % self.per_n_epoch != 0:
+            return
+
         for net_name, net_info in state.run_info.items():
             net_checkpoint = {}
             for key, value in net_info.items():
@@ -84,6 +96,55 @@ class CheckpointSaver(BaseCallbacks):
                        (state.log_dir, net_name, state.curr_epoch))
         return
 
+####
+class ConditionalSaver(BaseCallbacks):
+    """
+    Must declare save dir first in the shared global state of the
+    attached engine
+    """
+    def __init__(self, metric_name, comparator='>='):
+        super().__init__()
+        self.metric_name = metric_name
+        self.comparator = comparator
+
+    def run(self, state, event):
+        if not state.logging:
+            return
+
+        ops = {
+            '>': operator.gt,
+            '<': operator.lt,
+            '>=': operator.ge,
+            '<=': operator.le,            
+        }
+        op_func = ops[self.comparator]
+        if self.comparator == '>' or self.comparator == '>=':
+            best_value  = -float("inf")
+        else:
+            best_value  = +float("inf")
+
+        # json stat log file, update and overwrite
+        with open(state.log_info['json_file']) as json_file:
+            json_data = json.load(json_file)
+
+        for epoch, epoch_stat in json_data.items():
+            epoch_value = epoch_stat[self.metric_name]
+            if op_func(epoch_value, best_value):
+                best_value  = epoch_value
+
+        current_value = json_data[str(state.curr_epoch)][self.metric_name]
+        if not op_func(current_value, best_value):
+            return # simply return because not satisfy
+
+        print(state.curr_epoch) # TODO: better way to track which optimal epoch is saved
+        for net_name, net_info in state.run_info.items():
+            net_checkpoint = {}
+            for key, value in net_info.items():
+                if key != 'extra_info': 
+                    net_checkpoint[key] = value.state_dict()
+            torch.save(net_checkpoint, '%s/%s_best=[%s].tar' %
+                       (state.log_dir, net_name, self.metric_name))
+        return
 ####
 class AccumulateRawOutput(BaseCallbacks):
     def run(self, state, event):

@@ -166,7 +166,14 @@ class RunEngine(object):
             for data_batch in self.dataloader:
                 self.__trigger_events(Events.STEP_STARTED)
 
-                step_output = self.run_step(data_batch, self.state.run_info)
+                step_run_info = [
+                    self.state.run_info,
+                    {
+                        'epoch' : self.state.curr_epoch,
+                        'step' : self.state.curr_global_step
+                    }
+                ]
+                step_output = self.run_step(data_batch, step_run_info)
                 self.state.step_output = step_output
 
                 self.__trigger_events(Events.STEP_COMPLETED)

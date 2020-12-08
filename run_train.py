@@ -10,7 +10,7 @@ Usage:
 Options:
   -h --help       Show this string.
   --version       Show version.
-  --gpu=<id>      Comma separated GPU list.  
+  --gpu=<id>      Comma separated GPU list. [default: 0,1,2,3]
   --view=<dset>   Visualise images after augmentation. Choose 'train' or 'valid'.
 """
 
@@ -40,6 +40,21 @@ from config import Config
 from tensorboardX import SummaryWriter
 from dataloader.train_loader import FileLoader
 
+#### have to move outside because of spawn
+# * must initialize augmentor per worker, else duplicated rng generators may happen
+def worker_init_fn(worker_id):
+    # ! to make the seed chain reproducible, must use the torch random, not numpy
+    # the torch rng from main thread will regenerate a base seed, which is then
+    # copied into the dataloader each time it created (i.e start of each epoch)
+    # then dataloader with this seed will spawn worker, now we reseed the worker
+    worker_info = torch.utils.data.get_worker_info()
+    # to make it more random, simply switch torch.randint to np.randint
+    worker_seed = torch.randint(0, 2**32, (1,))[0].cpu().item() + worker_id
+    # print('Loader Worker %d Uses RNG Seed: %d' % (worker_id, worker_seed))
+    # retrieve the dataset copied into this worker process
+    # then set the random seed for each augmentation
+    worker_info.dataset.setup_augmentor(worker_id, worker_seed)  
+    return
 
 ####
 class TrainManager(Config):
@@ -55,15 +70,19 @@ class TrainManager(Config):
     ####
     def view_dataset(self, mode='train'):
         check_manual_seed(self.seed)
-        dataloader = self.get_datagen(1, mode)
+        # TODO: what if each phase want diff annotation ?
+        phase_list = self.model_config['phase_list'][0]
+        target_info = phase_list['target_info']
+        dataloader = self.get_datagen(1, mode, target_info['gen'])
         for batch_data in dataloader: # convert from Tensor to Numpy
             batch_data_np = {k : v.numpy() for k, v in batch_data.items()}
-            FileLoader.view(batch_data_np)
+            # TODO: a separate func, not static method ?
+            FileLoader.view(batch_data_np, target_info['viz'])
             continue
         return
 
     ####
-    def get_datagen(self, batch_size, run_mode, nr_procs=0, fold_idx=0):       
+    def _get_datagen(self, batch_size, run_mode, target_gen, nr_procs=0, fold_idx=0):       
         nr_procs =  nr_procs if not self.debug else 0
 
         # ! Hard assumption on file type
@@ -80,18 +99,11 @@ class TrainManager(Config):
                 'No .npy found for `%s`, please check `%s` in `config.py`' %\
                 (run_mode, '%s_dir_list' % run_mode)
         print('Dataset %s: %d' % (run_mode, len(file_list)))
-
         input_dataset = FileLoader(file_list, mode=run_mode, 
                                     with_type=self.type_classification,
                                     setup_augmentor=nr_procs==0,
+                                    target_gen=target_gen,
                                     **self.shape_info[run_mode])
-
-        # * must initialize augmentor per worker, else duplicated rng generators may happen
-        def worker_init_fn(worker_id):
-            worker_info = torch.utils.data.get_worker_info()
-            # retriev the dataset copied into this worker process
-            worker_info.dataset.setup_augmentor(worker_info.id)  
-            return
 
         dataloader = DataLoader(input_dataset, 
                         num_workers = nr_procs, 
@@ -122,7 +134,15 @@ class TrainManager(Config):
                 'json_file' : json_log_file,
                 'tfwriter'  : tfwriter,
             }
-
+        
+        ####
+        loader_dict = {}
+        for runner_name, runner_opt in run_engine_opt.items():
+            loader_dict[runner_name] = self._get_datagen(
+                    opt['batch_size'][runner_name],
+                    runner_name, opt['target_info']['gen'],
+                    nr_procs=runner_opt['nr_procs'],
+                    fold_idx=fold_idx)
         ####
         def get_last_chkpt_path(prev_phase_dir, net_name):
             stat_file_path = prev_phase_dir + '/stats.json'
@@ -152,24 +172,48 @@ class TrainManager(Config):
                     # * depend on logging format so may be broken if logging format has been changed
                     pretrained_path = get_last_chkpt_path(prev_log_dir, net_name)
                     net_state_dict = torch.load(pretrained_path)['desc']
+                    # conversion to single mode if its saved in parallel mode
+                    variable_name_list = list(net_state_dict.keys())
+                    is_in_parallel_mode = all(v.split('.')[0] == 'module' for v in variable_name_list)
+                    if is_in_parallel_mode:
+                        colored_word = colored('WARNING', color='red', attrs=['bold'])
+                        print(('%s: Detect checkpoint saved in data-parallel mode.'
+                              ' Converting saved model to single GPU mode.' % colored_word).rjust(80))
+                        net_state_dict = {'.'.join(k.split('.')[1:]) : v for k, v in net_state_dict.items()}
                 else:
-                    # TODO: extremely slow at this conversion step, why ?
-                    net_state_dict = dict(np.load(pretrained_path))
-                    net_state_dict = {k : torch.from_numpy(v) for k, v in net_state_dict.items()}
-                
-                colored_word = colored(net_name, color='red', attrs=['bold'])
-                print('Use pretrained path for %s: %s' % (colored_word, pretrained_path))
+                    chkpt_ext = os.path.basename(pretrained_path).split('.')[-1]
+                    if chkpt_ext == 'npz':
+                        net_state_dict = dict(np.load(pretrained_path))
+                        net_state_dict = {k : torch.from_numpy(v) for k, v in net_state_dict.items()}
+                    elif chkpt_ext == 'tar': # ! assume same saving format we desire
+                        net_state_dict = torch.load(pretrained_path)['desc']
+                        # TODO: refactor checkpoint format conversion!
+                        variable_name_list = list(net_state_dict.keys())
+                        is_in_parallel_mode = all(v.split('.')[0] == 'module' for v in variable_name_list)
+                        if is_in_parallel_mode:
+                            colored_word = colored('WARNING', color='red', attrs=['bold'])
+                            print(('%s: Detect checkpoint saved in data-parallel mode.'
+                                ' Converting saved model to single GPU mode.' % colored_word).rjust(80))
+                            net_state_dict = {'.'.join(k.split('.')[1:]) : v for k, v in net_state_dict.items()}
 
+                colored_word = colored(net_name, color='red', attrs=['bold'])
+                print('Model `%s` pretrained path: %s' % (colored_word, pretrained_path))
+
+                # load_state_dict returns (missing keys, unexpected keys)
                 load_feedback = net_desc.load_state_dict(net_state_dict, strict=False)
-                # load_state_dict return (missing keys, unexpected keys)
+                # * uncomment for your convenience
+                print('Missing Variables: \n', load_feedback[0])
+                print('Detected Unknown Variables: \n', load_feedback[1])
 
             # * extremely slow to pass this on DGX with 1 GPU, why (?)
-            # net_desc = DataParallel(net_desc) 
+            net_desc = DataParallel(net_desc) 
             net_desc = net_desc.to('cuda')
             # print(net_desc) # * dump network definition or not?
             optimizer, optimizer_args = net_info['optimizer']
             optimizer = optimizer(net_desc.parameters(), **optimizer_args)
-            scheduler = net_info['lr_scheduler'](optimizer)
+            # TODO: expand for external aug for scheduler
+            nr_iter = opt['nr_epochs'] * len(loader_dict['train'])
+            scheduler = net_info['lr_scheduler'](optimizer, nr_iter)
             net_run_info[net_name] = {
                 'desc' : net_desc,
                 'optimizer' : optimizer,
@@ -186,10 +230,7 @@ class TrainManager(Config):
         runner_dict = {}
         for runner_name, runner_opt in run_engine_opt.items():
             runner_dict[runner_name] = RunEngine(
-                dataloader=self.get_datagen(
-                            opt['batch_size'][runner_name], 
-                            runner_name, nr_procs=runner_opt['nr_procs'],
-                            fold_idx=fold_idx),
+                dataloader=loader_dict[runner_name],
                 engine_name=runner_name,
                 run_step=runner_opt['run_step'],
                 run_info=net_run_info,
@@ -228,7 +269,10 @@ class TrainManager(Config):
 
         prev_save_path = None
         for phase_idx, phase_info in enumerate(phase_list):
-            save_path = self.log_dir + '/%02d' % (phase_idx)
+            if len(phase_list) == 1:
+                save_path = self.log_dir
+            else:
+                save_path = self.log_dir + '/%02d/' % (phase_idx)
             self.run_once(phase_info, engine_opt, save_path, prev_log_dir=prev_save_path)
             prev_save_path = save_path
 
