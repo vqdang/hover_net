@@ -10,6 +10,7 @@ warnings.filterwarnings('ignore')
 from importlib import import_module
 from multiprocessing import Lock, Pool
 
+import json
 import numpy as np
 import torch
 import torch.utils.data as data
@@ -51,3 +52,22 @@ class InferManager(object):
         module_lib = import_module('models.%s.post_proc' % self.method['model_name'])
         self.post_proc_func = getattr(module_lib, 'process')
         return
+
+    def __jsonify_dict(self, path, old_dict, mag=None):
+        new_dict = {}
+        for inst_id, inst_info in old_dict.items():
+            new_inst_info = {}
+            for info_name, info_value in inst_info.items():
+                # convert to jsonable
+                if isinstance(info_value, np.ndarray):
+                    info_value = info_value.tolist()
+                new_inst_info[info_name] = info_value
+            new_dict[int(inst_id)] = new_inst_info
+
+        json_dict = { # to sync the format protocol
+            'mag' : mag,
+            'nuc' : new_dict
+        }
+        with open(path, 'w') as handle:
+            json.dump(json_dict, handle)
+        return new_dict

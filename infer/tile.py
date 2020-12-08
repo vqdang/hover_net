@@ -139,34 +139,20 @@ class InferManager(base.InferManager):
             pred_inst, inst_info_dict, overlaid, pred_raw, color_inst_map = results
 
             base_name = args[0]
-            # value_range = [(0, 1), (-1, 1), (-1, 1)]
-            # for idx in range(pred_raw.shape[-1]):
-            #     pred_ch = pred_raw[...,idx]
-            #     ch_range = value_range[idx]
-            #     pred_ch = colorize(pred_ch, value_range[idx][0], value_range[idx][1])            
-            #     pred_ch = cv2.cvtColor(pred_ch, cv2.COLOR_RGB2BGR)
-            #     cv2.imwrite('%s/%s_ch%d.png' % (self.output_dir, base_name, idx), pred_ch)
 
             if overlaid is not None:
                 overlaid = cv2.cvtColor(overlaid, cv2.COLOR_RGB2BGR)
-                cv2.imwrite('%s/%s.png' % (self.output_dir, base_name), overlaid)
+                cv2.imwrite('%s/%s-over.png' % (self.output_dir, base_name), overlaid)
             color_inst_map = cv2.cvtColor(color_inst_map, cv2.COLOR_RGB2BGR)
             cv2.imwrite('%s/%s-inst.png' % (self.output_dir, base_name), color_inst_map)
-            np.save('%s/%s_raw.npy' % (self.output_dir, base_name), pred_raw)
-            sio.savemat('%s/%s.mat' % (self.output_dir, base_name), {'inst_map': pred_inst})
 
-            # TODO: refactor out to sync with WSI code
-            json_dict = {}
-            for inst_id, inst_info in inst_info_dict.items():
-                new_inst_info = {}
-                for info_name, info_value in inst_info.items():
-                    # convert to jsonable
-                    if isinstance(info_value, np.ndarray):
-                        info_value = info_value.tolist()
-                    new_inst_info[info_name] = info_value
-                json_dict[int(inst_id)] = new_inst_info
-            with open('%s/%s.json' % (self.output_dir, base_name), 'w') as handle:
-                json.dump(json_dict, handle)
+            # TODO: save raw or not
+            sio.savemat('%s/%s.mat' % (self.output_dir, base_name), {'inst_map': pred_inst})
+            if self.save_raw_map:
+                np.save('%s/%s-raw.npy' % (self.output_dir, base_name), pred_raw)
+
+            json_path = '%s/%s.json' % (self.output_dir, base_name)
+            self.__save_json(json_path, inst_info_dict, None)
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
             item_counter = 0
@@ -213,9 +199,6 @@ class InferManager(base.InferManager):
 
                 img = cv2.imread(file_path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-                # he_ch = 255 - color_deconvolution(img, color.hdx_from_rgb)[...,0]
-                # img = np.concatenate([img, he_ch[...,None]], axis=-1)
 
                 # TODO: provide external resize or sthg !
                 img = cv2.resize(img, (0, 0), fx=2.0, fy=2.0)
