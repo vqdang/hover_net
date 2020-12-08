@@ -40,15 +40,17 @@ def random_colors(N, bright=True):
     return colors
 
 ####
-def visualize_instances_map(input_image, inst_map, type_map=None, type_colour=None, line_thickness=2):
+def visualize_instances_map(input_image, inst_map, 
+        type_map=None, type_colour=None, line_thickness=2):
     """
     Overlays segmentation results on image as contours
 
     Args:
         input_image: input image
-        pred_inst: instance mask with unique value for every object
-        pred_type: type mask with unique value for every class
-        colours: 
+        inst_map: instance mask with unique value for every object
+        type_map: type mask with unique value for every class
+        type_colour: a dict of {type : colour} , `type` is from 0-N
+                     and `colour` is a tuple of (R, G, B)
         line_thickness: line thickness of contours
 
     Returns:
@@ -86,8 +88,16 @@ def visualize_instances_map(input_image, inst_map, type_map=None, type_colour=No
 
 ####
 def visualize_instances_dict(input_image, inst_dict, 
-                    draw_dot=False, id_as_color=False,
-                    type_colour=None, line_thickness=2):
+            draw_dot=False, type_colour=None, line_thickness=2):
+    """
+    Args:
+        input_image: input image
+        inst_dict: dict of output prediction, defined as in this library
+        draw_dot: to draw a dot for each centroid
+        type_colour: a dict of {type : colour} , `type` is from 0-N
+                     and `colour` is a tuple of (R, G, B)
+        line_thickness: line thickness of contours
+    """
     overlay = np.copy((input_image))
 
     inst_rng_colors = random_colors(len(inst_dict))
@@ -100,8 +110,6 @@ def visualize_instances_dict(input_image, inst_dict,
             inst_colour = type_colour[inst_info['type']]
         else:
             inst_colour = (inst_rng_colors[idx]).tolist()
-        if id_as_color:
-            inst_colour = idx+1
         cv2.drawContours(overlay, [inst_contour], -1, inst_colour, line_thickness)
 
         if draw_dot:
