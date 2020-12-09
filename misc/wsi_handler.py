@@ -6,9 +6,7 @@ from skimage import color
 import re
 import subprocess
 
-import tifffile
 import openslide
-import glymur
 
 class FileHandler(object):
     def __init__(self):
