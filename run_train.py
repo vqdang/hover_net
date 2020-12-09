@@ -15,30 +15,31 @@ Options:
 """
 
 import cv2
-cv2.setNumThreads(0)
-from docopt import docopt
-import numpy as np
-import matplotlib
-import glob
-import inspect
-import importlib
-import shutil
-import argparse
-import os
-import json
 
+cv2.setNumThreads(0)
+import argparse
+import glob
+import importlib
+import inspect
+import json
+import os
+import shutil
+
+import matplotlib
+import numpy as np
 import torch
-from torch.nn import DataParallel # TODO: switch to DistributedDataParallel
+from docopt import docopt
+from tensorboardX import SummaryWriter
+from torch.nn import DataParallel  # TODO: switch to DistributedDataParallel
 from torch.utils.data import DataLoader
 
-from misc.utils import rm_n_mkdir
-from run_utils.utils import check_log_dir, check_manual_seed, colored
-from run_utils.engine import RunEngine
-
 from config import Config
-
-from tensorboardX import SummaryWriter
 from dataloader.train_loader import FileLoader
+from misc.utils import rm_n_mkdir
+from run_utils.engine import RunEngine
+from run_utils.utils import (check_log_dir, check_manual_seed, colored,
+                             convert_pytorch_checkpoint)
+
 
 #### have to move outside because of spawn
 # * must initialize augmentor per worker, else duplicated rng generators may happen
@@ -172,14 +173,6 @@ class TrainManager(Config):
                     # * depend on logging format so may be broken if logging format has been changed
                     pretrained_path = get_last_chkpt_path(prev_log_dir, net_name)
                     net_state_dict = torch.load(pretrained_path)['desc']
-                    # conversion to single mode if its saved in parallel mode
-                    variable_name_list = list(net_state_dict.keys())
-                    is_in_parallel_mode = all(v.split('.')[0] == 'module' for v in variable_name_list)
-                    if is_in_parallel_mode:
-                        colored_word = colored('WARNING', color='red', attrs=['bold'])
-                        print(('%s: Detect checkpoint saved in data-parallel mode.'
-                              ' Converting saved model to single GPU mode.' % colored_word).rjust(80))
-                        net_state_dict = {'.'.join(k.split('.')[1:]) : v for k, v in net_state_dict.items()}
                 else:
                     chkpt_ext = os.path.basename(pretrained_path).split('.')[-1]
                     if chkpt_ext == 'npz':
@@ -187,19 +180,12 @@ class TrainManager(Config):
                         net_state_dict = {k : torch.from_numpy(v) for k, v in net_state_dict.items()}
                     elif chkpt_ext == 'tar': # ! assume same saving format we desire
                         net_state_dict = torch.load(pretrained_path)['desc']
-                        # TODO: refactor checkpoint format conversion!
-                        variable_name_list = list(net_state_dict.keys())
-                        is_in_parallel_mode = all(v.split('.')[0] == 'module' for v in variable_name_list)
-                        if is_in_parallel_mode:
-                            colored_word = colored('WARNING', color='red', attrs=['bold'])
-                            print(('%s: Detect checkpoint saved in data-parallel mode.'
-                                ' Converting saved model to single GPU mode.' % colored_word).rjust(80))
-                            net_state_dict = {'.'.join(k.split('.')[1:]) : v for k, v in net_state_dict.items()}
 
                 colored_word = colored(net_name, color='red', attrs=['bold'])
                 print('Model `%s` pretrained path: %s' % (colored_word, pretrained_path))
 
                 # load_state_dict returns (missing keys, unexpected keys)
+                net_state_dict = convert_pytorch_checkpoint(net_state_dict)
                 load_feedback = net_desc.load_state_dict(net_state_dict, strict=False)
                 # * uncomment for your convenience
                 print('Missing Variables: \n', load_feedback[0])

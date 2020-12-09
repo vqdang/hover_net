@@ -1,10 +1,11 @@
 """run_infer.py
 Usage:
-  run_infer.py [--gpu=<id>] [--model_name=<name>] [--run_mode=<mode>] [--nr_types=<n>] [--model_path=<path>] \
+  run_infer.py [--gpu=<id>] [--model_mode=<mode>] [--run_mode=<mode>] [--nr_types=<n>] [--model_path=<path>] \
                [--nr_inference_workers=<n>] [--nr_post_proc_workers=<n>] [--batch_size=<n>] \
                [--ambiguous_size=<n>] [--chunk_shape=<n>] [--tile_shape=<n>] [--wsi_proc_mag=<n>] \
                [--cache_path=<path>] [--input_dir=<path>] [--input_msk_dir=<path>] \
-               [--output_dir=<path>] [--patch_input_shape=<n>] [--patch_output_shape=<n>]
+               [--output_dir=<path>] [--patch_input_shape=<n>] [--patch_output_shape=<n>] \
+               [--save_raw_map=<BOOL>]
   run_infer.py (-h | --help)
   run_infer.py --version
 Options:
@@ -14,15 +15,15 @@ Options:
   --run_mode=<mode>           Inference mode. 'tile' or 'wsi'. [default: tile]
   --nr_types=<n>              Number of nuclei types to predict. [default: 0]
   --model_path=<path>         Path to saved checkpoint.
-  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke. 'None' or 'pannuke' [default: 'pannuke']
+  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke, 'None' or 'pannuke'. [default: pannuke]
   --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
   --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
   --batch_size=<n>            Batch size. [default: 128]
   --ambiguous_size=<n>        Ambiguous size. [default: 128]
   --chunk_shape=<n>           Shape of chunk for processing. [default: 10000]
   --tile_shape=<n>            Shape of tiles for processing. [default: 2048]
-  --save_raw_map=<n>          For `run_mode`=`tile`. To save raw prediction or not. [default: False]
-  --wsi_proc_mag=<n>          Magnification level used for WSI processing. [default: -1]
+  --save_raw_map=<BOOL>       For `run_mode`=`tile`. To save raw prediction or not. [default: False]
+  --wsi_proc_mag=<n>          Magnification level used for WSI processing. [default: 40]
   --cache_path=<path>         Path for cache. Should be placed on SSD with at least 100GB. [default: cache]
   --input_dir=<path>          Path to input data directory. Assumes the files are not nested within directory.
   --input_msk_dir=<path>      Path to directory containing tissue masks. Should have the same name as corresponding WSIs. [default: '']
@@ -31,6 +32,7 @@ Options:
   --patch_output_shape=<n>    Shape of network output- Assume square shape. [default: 80]
 """
 
+import logging
 import os
 import copy
 from docopt import docopt
@@ -49,22 +51,20 @@ if __name__ == '__main__':
 
     if args['--model_path'] == None:
         raise Exception('A model path must be supplied as an argument with --model_path.')
-    if args['--model_name'] == None:
-        raise Exception('A model path must be supplied as an argument with --model_path.')
     nr_types = int(args['--nr_types']) if int(args['--nr_types']) > 0 else None
 
     method_args = {
         'method' : {
-            'model_name'       : args['--model_name'],
             'model_args' : {
                 'nr_types'   : nr_types,
-                'mode'       : 'pannuke',
+                'mode'       : args['--model_mode'],
             },
             'model_path' : args['--model_path'],
         },
     }
 
     run_args = {
+            'save_raw_map' : args['--save_raw_map'],
             'nr_inference_workers' : int(args['--nr_inference_workers']),
             'nr_post_proc_workers' : int(args['--nr_post_proc_workers']),
             'batch_size' : int(args['--batch_size']),
@@ -84,6 +84,16 @@ if __name__ == '__main__':
             'wsi_proc_mag' : int(args['--wsi_proc_mag']),
         }
         run_args.update(wsi_run_args) 
+
+    # ! TODO: where to save logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='|%(asctime)s.%(msecs)03d| [%(levelname)s] %(message)s',datefmt='%Y-%m-%d|%H:%M:%S',
+        handlers=[
+            logging.FileHandler("debug.log"),
+            logging.StreamHandler()
+        ]
+    )
 
     if args['--run_mode'] == 'tile':
         from infer.tile import InferManager
