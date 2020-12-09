@@ -1,5 +1,5 @@
 
-
+from concurrent.futures import ProcessPoolExecutor, wait, FIRST_EXCEPTION, as_completed
 import multiprocessing as mp
 from multiprocessing import Lock, Pool
 mp.set_start_method('spawn', True) # ! must be at top for VScode debugging
@@ -319,12 +319,13 @@ class InferManager(base.InferManager):
             self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
             self.wsi_mask[self.wsi_mask > 0] = 1
         else:
-            print('WARNING: No mask found, processing entire WSI including background !!')
+            print('WARNING: No mask found, auto generate mask via simple thresholding at x1.25 !!!')
 
             from skimage import morphology
 
             # simple method to extract tissue regions using intensity thresholding and morphological operations
             def simple_get_mask():
+                scaled_wsi_mag = 1.25 # ! hard coded
                 wsi_thumb_rgb = self.wsi_handler.get_full_img(read_mag=scaled_wsi_mag)
                 gray = cv2.cvtColor(wsi_thumb_rgb, cv2.COLOR_RGB2GRAY)
                 _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU)
@@ -332,11 +333,6 @@ class InferManager(base.InferManager):
                 mask = morphology.remove_small_holes(mask, area_threshold=128 * 128)
                 mask = morphology.binary_dilation(mask, morphology.disk(16))
                 return mask
-            # scaled_wsi_mag = 5
-            scaled_wsi_mag = 1.25
-            # create a dummy array to use the entire wsi
-            # scaled_wsi_shape = self.wsi_handler.get_dimensions(scaled_wsi_mag)[::-1]
-            # self.wsi_mask = np.ones(scaled_wsi_shape, dtype=np.uint8)
             self.wsi_mask = np.array(simple_get_mask() > 0, dtype=np.uint8)
         cv2.imwrite('%s/%s.png' % (output_path, wsi_name), self.wsi_mask * 255)
 
@@ -353,20 +349,20 @@ class InferManager(base.InferManager):
         # self.wsi_inst_map[:] = 0 # flush fill
 
         # warning, the value within this is uninitialized
-        self.wsi_pred_map = np.lib.format.open_memmap(
-                                            '%s/pred_map.npy' % self.cache_path, mode='w+',
-                                            shape=tuple(self.wsi_proc_shape) + (out_ch,), 
-                                            dtype=np.float32)
-        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
+        # self.wsi_pred_map = np.lib.format.open_memmap(
+        #                                     '%s/pred_map.npy' % self.cache_path, mode='w+',
+        #                                     shape=tuple(self.wsi_proc_shape) + (out_ch,), 
+        #                                     dtype=np.float32)
+        self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
         end = time.perf_counter()
         print('Preparing Input Output Placement: ', end - start)
         
         # * raw prediction
         start = time.perf_counter()
-        chunk_info_list, patch_info_list = _get_chunk_patch_info(
-                                                self.wsi_proc_shape, chunk_input_shape, 
-                                                patch_input_shape, patch_output_shape)
-        self.__get_raw_prediction(chunk_info_list, patch_info_list)
+        # chunk_info_list, patch_info_list = _get_chunk_patch_info(
+        #                                         self.wsi_proc_shape, chunk_input_shape, 
+        #                                         patch_input_shape, patch_output_shape)
+        # self.__get_raw_prediction(chunk_info_list, patch_info_list)
         end = time.perf_counter()
         print('Inference Time: ',  end - start)
 
@@ -504,18 +500,18 @@ class InferManager(base.InferManager):
 
         # ! cant possibly save the inst map at high res, too large
         start = time.perf_counter()
-        json_path = '%s/%s.json' % (output_path, base_name)
+        json_path = '%s/%s.json' % (output_path, wsi_name)
         self.__save_json(json_path, self.wsi_inst_info, mag=self.wsi_proc_mag)
         end = time.perf_counter()
-        print('Post Proc Time: ', end - start)
+        print('Save Time: ', end - start)
 
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
         
-        if not os.path.exists(self.cache_path):
-            rm_n_mkdir(self.cache_path)
-        if not os.path.exists(self.output_dir):
-            rm_n_mkdir(self.output_dir)
+        # if not os.path.exists(self.cache_path):
+        #     rm_n_mkdir(self.cache_path)
+        # if not os.path.exists(self.output_dir):
+        #     rm_n_mkdir(self.output_dir)
 
         wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
@@ -524,7 +520,7 @@ class InferManager(base.InferManager):
             # if wsi_base_name not in name_list: continue
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
             output_file = '%s/%s.json' % (self.output_dir, wsi_base_name)
-            if os.path.exists(output_file): continue
+            # if os.path.exists(output_file): continue
             self.process_single_file(wsi_path, msk_path, self.output_dir)
-        rm_n_mkdir(self.cache_path) # clean up all cache
+        # rm_n_mkdir(self.cache_path) # clean up all cache
         return
