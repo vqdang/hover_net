@@ -4,7 +4,13 @@ A multiple branch network that performs nuclear instance segmentation and classi
 
 [Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. <br />
 
-This is the official PyTorch implementation of HoVer-Net. For a TensorFlow version of this code, please refer to the [original repository](https://github.com/vqdang/hover_net). 
+This is the official PyTorch implementation of HoVer-Net. For a TensorFlow version of this code, please refer to the [original repository](https://github.com/vqdang/hover_net). The repository can be used for training HoVer-Net and to process image tiles or whole-slide images. As part of this repository, we supply model weights trained on the following datasets:
+
+- CoNSeP
+- PanNuke
+- MoNuSAC
+- Kumar
+- CPM17
 
 ![](docs/diagram.png)
 
@@ -47,10 +53,10 @@ For simultaneous instance segmentation and classification, patches are stored as
 
 Before training:
 
-- set path to the data directories in `config.py`
-- set path where checkpoints will be saved  in `config.py`
-- set path to pretrained weights Preact-ResNet50  in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/open?id=187C9pGjlVmlqz-PlKW1K8AYfxDONrB0n).
-- modify hyperparameters, including number of epochs and learning rate in `models/hovernet/opt.py`.
+- Set path to the data directories in `config.py`
+- Set path where checkpoints will be saved  in `config.py`
+- Set path to pretrained weights Preact-ResNet50  in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/open?id=187C9pGjlVmlqz-PlKW1K8AYfxDONrB0n).
+- Modify hyperparameters, including number of epochs and learning rate in `models/hovernet/opt.py`.
 
 ### Usage and Options
  
@@ -85,7 +91,7 @@ python run_train.py --gpu='0,1'
 
 ### Data Format
 Input: <br />
-- standard images files, including `png`, `jpg` and `tiff`.
+- Standard images files, including `png`, `jpg` and `tiff`.
 - WSIs supported by [OpenSlide](https://openslide.org/), including `svs`, `tif`, `ndpi` and `mrxs`.
 
 Output: <br />
@@ -95,6 +101,16 @@ Output: <br />
 - WSI input
     - Output1
     - Output2
+  
+### Model Weights
+
+Model weights obtained from training HoVer-Net as a result of the above instructions can be supplied to process input images / WSIs. Alternatively, any of the below pre-trained model weights can be used to process the data.
+
+- [CoNSeP checkpoint](link)
+- [PanNuke checkpoint](link)
+- [MoNuSAC checkpoint](link)
+- [Kumar checkpoint](link) (only instance segmentation)
+- [CPM17 checkpoint](link) (only instance segmentation)
 
 ### Usage and Options
 
