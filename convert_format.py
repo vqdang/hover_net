@@ -2,6 +2,7 @@ import os
 import re
 import glob
 import json
+import pathlib
 import numpy as np
 import shutil
 
@@ -12,6 +13,10 @@ def to_qupath(file_path, nuc_pos_list, nuc_type_list, type_info_dict):
     """
     For QuPath v0.2.3
     """
+    def rgb2int(rgb):
+        r, g, b = rgb
+        return (r<<16) + (g<<8) + b
+
     nuc_pos_list = np.array(nuc_pos_list)
     nuc_type_list = np.array(nuc_type_list)
     assert nuc_pos_list.shape[0] == nuc_type_list.shape[0]
@@ -23,7 +28,8 @@ def to_qupath(file_path, nuc_pos_list, nuc_type_list, type_info_dict):
             nuc_type = nuc_type_list[idx]
             nuc_pos = nuc_pos_list[idx]
             type_name = type_info_dict[nuc_type][0]
-            type_color = type_info_dict[nuc_type][-1] # color in qupath format
+            type_color = type_info_dict[nuc_type][1]
+            type_color = rgb2int(type_color) # color in qupath format
             fptr.write('{x}\t{y}\t{type_class}\t{type_name}\t{type_color}\n'.format(
                         x=nuc_pos[0], y=nuc_pos[1], 
                         type_class='', 
@@ -34,22 +40,23 @@ def to_qupath(file_path, nuc_pos_list, nuc_type_list, type_info_dict):
 ####
 if __name__ == '__main__':
     target_format = 'qupath'
-    scale_factor = 0.5 # to rescale the coordinate set
-    root_dir = 'dataset/rmt/continual_v0.0/pred/clf=[densenet-mini_v0.2.2]/'
+    # to rescale the coordinate set to match with lv0 mag of the wsi
+    scale_factor = 1.0 
+    root_dir = 'dataset/dummy/out/'
 
     # to define the name, and color conversion code for each target format
     type_info_dict = {
-        0 : ('nolabe', (0  ,   0,   0), -1), # no label
-        1 : ('neopla', (255,   0,   0), -65536), # neoplastic
-        2 : ('inflam', (0  , 255,   0), -16711936), # inflamm
-        3 : ('connec', (0  ,   0, 255), -16776961), # connective
-        4 : ('necros', (255, 255,   0), -1), # dead
-        5 : ('no-neo', (255, 165,   0), -1), # non-neoplastic epithelial
+        0 : ('nolabe', (0  ,   0,   0)), # no label
+        1 : ('neopla', (255,   0,   0)), # neoplastic
+        2 : ('inflam', (0  , 255,   0)), # inflamm
+        3 : ('connec', (0  ,   0, 255)), # connective
+        4 : ('necros', (255, 255,   0)), # dead
+        5 : ('no-neo', (255, 165,   0)), # non-neoplastic epithelial
     }
 
     patterning = lambda x : re.sub('([\[\]])', '[\\1]', x)
     code_name_list = glob.glob(patterning('%s/*.json' % root_dir))
-    code_name_list = [os.path.basename(v).split('.')[0] for v in code_name_list]
+    code_name_list = [pathlib.Path(v).stem for v in code_name_list]
     code_name_list.sort()
 
     output_dir = root_dir
