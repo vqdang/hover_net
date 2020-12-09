@@ -49,10 +49,10 @@ To train the network, the command is: <br/>
 where gpu_id denotes which GPU will be used for training. For example, if we are using GPU number 0 and 1, the command is: <br/>
 `python train.py --gpu='0,1'` <br/>
 
-Before training, set in `config.py`:
-- path to pretrained weights Preact-ResNet50. Download the weights [here](https://drive.google.com/open?id=187C9pGjlVmlqz-PlKW1K8AYfxDONrB0n).
-- path to the data directories
-- path where checkpoints will be saved
+Before training, set:
+- path to pretrained weights Preact-ResNet50  in `opt/`. Download the weights [here](https://drive.google.com/open?id=187C9pGjlVmlqz-PlKW1K8AYfxDONrB0n).
+- path to the data directories in `config.py`
+- path where checkpoints will be saved  in `config.py`
 
 ## Inference
 
