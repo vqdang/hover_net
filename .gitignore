@@ -2,6 +2,7 @@
 *__pycache__
 
 # directories
+cache/
 dataset/
 exp_output/
 
