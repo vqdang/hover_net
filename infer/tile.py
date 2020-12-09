@@ -1,18 +1,24 @@
+import logging
 import multiprocessing
 from multiprocessing import Lock, Pool
-multiprocessing.set_start_method('spawn', True) # ! must be at top for VScode debugging
 
+multiprocessing.set_start_method('spawn', True) # ! must be at top for VScode debugging
 import argparse
 import glob
 import json
 import math
+import multiprocessing as mp
 import os
+import pathlib
 import pickle
 import re
 import sys
 import warnings
+from concurrent.futures import (FIRST_EXCEPTION, ProcessPoolExecutor,
+                                as_completed, wait)
 from functools import reduce
 from importlib import import_module
+from multiprocessing import Lock, Pool
 
 import cv2
 import numpy as np
@@ -21,14 +27,14 @@ import scipy.io as sio
 import torch
 import torch.utils.data as data
 import tqdm
-from skimage import color
-
 from dataloader.infer_loader import SerializeArray, SerializeFileList
 from misc.utils import (color_deconvolution, cropping_center, get_bounding_box,
-                        rm_n_mkdir)
+                        log_debug, log_info, rm_n_mkdir)
 from misc.viz_utils import colorize, visualize_instances_dict
+from skimage import color
 
 from . import base
+
 
 ####
 def _prepare_patching(img, window_size, mask_size, return_src_top_corner=False):
@@ -125,7 +131,8 @@ class InferManager(base.InferManager):
 
 
         # * depend on the number of samples and their size, this may be less efficient
-        file_path_list = glob.glob('%s/*' % self.input_dir)
+        patterning = lambda x : re.sub('([\[\]])','[\\1]',x)
+        file_path_list = glob.glob(patterning('%s/*' % self.input_dir))
         file_path_list.sort()  # ensure same order
         file_path_list = file_path_list
 
@@ -153,6 +160,7 @@ class InferManager(base.InferManager):
 
             json_path = '%s/%s.json' % (self.output_dir, base_name)
             self.__save_json(json_path, inst_info_dict, None)
+            return base_name
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
             item_counter = 0
@@ -173,8 +181,9 @@ class InferManager(base.InferManager):
             return detached_items_list, remained_items_list
 
         proc_pool = None
-        if self.nr_post_proc_workers != 0:            
-            proc_pool = Pool(processes=self.nr_post_proc_workers)
+        future_list = []
+        if self.nr_post_proc_workers > 0: 
+            proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
 
         while len(file_path_list) > 0:
   
@@ -199,9 +208,6 @@ class InferManager(base.InferManager):
 
                 img = cv2.imread(file_path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-                # TODO: provide external resize or sthg !
-                img = cv2.resize(img, (0, 0), fx=2.0, fy=2.0)
                 src_shape = img.shape
 
                 img, patch_info, top_corner = _prepare_patching(img, 
@@ -256,7 +262,6 @@ class InferManager(base.InferManager):
             
             # * parallely assemble the processed cache data for each file if possible
             for file_idx, file_path in enumerate(use_path_list):
-                print(file_path)
                 image_info = cache_image_info_list[file_idx]
                 file_ouput_data, accumulated_patch_output = detach_items_of_uid(
                                                                 accumulated_patch_output, 
@@ -268,7 +273,7 @@ class InferManager(base.InferManager):
                 src_image = src_image[src_pos[0]:src_pos[0]+image_info[0][0],
                                       src_pos[1]:src_pos[1]+image_info[0][1]]
                 file_info = {'src_shape' : image_info[0], 'src_image' : src_image}
-                base_name = os.path.basename(file_path).split('.')[0]
+                base_name = pathlib.Path(file_path).stem
 
                 post_proc_kwargs = {'nr_types' : self.method['model_args']['nr_types'], 
                                     'return_centroids' : True} # dynamicalize this
@@ -277,13 +282,28 @@ class InferManager(base.InferManager):
 
                 # dispatch for parallel post-processing
                 if proc_pool is not None:
-                    proc_pool.apply_async(_post_process_patches, args=func_args, 
-                                    callback=proc_callback)
+                    proc_future = proc_pool.submit(_post_process_patches, *func_args)       
+                    # ! manually poll future and call callback later as there is no guarantee
+                    # ! that the callback is called from main thread
+                    future_list.append(proc_future)
                 else:
                     proc_output = _post_process_patches(*func_args)
                     proc_callback(proc_output)
 
         if proc_pool is not None:
-            proc_pool.close()
-            proc_pool.join()
+            # loop over all to check state a.k.a polling
+            for future in as_completed(future_list):
+                # TODO: way to retrieve which file crashed ?
+                # ! silent crash, cancel all and raise error
+                if future.exception() is not None:
+                    log_info('Silent Crash')
+                    # ! cancel somehow leads to cascade error later
+                    # ! so just poll it then crash once all future
+                    # ! acquired for now
+                    # for future in future_list:
+                    #     future.cancel()
+                    # break
+                else:
+                    file_path = proc_callback(future.result())                                
+                    log_info('Done Assembling %s' % file_path)
         return 

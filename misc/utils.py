@@ -1,5 +1,7 @@
 
 import glob
+import inspect
+import logging
 import os
 import shutil
 
@@ -104,15 +106,23 @@ def color_deconvolution(rgb, stain_mat):
     return output
 
 ####
-def check_available_subject(listA, listB):
-    subject_code_setA = set(listA)
-    subject_code_setB = set(listB)
-    subject_code_list = set.intersection(subject_code_setA, subject_code_setB)
-    subject_code_list = list(subject_code_list)
-    subject_code_list.sort()
-    in_A_not_in_B = list(subject_code_setA - subject_code_setB)
-    in_B_not_in_A = list(subject_code_setB - subject_code_setA)
-    in_A_not_in_B.sort()
-    in_B_not_in_A.sort()
-    # in_A_not_in_B, in_B_not_in_A, intersection
-    return in_A_not_in_B, in_B_not_in_A, subject_code_list
+def log_debug(msg):
+    frame,filename,line_number,function_name,lines,index=inspect.getouterframes(
+        inspect.currentframe())[1]
+    line=lines[0]
+    indentation_level=line.find(line.lstrip())
+    logging.debug('{i} {m}'.format(
+            i='.'*indentation_level,
+            m=msg            
+        ))
+
+####
+def log_info(msg):
+    frame,filename,line_number,function_name,lines,index=inspect.getouterframes(
+        inspect.currentframe())[1]
+    line=lines[0]
+    indentation_level=line.find(line.lstrip())
+    logging.info('{i} {m}'.format(
+            i='.'*indentation_level,
+            m=msg            
+        ))

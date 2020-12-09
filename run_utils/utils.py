@@ -10,6 +10,16 @@ from imgaug import imgaug as ia
 from termcolor import colored
 from torch.autograd import Variable
 
+####
+def convert_pytorch_checkpoint(net_state_dict):
+    variable_name_list = list(net_state_dict.keys())
+    is_in_parallel_mode = all(v.split('.')[0] == 'module' for v in variable_name_list)
+    if is_in_parallel_mode:
+        colored_word = colored('WARNING', color='red', attrs=['bold'])
+        print(('%s: Detect checkpoint saved in data-parallel mode.'
+            ' Converting saved model to single GPU mode.' % colored_word).rjust(80))
+        net_state_dict = {'.'.join(k.split('.')[1:]) : v for k, v in net_state_dict.items()}
+    return net_state_dict
 
 ####
 def check_manual_seed(seed):

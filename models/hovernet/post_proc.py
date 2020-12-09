@@ -104,7 +104,7 @@ def process(pred_map, nr_types=None, return_centroids=False):
     if return_centroids or nr_types is not None:
         inst_id_list = np.unique(pred_inst)[1:] # exlcude background
         inst_info_dict = {}
-        for idx, inst_id in enumerate(inst_id_list):
+        for inst_id in inst_id_list:
             inst_map = pred_inst == inst_id
             # TODO: chane format of bbox output
             rmin, rmax, cmin, cmax = get_bounding_box(inst_map) 
@@ -116,6 +116,9 @@ def process(pred_map, nr_types=None, return_centroids=False):
             inst_contour = cv2.findContours(inst_map, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             # * opencv protocol format may break
             inst_contour = np.squeeze(inst_contour[0][0].astype('int32'))
+            # < 3 points dont make a contour, so skip, likely artifact too
+            # as the contours obtained via approximation => too small or sthg
+            if inst_contour.shape[0] < 3 : continue
             inst_centroid = [(inst_moment["m10"] / inst_moment["m00"]),
                              (inst_moment["m01"] / inst_moment["m00"])]
             inst_centroid = np.array(inst_centroid)
@@ -131,7 +134,7 @@ def process(pred_map, nr_types=None, return_centroids=False):
 
     if nr_types is not None:
         #### * Get class of each instance id, stored at index id-1
-        for idx, inst_id in enumerate(inst_id_list):
+        for inst_id in list(inst_info_dict.keys()):
             rmin, cmin, rmax, cmax = (inst_info_dict[inst_id]['bbox']).flatten()
             inst_map_crop  = pred_inst[rmin:rmax, cmin:cmax] 
             inst_type_crop = pred_type[rmin:rmax, cmin:cmax]

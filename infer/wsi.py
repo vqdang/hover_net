@@ -1,19 +1,22 @@
 
-from concurrent.futures import ProcessPoolExecutor, wait, FIRST_EXCEPTION, as_completed
 import multiprocessing as mp
+from concurrent.futures import (FIRST_EXCEPTION, ProcessPoolExecutor,
+                                as_completed, wait)
 from multiprocessing import Lock, Pool
+
 mp.set_start_method('spawn', True) # ! must be at top for VScode debugging
 
-import pathlib
-import shutil
-import time
 import argparse
 import glob
 import json
+import logging
 import math
 import os
+import pathlib
 import re
+import shutil
 import sys
+import time
 from functools import reduce
 from importlib import import_module
 
@@ -26,7 +29,8 @@ import torch.utils.data as data
 import tqdm
 from dataloader.infer_loader import SerializeArray, SerializeFileList
 from docopt import docopt
-from misc.utils import cropping_center, get_bounding_box, rm_n_mkdir
+from misc.utils import (cropping_center, get_bounding_box, log_debug, log_info,
+                        rm_n_mkdir)
 from misc.wsi_handler import get_file_handler
 
 from . import base
@@ -148,7 +152,7 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
                                       chunk_info[1][0][1]: chunk_info[1][1][1]] 
     if patch_output_list is None:
         # chunk_pred_map[:] = 0 # zero flush when there is no-results
-        print(chunk_info.flatten(), 'flush 0')
+        # print(chunk_info.flatten(), 'flush 0')
         return
 
     for pinfo in patch_output_list:
@@ -157,7 +161,7 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
         pcoord = np.squeeze(pcoord)[:2]
         chunk_pred_map[pcoord[0] : pcoord[0] + pdata.shape[0],
                        pcoord[1] : pcoord[1] + pdata.shape[1]] = pdata
-    print(chunk_info.flatten(), 'pass')
+    # print(chunk_info.flatten(), 'pass')
     return
 
 ####
@@ -257,8 +261,9 @@ class InferManager(base.InferManager):
 
         proc_pool = None
         if self.nr_post_proc_workers > 0: 
-            proc_pool = Pool(processes=self.nr_post_proc_workers)
+            proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
 
+        future_list = []
         wsi_pred_map_mmap_path = '%s/pred_map.npy' % self.cache_path
         for idx in list(range(tile_info_list.shape[0])):
             tile_tl = tile_info_list[idx][0]
@@ -272,16 +277,33 @@ class InferManager(base.InferManager):
 
             # TODO: standarize protocol
             if proc_pool is not None:
-                proc_pool.apply_async(_post_proc_para_wrapper, callback=callback, 
-                                    args=(wsi_pred_map_mmap_path, tile_info, 
-                                        self.post_proc_func, func_kwargs))
+                proc_future = proc_pool.submit(_post_proc_para_wrapper, 
+                                            wsi_pred_map_mmap_path, tile_info, 
+                                            self.post_proc_func, func_kwargs)       
+                # ! manually poll future and call callback later as there is no guarantee
+                # ! that the callback is called from main thread
+                future_list.append(proc_future)
             else:
-                results = _post_proc_para_wrapper(wsi_pred_map_mmap_path, tile_info, 
-                                        self.post_proc_func, func_kwargs)
+                results = _post_proc_para_wrapper(
+                                wsi_pred_map_mmap_path, tile_info, 
+                                self.post_proc_func, func_kwargs)
                 callback(results)
         if proc_pool is not None:
-            proc_pool.close()
-            proc_pool.join()
+            silent_crash = False
+            # loop over all to check state a.k.a polling
+            for future in as_completed(future_list):
+                # ! silent crash, cancel all and raise error
+                if future.exception() is not None:
+                    silent_crash = True
+                    # ! cancel somehow leads to cascade error later
+                    # ! so just poll it then crash once all future
+                    # ! acquired for now
+                    # for future in future_list:
+                    #     future.cancel()
+                    # break
+                else:
+                    callback(future.result())                                
+            assert not silent_crash
         return
 
     def _parse_args(self, run_args):
@@ -319,7 +341,7 @@ class InferManager(base.InferManager):
             self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
             self.wsi_mask[self.wsi_mask > 0] = 1
         else:
-            print('WARNING: No mask found, auto generate mask via simple thresholding at x1.25 !!!')
+            log_info('WARNING: No mask found, auto generate mask via simple thresholding at x1.25 !!!')
 
             from skimage import morphology
 
@@ -334,6 +356,9 @@ class InferManager(base.InferManager):
                 mask = morphology.binary_dilation(mask, morphology.disk(16))
                 return mask
             self.wsi_mask = np.array(simple_get_mask() > 0, dtype=np.uint8)
+        if np.sum(self.wsi_mask) == 0:
+            log_info('Skip due to empty mask !!!')
+            return
         cv2.imwrite('%s/%s.png' % (output_path, wsi_name), self.wsi_mask * 255)
 
         # * declare holder for output
@@ -349,22 +374,23 @@ class InferManager(base.InferManager):
         # self.wsi_inst_map[:] = 0 # flush fill
 
         # warning, the value within this is uninitialized
-        # self.wsi_pred_map = np.lib.format.open_memmap(
-        #                                     '%s/pred_map.npy' % self.cache_path, mode='w+',
-        #                                     shape=tuple(self.wsi_proc_shape) + (out_ch,), 
-        #                                     dtype=np.float32)
-        self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
+        self.wsi_pred_map = np.lib.format.open_memmap(
+                                            '%s/pred_map.npy' % self.cache_path, mode='w+',
+                                            shape=tuple(self.wsi_proc_shape) + (out_ch,), 
+                                            dtype=np.float32)
+        # ! for debug
+        # self.wsi_pred_map = np.load('%s/pred_map.npy' % self.cache_path, mmap_mode='r')
         end = time.perf_counter()
-        print('Preparing Input Output Placement: ', end - start)
+        log_info('Preparing Input Output Placement: {0}'.format(end - start))
         
         # * raw prediction
         start = time.perf_counter()
-        # chunk_info_list, patch_info_list = _get_chunk_patch_info(
-        #                                         self.wsi_proc_shape, chunk_input_shape, 
-        #                                         patch_input_shape, patch_output_shape)
-        # self.__get_raw_prediction(chunk_info_list, patch_info_list)
+        chunk_info_list, patch_info_list = _get_chunk_patch_info(
+                                                self.wsi_proc_shape, chunk_input_shape, 
+                                                patch_input_shape, patch_output_shape)
+        self.__get_raw_prediction(chunk_info_list, patch_info_list)
         end = time.perf_counter()
-        print('Inference Time: ',  end - start)
+        log_info('Inference Time: {0}'.format(end - start))
 
         # TODO: deal with error banding
         ##### * post proc
@@ -461,6 +487,12 @@ class InferManager(base.InferManager):
 
             # * proceed to overwrite
             for inst_id in inner_inst_list:
+                # ! happen because we alrd skip thoses with wrong
+                # ! contour (<3 points) within the postproc, so 
+                # ! sanity gate here
+                if inst_id not in inst_info_dict:
+                    log_info('Nuclei id=%d not in saved dict WRN1.' % inst_id)
+                    continue
                 inst_info = inst_info_dict[inst_id]
                 # now correct the coordinate wrt to wsi
                 inst_info['bbox']     += top_left
@@ -496,31 +528,37 @@ class InferManager(base.InferManager):
         pbar.close()
 
         end = time.perf_counter()
-        print('Post Proc Time: ', end - start)
+        log_info('Total Post Proc Time: {0}'.format(end - start))
 
         # ! cant possibly save the inst map at high res, too large
         start = time.perf_counter()
         json_path = '%s/%s.json' % (output_path, wsi_name)
         self.__save_json(json_path, self.wsi_inst_info, mag=self.wsi_proc_mag)
         end = time.perf_counter()
-        print('Save Time: ', end - start)
+        log_info('Save Time: {0}'.format(end - start))
 
     def process_wsi_list(self, run_args):
         self._parse_args(run_args) 
         
-        # if not os.path.exists(self.cache_path):
-        #     rm_n_mkdir(self.cache_path)
-        # if not os.path.exists(self.output_dir):
-        #     rm_n_mkdir(self.output_dir)
+        if not os.path.exists(self.cache_path):
+            rm_n_mkdir(self.cache_path)
+        if not os.path.exists(self.output_dir):
+            rm_n_mkdir(self.output_dir)
 
         wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list[:]:
             wsi_base_name = pathlib.Path(wsi_path).stem
-            # if wsi_base_name not in name_list: continue
             msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
             output_file = '%s/%s.json' % (self.output_dir, wsi_base_name)
-            # if os.path.exists(output_file): continue
-            self.process_single_file(wsi_path, msk_path, self.output_dir)
-        # rm_n_mkdir(self.cache_path) # clean up all cache
+            if os.path.exists(output_file): 
+                log_info('Skip: %s' % wsi_base_name)
+                continue
+            try:
+                log_info('Process: %s' % wsi_base_name)
+                self.process_single_file(wsi_path, msk_path, self.output_dir)
+                log_info('Finish')
+            except:
+                logging.exception("Crash")
+        rm_n_mkdir(self.cache_path) # clean up all cache
         return
