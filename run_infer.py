@@ -11,8 +11,11 @@ Options:
 
   --gpu=<id>                  GPU list. [default: 0]
   --nr_types=<n>              Number of nuclei types to predict. [default: 0]
+  --type_info_path=<path>     Path to a json define mapping between type id, type name, 
+                              and expected overlaid color. [default: '']
+
   --model_path=<path>         Path to saved checkpoint.
-  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke, 'None' or 'pannuke'. [default: pannuke]
+  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke, 'original' or 'fast'. [default: fast]
   --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
   --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
   --batch_size=<n>            Batch size. [default: 128]
@@ -29,14 +32,12 @@ Arguments for processing tiles.
 
 usage:
     tile (--input_dir=<path>) (--output_dir=<path>) \
-         [--type_info=<path>] [--draw_dot] [--save_qupath] [--save_raw_map]
+         [--draw_dot] [--save_qupath] [--save_raw_map]
     
 options:
    --input_dir=<path>     Path to input data directory. Assumes the files are not nested within directory.
    --output_dir=<path>    Path to output directory..
 
-   --type_info=<path>     Path to a json define mapping between type id, type name, 
-                          and expected overlaid color. [default: '']
    --draw_dot             To draw nuclei centroid on overlay. [default: False]
    --save_qupath          To optionally output QuPath v0.2.3 compatible format. [default: False]
    --save_raw_map         To save raw prediction or not. [default: False]
@@ -48,7 +49,8 @@ Arguments for processing wsi
 usage:
     wsi (--input_dir=<path>) (--output_dir=<path>) [--proc_mag=<n>]\
         [--cache_path=<path>] [--input_mask_dir=<path>] \
-        [--ambiguous_size=<n>] [--chunk_shape=<n>] [--tile_shape=<n>] 
+        [--ambiguous_size=<n>] [--chunk_shape=<n>] [--tile_shape=<n>] \
+        [--save_thumb] [--save_mask]
     
 options:
     --input_dir=<path>      Path to input data directory. Assumes the files are not nested within directory.
@@ -61,6 +63,8 @@ options:
     --ambiguous_size=<int>  Define ambiguous region along tiling grid to perform re-post processing. [default: 128]
     --chunk_shape=<n>       Shape of chunk for processing. [default: 10000]
     --tile_shape=<n>        Shape of tiles for processing. [default: 2048]
+    --save_thumb            To save thumb. [default: False]
+    --save_mask             To save mask. [default: False]
 """
 
 import logging
@@ -90,7 +94,7 @@ if __name__ == '__main__':
     sub_args = docopt(sub_cli_dict[sub_cmd], argv=sub_cmd_args, help=True)
     
     args.pop('--version')
-    os.environ['CUDA_VISIBLE_DEVICES'] = args.pop('--gpu')
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3' #args.pop('--gpu')
 
     args = {k.replace('--', '') : v for k, v in args.items()}
     sub_args = {k.replace('--', '') : v for k, v in sub_args.items()}
@@ -106,29 +110,30 @@ if __name__ == '__main__':
             },
             'model_path' : args['model_path'],
         },
+        'type_info_path'  : None if args['type_info_path'] == 'None' \
+                            else args['type_info_path'],
     }
 
     # ***
     run_args = {
         'batch_size' : int(args['batch_size']),
+
         'nr_inference_workers' : int(args['nr_inference_workers']),
         'nr_post_proc_workers' : int(args['nr_post_proc_workers']),
     }
 
     if args['model_mode'] == 'fast':
         run_args['patch_input_shape'] = 256
-        run_args['patch_input_shape'] = 164
+        run_args['patch_output_shape'] = 164
     else:
-        args['patch_input_shape'] = 270
-        run_args['patch_input_shape'] = 80
+        run_args['patch_input_shape'] = 270
+        run_args['patch_output_shape'] = 80
 
     if sub_cmd == 'tile':
         run_args.update({
             'input_dir'      : sub_args['input_dir'],
             'output_dir'     : sub_args['output_dir'],
 
-            'type_info'   : None if sub_args['type_info'] == 'None' \
-                                 else sub_args['type_info'],
             'draw_dot'    : sub_args['draw_dot'],
             'save_qupath' : sub_args['save_qupath'],
             'save_raw_map': sub_args['save_raw_map'],
@@ -145,19 +150,21 @@ if __name__ == '__main__':
             'ambiguous_size' : int(sub_args['ambiguous_size']),
             'chunk_shape'    : int(sub_args['chunk_shape']),
             'tile_shape'     : int(sub_args['tile_shape']),
+            'save_thumb'     : sub_args['save_thumb'],
+            'save_mask'      : sub_args['save_mask'],
         })
     # ***
     
     # ! TODO: where to save logging
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format='|%(asctime)s.%(msecs)03d| [%(levelname)s] %(message)s',datefmt='%Y-%m-%d|%H:%M:%S',
         handlers=[
             logging.FileHandler("debug.log"),
             logging.StreamHandler()
         ]
     )
-    exit()
+
     if sub_cmd == 'tile':
         from infer.tile import InferManager
         infer = InferManager(**method_args)

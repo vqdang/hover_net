@@ -27,7 +27,13 @@ class InferManager(object):
         self.nr_types = self.method['model_args']['nr_types']
         # create type info name and colour
         self.type_info_dict = None
-        if self.nr_types is not None:
+        if self.type_info_path is not None:
+            self.type_info_dict = json.load(open(self.type_info_path, 'r'))
+            self.type_info_dict = {
+                int(k) : (v[0], tuple(v[1])) for k, v in self.type_info_dict.items()
+            }
+
+        if self.nr_types is not None and self.type_info_dict is None:
             cmap = plt.get_cmap('hot')
             colour_list = np.arange(self.nr_types, dtype=np.int32)
             colour_list = (cmap(colour_list)[...,:3] * 255).astype(np.uint8)

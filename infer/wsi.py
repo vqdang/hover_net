@@ -316,7 +316,7 @@ class InferManager(base.InferManager):
         self.patch_output_shape = [self.patch_output_shape, self.patch_output_shape]
         return
 
-    def process_single_file(self, wsi_path, msk_path, output_path):
+    def process_single_file(self, wsi_path, msk_path, output_dir):
         # TODO: customize universal file handler to sync the protocol
         ambiguous_size = self.ambiguous_size
         tile_shape = (np.array(self.tile_shape)).astype(np.int64)
@@ -329,10 +329,9 @@ class InferManager(base.InferManager):
         wsi_name = path_obj.stem
 
         start = time.perf_counter()
-        # self.wsi_proc_mag = 40
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
-        self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.wsi_proc_mag)
-        self.wsi_handler.prepare_reading(read_mag=self.wsi_proc_mag, 
+        self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.proc_mag)
+        self.wsi_handler.prepare_reading(read_mag=self.proc_mag, 
                             cache_path='%s/src_wsi.npy' % self.cache_path)
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1]) # to Y, X
 
@@ -359,7 +358,12 @@ class InferManager(base.InferManager):
         if np.sum(self.wsi_mask) == 0:
             log_info('Skip due to empty mask !!!')
             return
-        cv2.imwrite('%s/%s.png' % (output_path, wsi_name), self.wsi_mask * 255)
+        if self.save_mask:
+            cv2.imwrite('%s/mask/%s.png' % (output_dir, wsi_name), self.wsi_mask * 255)
+        if self.save_thumb:
+            wsi_thumb_rgb = self.wsi_handler.get_full_img(read_mag=1.25)
+            cv2.imwrite('%s/thumb/%s.png' % (output_dir, wsi_name), 
+                        cv2.cvtColor(wsi_thumb_rgb, cv2.COLOR_RGB2BGR))
 
         # * declare holder for output
         # create a memory-mapped .npy file with the predefined dimensions and dtype
@@ -532,8 +536,11 @@ class InferManager(base.InferManager):
 
         # ! cant possibly save the inst map at high res, too large
         start = time.perf_counter()
-        json_path = '%s/%s.json' % (output_path, wsi_name)
-        self.__save_json(json_path, self.wsi_inst_info, mag=self.wsi_proc_mag)
+        if self.save_mask or self.save_thumb:
+            json_path = '%s/json/%s.json' % (output_dir, wsi_name)
+        else:
+            json_path = '%s/%s.json' % (output_dir, wsi_name)
+        self.__save_json(json_path, self.wsi_inst_info, mag=self.proc_mag)
         end = time.perf_counter()
         log_info('Save Time: {0}'.format(end - start))
 
@@ -544,13 +551,22 @@ class InferManager(base.InferManager):
             rm_n_mkdir(self.cache_path)
         if not os.path.exists(self.output_dir):
             rm_n_mkdir(self.output_dir)
+            if self.save_thumb or self.save_mask:
+                rm_n_mkdir(self.output_dir + '/json/')
+            if self.save_thumb:
+                rm_n_mkdir(self.output_dir + '/thumb/')
+            if self.save_mask:
+                rm_n_mkdir(self.output_dir + '/mask/')
 
         wsi_path_list = glob.glob(self.input_dir + '/*')       
         wsi_path_list.sort() # ensure ordering
         for wsi_path in wsi_path_list[:]:
             wsi_base_name = pathlib.Path(wsi_path).stem
-            msk_path = '%s/%s.png' % (self.input_msk_dir, wsi_base_name)
-            output_file = '%s/%s.json' % (self.output_dir, wsi_base_name)
+            msk_path = '%s/%s.png' % (self.input_mask_dir, wsi_base_name)
+            if self.save_thumb or self.save_mask:
+                output_file = '%s/json/%s.json' % (self.output_dir, wsi_base_name)
+            else:
+                output_file = '%s/%s.json' % (self.output_dir, wsi_base_name)
             if os.path.exists(output_file): 
                 log_info('Skip: %s' % wsi_base_name)
                 continue

@@ -111,8 +111,7 @@ def _post_process_patches(
     # * a prediction map with instance of ID 1-N
     # * and a dict contain the instance info, access via its ID
     # * each instance may have type
-    functor, func_kwargs = post_proc_func
-    pred_inst, inst_info_dict = functor(pred_map, **func_kwargs) 
+    pred_inst, inst_info_dict = post_proc_func(pred_map, **post_proc_kwargs) 
 
     overlaid_img = visualize_instances_dict(
                         src_image.copy(), 
@@ -130,7 +129,6 @@ class InferManager(base.InferManager):
         """
         Process a single image tile < 5000x5000 in size.
         """
-
         for variable, value in run_args.items():
             self.__setattr__(variable, value)
 
@@ -138,13 +136,13 @@ class InferManager(base.InferManager):
         patterning = lambda x : re.sub('([\[\]])','[\\1]',x)
         file_path_list = glob.glob(patterning('%s/*' % self.input_dir))
         file_path_list.sort()  # ensure same order
-        file_path_list = file_path_list
+        file_path_list = file_path_list[:3]
 
         rm_n_mkdir(self.output_dir + '/json/')
         rm_n_mkdir(self.output_dir + '/mat/')
         rm_n_mkdir(self.output_dir + '/overlay/')
         if self.save_qupath:
-            rm_n_mkdir(self.output_dir + '/overlay/')        
+            rm_n_mkdir(self.output_dir + '/qupath/')        
 
         def proc_callback(results):
             """
@@ -166,7 +164,7 @@ class InferManager(base.InferManager):
             cv2.imwrite(save_path, cv2.cvtColor(overlaid_img, cv2.COLOR_RGB2BGR))
 
             if self.save_qupath:
-                nuc_val_list = list(inst_type_dict.values())
+                nuc_val_list = list(inst_info_dict.values())
                 nuc_type_list = np.array([v['type'] for v in nuc_val_list])
                 nuc_coms_list = np.array([v['centroid'] for v in nuc_val_list])
                 save_path = '%s/qupath/%s.tsv' % (self.output_dir, img_name)
@@ -293,7 +291,7 @@ class InferManager(base.InferManager):
                              'src_image' : src_image, 
                              'name' : base_name}
 
-                post_proc_kwargs = {'nr_types' : self.nr_type, 
+                post_proc_kwargs = {'nr_types' : self.nr_types, 
                                     'return_centroids' : True} # dynamicalize this
 
                 overlay_kwargs = {
