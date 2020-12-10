@@ -5,10 +5,12 @@ import os
 
 import cv2
 import numpy as np
-import scipy.io as sio
 import pandas as pd
+import scipy.io as sio
 
-from metrics.stats_utils import *
+from metrics.stats_utils import (get_dice_1, get_fast_aji, get_fast_aji_plus,
+                                 get_fast_dice_2, get_fast_pq, remap_label)
+
 
 def run_nuclei_type_stat(pred_dir, true_dir, type_uid_list=None, exhaustive=True):
     """
