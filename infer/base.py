@@ -1,16 +1,15 @@
 import argparse
 import glob
+import json
 import math
 import multiprocessing
 import os
 import re
 import sys
-import warnings
-warnings.filterwarnings('ignore') 
 from importlib import import_module
 from multiprocessing import Lock, Pool
 
-import json
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.utils.data as data
@@ -25,7 +24,16 @@ class InferManager(object):
         for variable, value in kwargs.items():
             self.__setattr__(variable, value)
         self.__load_model()
-        self.type_classification = self.method['model_args']['nr_types'] is not None
+        self.nr_types = self.method['model_args']['nr_types']
+        # create type info name and colour
+        self.type_info_dict = None
+        if self.nr_types is not None:
+            cmap = plt.get_cmap('hot')
+            colour_list = np.arange(self.nr_types, dtype=np.int32)
+            colour_list = (cmap(colour_list)[...,:3] * 255).astype(np.uint8)
+            # should be compatible out of the box wrt qupath
+            self.type_info_dict = {k : (str(k), tuple(v)) 
+                                   for k, v in enumerate(colour_list)}
         return
 
     def __load_model(self):

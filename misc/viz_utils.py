@@ -94,8 +94,8 @@ def visualize_instances_dict(input_image, inst_dict,
         input_image: input image
         inst_dict: dict of output prediction, defined as in this library
         draw_dot: to draw a dot for each centroid
-        type_colour: a dict of {type : colour} , `type` is from 0-N
-                     and `colour` is a tuple of (R, G, B)
+        type_colour: a dict of {type_id : (type_name, colour)} , 
+                     `type_id` is from 0-N and `colour` is a tuple of (R, G, B)
         line_thickness: line thickness of contours
     """
     overlay = np.copy((input_image))
@@ -107,7 +107,7 @@ def visualize_instances_dict(input_image, inst_dict,
     for idx, [inst_id, inst_info] in enumerate(inst_dict.items()):
         inst_contour = inst_info['contour']
         if 'type' in inst_info and type_colour is not None:
-            inst_colour = type_colour[inst_info['type']]
+            inst_colour = type_colour[inst_info['type']][1]
         else:
             inst_colour = (inst_rng_colors[idx]).tolist()
         cv2.drawContours(overlay, [inst_contour], -1, inst_colour, line_thickness)

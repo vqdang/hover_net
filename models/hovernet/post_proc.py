@@ -130,6 +130,8 @@ def process(pred_map, nr_types=None, return_centroids=False):
                 'bbox'     : inst_bbox,
                 'centroid' : inst_centroid,
                 'contour'  : inst_contour,
+                'type_prob' : None,
+                'type' : None,
             }
 
     if nr_types is not None:
@@ -147,9 +149,13 @@ def process(pred_map, nr_types=None, return_centroids=False):
             if inst_type == 0: # ! pick the 2nd most dominant if exist
                 if len(type_list) > 1:
                     inst_type = type_list[1][0]
+            type_dict = {v[0] : v[1] for v in type_list}
+            type_prob = type_dict[inst_type] / (np.sum(inst_map_crop) + 1.0e-6)
             inst_info_dict[inst_id]['type'] = int(inst_type)
+            inst_info_dict[inst_id]['type_prob'] = float(type_prob)
     
     # print('here')
     # ! WARNING: ID MAY NOT BE CONTIGUOUS
+    # inst_id in the dict maps to the same value in the `pred_inst`
     return pred_inst, inst_info_dict
     
