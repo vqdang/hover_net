@@ -340,7 +340,7 @@ class InferManager(base.InferManager):
             self.wsi_mask = cv2.cvtColor(self.wsi_mask, cv2.COLOR_BGR2GRAY)
             self.wsi_mask[self.wsi_mask > 0] = 1
         else:
-            log_info('WARNING: No mask found, auto generate mask via simple thresholding at x1.25 !!!')
+            log_info('WARNING: No mask found, generating mask via thresholding at 1.25x!')
 
             from skimage import morphology
 
@@ -356,7 +356,7 @@ class InferManager(base.InferManager):
                 return mask
             self.wsi_mask = np.array(simple_get_mask() > 0, dtype=np.uint8)
         if np.sum(self.wsi_mask) == 0:
-            log_info('Skip due to empty mask !!!')
+            log_info('Skip due to empty mask!')
             return
         if self.save_mask:
             cv2.imwrite('%s/mask/%s.png' % (output_dir, wsi_name), self.wsi_mask * 255)
@@ -549,13 +549,14 @@ class InferManager(base.InferManager):
         
         if not os.path.exists(self.cache_path):
             rm_n_mkdir(self.cache_path)
-        if not os.path.exists(self.output_dir):
-            rm_n_mkdir(self.output_dir)
-            if self.save_thumb or self.save_mask:
-                rm_n_mkdir(self.output_dir + '/json/')
-            if self.save_thumb:
+        
+        if not os.path.exists(self.output_dir + '/json/'):
+            rm_n_mkdir(self.output_dir + '/json/')
+        if self.save_thumb:
+            if not os.path.exists(self.output_dir + '/thumb/'):
                 rm_n_mkdir(self.output_dir + '/thumb/')
-            if self.save_mask:
+        if self.save_mask:
+            if not os.path.exists(self.output_dir + '/mask/'):
                 rm_n_mkdir(self.output_dir + '/mask/')
 
         wsi_path_list = glob.glob(self.input_dir + '/*')       
