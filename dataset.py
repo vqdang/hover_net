@@ -3,9 +3,20 @@ import cv2
 import numpy as np
 import scipy.io as sio
 
+class __AbstractDataset(object):
+    """
+    Abstract class for interface of subsequent classes.
+    Main idea is to encapsulate how each dataset should parse
+    their images and annotations
+    """
+    def load_img(self, path):
+        raise NotImplementedError
+
+    def load_ann(self, path, with_type=False):
+        raise NotImplementedError
 
 ####
-class __Kumar(object):
+class __Kumar(__AbstractDataset):
     """
     Defines the Kumar dataset as originally introduced in:
 
@@ -13,34 +24,6 @@ class __Kumar(object):
     and Amit Sethi. "A dataset and a technique for generalized nuclear segmentation for 
     computational pathology." IEEE transactions on medical imaging 36, no. 7 (2017): 1550-1560.
     """
-    def __init__(self, **kwargs):
-        self.data_root = 'dataset' # ! modify the path accordingly
-        self.desc = {
-            'train':
-                {
-                    'img': ('.tif', self.data_root + '/Kumar/train/Images/'),
-                    'ann': ('.mat', self.data_root + '/Kumar/train/Labels/')
-                },
-            'valid_same':
-                {
-                    'img': ('.tif', self.data_root + '/Kumar/test_same/Images/'),
-                    'ann': ('.mat', self.data_root + '/Kumar/test_same/Labels/')
-                },
-            'valid_diff':
-                {
-                    'img': ('.tif', self.data_root + '/Kumar/test_diff/Images/'),
-                    'ann': ('.mat', self.data_root + '/Kumar/test_diff/Labels/')
-                },
-        }
-
-        self.nr_types = None # no classification labels
-
-        # used for determining the colour of contours in overlay
-        self.type_colour = {
-            0: (0, 0, 0),
-            1: (255, 255, 0),
-        }
-
     def load_img(self, path):
         return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
@@ -52,9 +35,8 @@ class __Kumar(object):
         ann = np.expand_dims(ann_inst, -1)
         return ann
 
-
 ####
-class __CPM17(object):
+class __CPM17(__AbstractDataset):
     """
     Defines the CPM 2017 dataset as originally introduced in:
 
@@ -62,34 +44,6 @@ class __CPM17(object):
     Talha Qaiser, Navid Alemi Koohbanani et al. "Methods for segmentation and classification 
     of digital microscopy tissue images." Frontiers in bioengineering and biotechnology 7 (2019).
     """
-    def __init__(self, **kwargs):
-        self.data_root = 'dataset'
-        self.desc = {
-            'train':
-                {
-                    'img': ('.png', self.data_root + '/cpm17/train/Images/'),
-                    'ann': ('.mat', self.data_root + '/cpm17/train/Labels/')
-                },
-            'valid':
-                {
-                    'img': ('.png', self.data_root + '/cpm17/test/Images/'),
-                    'ann': ('.mat', self.data_root + '/cpm17/test/Labels/')
-                },
-        }
-
-        self.train_dir_list = [
-            self.data_root + '/cpm17/patches/train/']
-        self.valid_dir_list = [
-            self.data_root + '/cpm17/patches/valid/']
-
-        self.nr_types = None  # no classification labels
-
-        # used for determining the colour of contours in overlay
-        self.type_colour = {
-            0: (0, 0, 0),
-            1: (255, 255, 0),
-        }
-
 
     def load_img(self, path):
         return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
@@ -104,48 +58,7 @@ class __CPM17(object):
 
 
 ####
-class __CoNSeP(object):
-    """
-    Defines the CoNSeP dataset as originally introduced in:
-
-    Graham, Simon, Quoc Dang Vu, Shan E. Ahmed Raza, Ayesha Azam, Yee Wah Tsang, Jin Tae Kwak, 
-    and Nasir Rajpoot. "Hover-Net: Simultaneous segmentation and classification of nuclei 
-    in multi-tissue histology images." Medical Image Analysis 58 (2019): 101563.
-    """
-    def __init__(self, **kwargs):
-        self.data_root = 'dataset'
-        self.desc = {
-            'train':
-                {
-                    'img': ('.png', self.data_root + '/consep/Train/Images/'),
-                    'ann': ('.mat', self.data_root + '/consep/Train/Labels/')
-                },
-            'valid':
-                {
-                    'img': ('.png', self.data_root + '/consep/Test/Images/'),
-                    'ann': ('.mat', self.data_root + '/consep/Test/Labels/')
-                },
-        }
-
-        self.nr_types = 5
-
-        self.type_colour = {
-            0: (  0,   0,   0),
-            1: (255,   0,   0),
-            2: (  0, 255,   0),
-            3: (  0,   0, 255),
-            4: (255, 255,   0),
-            5: (255, 165,   0)
-        }
-
-        self.nuclei_type_dict = {
-            'Miscellaneous': 1,
-            'Inflammatory': 2,
-            'Epithelial': 3,
-            'Spindle': 4,
-        }
-        assert len(self.nuclei_type_dict.values()) == self.nr_types - 1
-
+class __CoNSeP(__AbstractDataset):
     def load_img(self, path):
         return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
@@ -170,15 +83,16 @@ class __CoNSeP(object):
 
 
 ####
-def get_dataset(name, **kwargs):
+def get_dataset(name):
     """
     Return a pre-defined dataset object associated with `name`
     """
-    if name.lower() == 'kumar':
-        return __Kumar(**kwargs)
-    elif name.lower() == 'cpm17':
-        return __CPM17(**kwargs)
-    elif name.lower() == 'consep':
-        return __CoNSeP(**kwargs)
+    name_dict = {
+        'kumar'  : lambda: __Kumar(),
+        'cpm17'  : lambda: __CPM17(),
+        'consep' : lambda: __CoNSeP(),
+    }
+    if name.lower() in name_dict:
+        return name_dict[name]()
     else:
         assert False, "Unknown dataset `%s`" % name

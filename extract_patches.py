@@ -19,8 +19,6 @@ from dataset import get_dataset
 #-------------------------------------------------------------------------------------
 if __name__ == '__main__':
 
-    patterning = lambda x: re.sub('([\[\]])','[\\1]', x)
-
     # Determines whether to extract type map (only applicable to datasets with class labels).
     type_classification = True 
 
@@ -30,22 +28,44 @@ if __name__ == '__main__':
     # step_size = [80, 80]     # Step size for patch extraction. Should match network output size. 
     # dataset_name = 'consep'   # Name of dataset - use Kumar, CPM17 or CoNSeP. Pulls dataset info from dataset.py
     # extract_type = 'mirror'  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
-
     win_size  = [540, 540]         
     step_size = [164, 164]        
     extract_type = 'mirror'  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
-    dataset_name = 'rmt' # Name of dataset - use Kumar, CPM17 or CoNSeP. Pulls dataset info from dataset.py
-    dataset_kwargs = {'version_code' : 'continual_v0.0'}
-    save_root = "dataset/training_data/%s/" % dataset_kwargs['version_code']
 
+    # Name of dataset - use Kumar, CPM17 or CoNSeP. 
+    # This used to get the specific dataset img and ann loading scheme from dataset.py
+    dataset_name = 'consep' 
+    save_root = 'dataset/training_data/%s/' % dataset_name
+    # a dictionary to specify where the dataset path should be
+    # {split_name : 
+    #   {
+    #       'img' : (ext, path to corresponding img directory)
+    #       'ann' : (ext, path to corresponding ann directory)
+    #   }
+    # }
+    dataset_info = {
+        'train':
+            {
+                'img': ('.png', 'dataset/CoNSeP/Train/Images/'),
+                'ann': ('.mat', 'dataset/CoNSeP/Train/Labels/')
+            },
+        'valid':
+            {
+                'img': ('.png', 'dataset/CoNSeP/Test/Images/'),
+                'ann': ('.mat', 'dataset/CoNSeP/Test/Labels/')
+            },
+    }
+
+    
+    patterning = lambda x : re.sub('([\[\]])','[\\1]',x)
+    parser = get_dataset(dataset_name)
     xtractor = PatchExtractor(win_size, step_size)
-    dataset_info = get_dataset(dataset_name, **dataset_kwargs)
-    for dir_codename, dir_desc in dataset_info.desc.items():
-        img_ext, img_dir = dir_desc['img']
-        ann_ext, ann_dir = dir_desc['ann']
+    for split_name, split_desc in dataset_info.items():
+        img_ext, img_dir = split_desc['img']
+        ann_ext, ann_dir = split_desc['ann']
 
         out_dir = "%s/%s/%s/%dx%d_%dx%d/" % \
-                    (save_root, dataset_name, dir_codename,
+                    (save_root, dataset_name, split_name,
                     win_size[0], win_size[1], step_size[0], step_size[1])
         file_list = glob.glob(patterning('%s/*%s' % (ann_dir, ann_ext)))
         file_list.sort() # ensure same ordering across platform
@@ -56,10 +76,10 @@ if __name__ == '__main__':
         pbarx = tqdm.tqdm(total=len(file_list), bar_format=pbar_format, ascii=True, position=0)
 
         for file_idx, file_path in enumerate(file_list):
-            base_name = pathlib.Path(file_path)
+            base_name = pathlib.Path(file_path).stem
             
-            img = dataset_info.load_img(img_dir + base_name + img_ext)
-            ann = dataset_info.load_ann(ann_dir + base_name + ann_ext, type_classification)
+            img = parser.load_img('%s/%s%s' % (img_dir, base_name, img_ext))
+            ann = parser.load_ann('%s/%s%s' % (ann_dir, base_name, ann_ext), type_classification)
 
             # *
             img = np.concatenate([img, ann], axis=-1)

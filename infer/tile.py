@@ -33,6 +33,7 @@ from misc.utils import (color_deconvolution, cropping_center, get_bounding_box,
 from misc.viz_utils import colorize, visualize_instances_dict
 from skimage import color
 
+import convert_format
 from . import base
 
 
@@ -79,13 +80,19 @@ def _prepare_patching(img, window_size, mask_size, return_src_top_corner=False):
         return img, patch_info, [padt, padl]
 
 #### 
-def _post_process_patches(post_proc_func, patch_info, src_info, get_overlaid=False, type_colour=None, *args):
+def _post_process_patches(
+        post_proc_func, 
+        post_proc_kwargs,
+        patch_info, 
+        image_info,
+        overlay_kwargs,
+    ):
     # re-assemble the prediction, sort according to the patch location within the original image
     patch_info = sorted(patch_info, key=lambda x: [x[0][0], x[0][1]]) 
     patch_info, patch_data = zip(*patch_info)
 
-    src_shape = src_info['src_shape']
-    src_image = src_info['src_image']
+    src_shape = image_info['src_shape']
+    src_image = image_info['src_image']
 
     patch_shape = np.squeeze(patch_data[0]).shape
     ch = 1 if len(patch_shape) == 2 else patch_shape[-1]
@@ -104,17 +111,14 @@ def _post_process_patches(post_proc_func, patch_info, src_info, get_overlaid=Fal
     # * a prediction map with instance of ID 1-N
     # * and a dict contain the instance info, access via its ID
     # * each instance may have type
-    functor, func_kwargs = post_proc_func
-    pred_inst, inst_info_dict = functor(pred_map, **func_kwargs) 
+    pred_inst, inst_info_dict = post_proc_func(pred_map, **post_proc_kwargs) 
 
-    overlaid_img = None
-    if get_overlaid:
-        overlaid_img = visualize_instances_dict(src_image.copy(), inst_info_dict, draw_dot=True,
-                                            type_colour=type_colour, line_thickness=1)
-    canvas = np.zeros(src_image.shape, dtype=np.uint8)
-    color_inst_map = visualize_instances_dict(canvas, inst_info_dict, type_colour=None, line_thickness=-1)
+    overlaid_img = visualize_instances_dict(
+                        src_image.copy(), 
+                        inst_info_dict, 
+                        **overlay_kwargs)
 
-    return [pred_inst, inst_info_dict , overlaid_img, pred_map, color_inst_map], args
+    return image_info['name'], pred_map, pred_inst, inst_info_dict, overlaid_img
     
 class InferManager(base.InferManager):
     """
@@ -125,41 +129,50 @@ class InferManager(base.InferManager):
         """
         Process a single image tile < 5000x5000 in size.
         """
-
         for variable, value in run_args.items():
             self.__setattr__(variable, value)
-
 
         # * depend on the number of samples and their size, this may be less efficient
         patterning = lambda x : re.sub('([\[\]])','[\\1]',x)
         file_path_list = glob.glob(patterning('%s/*' % self.input_dir))
         file_path_list.sort()  # ensure same order
-        file_path_list = file_path_list
+        file_path_list = file_path_list[:3]
 
-        rm_n_mkdir(self.output_dir)
+        rm_n_mkdir(self.output_dir + '/json/')
+        rm_n_mkdir(self.output_dir + '/mat/')
+        rm_n_mkdir(self.output_dir + '/overlay/')
+        if self.save_qupath:
+            rm_n_mkdir(self.output_dir + '/qupath/')        
 
-        def proc_callback(args):
+        def proc_callback(results):
             """
-            output format is implicit assumption
+            output format is implicit assumption, taken from `_post_process_patches`
             """
-            results, args = args # TODO: args is not very intuitive
-            pred_inst, inst_info_dict, overlaid, pred_raw, color_inst_map = results
+            img_name, pred_map, pred_inst, inst_info_dict, overlaid_img = results
 
-            base_name = args[0]
-
-            if overlaid is not None:
-                overlaid = cv2.cvtColor(overlaid, cv2.COLOR_RGB2BGR)
-                cv2.imwrite('%s/%s-over.png' % (self.output_dir, base_name), overlaid)
-            color_inst_map = cv2.cvtColor(color_inst_map, cv2.COLOR_RGB2BGR)
-            cv2.imwrite('%s/%s-inst.png' % (self.output_dir, base_name), color_inst_map)
-
-            # TODO: save raw or not
-            sio.savemat('%s/%s.mat' % (self.output_dir, base_name), {'inst_map': pred_inst})
+            inst_type_dict = {k : v['type'] for k, v in inst_info_dict.items()}
+            mat_dict = {
+                'inst_map'  : pred_inst,
+                'inst_type' : inst_type_dict,
+            }
             if self.save_raw_map:
-                np.save('%s/%s-raw.npy' % (self.output_dir, base_name), pred_raw)
+                mat_dict['raw_map'] = pred_map
+            save_path = '%s/mat/%s.mat' % (self.output_dir, img_name)
+            sio.savemat(save_path, mat_dict)
 
-            json_path = '%s/%s.json' % (self.output_dir, base_name)
-            self.__save_json(json_path, inst_info_dict, None)
+            save_path = '%s/overlay/%s.png' % (self.output_dir, img_name)
+            cv2.imwrite(save_path, cv2.cvtColor(overlaid_img, cv2.COLOR_RGB2BGR))
+
+            if self.save_qupath:
+                nuc_val_list = list(inst_info_dict.values())
+                nuc_type_list = np.array([v['type'] for v in nuc_val_list])
+                nuc_coms_list = np.array([v['centroid'] for v in nuc_val_list])
+                save_path = '%s/qupath/%s.tsv' % (self.output_dir, img_name)
+                convert_format.to_qupath(save_path, 
+                    nuc_coms_list, nuc_type_list, self.type_info_dict)
+                
+            save_path = '%s/json/%s.json' % (self.output_dir, img_name)
+            self.__save_json(save_path, inst_info_dict, None)
             return base_name
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
@@ -272,13 +285,22 @@ class InferManager(base.InferManager):
                 src_image = cache_image_list[file_idx]
                 src_image = src_image[src_pos[0]:src_pos[0]+image_info[0][0],
                                       src_pos[1]:src_pos[1]+image_info[0][1]]
-                file_info = {'src_shape' : image_info[0], 'src_image' : src_image}
-                base_name = pathlib.Path(file_path).stem
 
-                post_proc_kwargs = {'nr_types' : self.method['model_args']['nr_types'], 
+                base_name = pathlib.Path(file_path).stem
+                file_info = {'src_shape' : image_info[0], 
+                             'src_image' : src_image, 
+                             'name' : base_name}
+
+                post_proc_kwargs = {'nr_types' : self.nr_types, 
                                     'return_centroids' : True} # dynamicalize this
-                func_args = ([self.post_proc_func, post_proc_kwargs], 
-                                file_ouput_data, file_info, True, None, base_name)
+
+                overlay_kwargs = {
+                    'draw_dot' : self.draw_dot,
+                    'type_colour' : self.type_info_dict,
+                    'line_thickness' : 1,
+                }
+                func_args = (self.post_proc_func, post_proc_kwargs, 
+                             file_ouput_data, file_info, overlay_kwargs)
 
                 # dispatch for parallel post-processing
                 if proc_pool is not None:
