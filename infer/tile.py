@@ -172,7 +172,7 @@ class InferManager(base.InferManager):
                 
             save_path = '%s/json/%s.json' % (self.output_dir, img_name)
             self.__save_json(save_path, inst_info_dict, None)
-            return base_name
+            return img_name
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
             item_counter = 0
