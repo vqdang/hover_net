@@ -21,14 +21,33 @@ class FileHandler(object):
             ('mpp  '        , None),
             ('base_shape'   , None),
         }
-
-        pass
+        raise NotImplementedError
 
     def __load_metadata(self):
-        pass
+        raise NotImplementedError
 
-    def read_region(self):
-        pass
+
+    def get_full_img(self, read_mag=None, read_mpp=None):
+        """
+        Only use `read_mag` or `read_mpp`, not both, prioritize `read_mpp`
+
+        `read_mpp` is in X, Y format
+        """
+        raise NotImplementedError
+
+    def read_region(self, coords, size):
+        """
+        Must call `prepare_reading` before hand
+
+        Args:
+            coords (tuple): (dims_x, dims_y), 
+                          top left coordinates of image region at selected 
+                          `read_mag` or `read_mpp` from `prepare_reading` 
+            size (tuple): (dims_x, dims_y)
+                          width and height of image region at selected 
+                          `read_mag` or `read_mpp` from `prepare_reading`                           
+        """
+        raise NotImplementedError
     
     def get_dimensions(self, read_mag=None, read_mpp=None):
         """
@@ -43,7 +62,7 @@ class FileHandler(object):
 
     def prepare_reading(self, read_mag=None, read_mpp=None, cache_path=None):
         """
-        Only use either of these parameter, prioritize `read_mpp`
+        Only use `read_mag` or `read_mpp`, not both, prioritize `read_mpp`
 
         `read_mpp` is in X, Y format
         """
@@ -125,12 +144,15 @@ class OpenSlideHandler(FileHandler):
     
     def read_region(self, coords, size):
         """
-        Must call `prepare_image` before hand
+        Must call `prepare_reading` before hand
 
         Args:
-            coords (tuple): top left coordinates of image region at level 0 (x,y)
-            read_level (int): level of image pyramid to read from
-            read_level_size (tuple): dimensions of image region at selected level (dims_x, dims_y)
+            coords (tuple): (dims_x, dims_y), 
+                          top left coordinates of image region at selected 
+                          `read_mag` or `read_mpp` from `prepare_reading` 
+            size (tuple): (dims_x, dims_y)
+                          width and height of image region at selected 
+                          `read_mag` or `read_mpp` from `prepare_reading`                           
         """
         if self.image_ptr is None:
             # convert coord from read lv to lv zero
@@ -147,6 +169,11 @@ class OpenSlideHandler(FileHandler):
         return np.array(region)[...,:3]
 
     def get_full_img(self, read_mag=None, read_mpp=None):
+        """
+        Only use `read_mag` or `read_mpp`, not both, prioritize `read_mpp`
+
+        `read_mpp` is in X, Y format
+        """
 
         read_lv, scale_factor = self._get_read_info(
                                         read_mag=read_mag, 
