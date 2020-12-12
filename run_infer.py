@@ -95,7 +95,6 @@ if __name__ == '__main__':
     
     args.pop('--version')
     gpu_list = args.pop('--gpu')
-    print(gpu_list)
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
 
     args = {k.replace('--', '') : v for k, v in args.items()}
