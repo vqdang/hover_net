@@ -1,5 +1,5 @@
 python run_infer.py \
---gpu '0,1' \
+--gpu='0,1' \
 --nr_types=6 \
 --type_info_path=type_info.json \
 --batch_size=64 \
