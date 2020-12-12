@@ -136,7 +136,7 @@ class InferManager(base.InferManager):
         patterning = lambda x : re.sub('([\[\]])','[\\1]',x)
         file_path_list = glob.glob(patterning('%s/*' % self.input_dir))
         file_path_list.sort()  # ensure same order
-
+        
         rm_n_mkdir(self.output_dir + '/json/')
         rm_n_mkdir(self.output_dir + '/mat/')
         rm_n_mkdir(self.output_dir + '/overlay/')
