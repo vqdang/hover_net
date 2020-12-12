@@ -136,7 +136,6 @@ class InferManager(base.InferManager):
         patterning = lambda x : re.sub('([\[\]])','[\\1]',x)
         file_path_list = glob.glob(patterning('%s/*' % self.input_dir))
         file_path_list.sort()  # ensure same order
-        file_path_list = file_path_list[:3]
 
         rm_n_mkdir(self.output_dir + '/json/')
         rm_n_mkdir(self.output_dir + '/mat/')
@@ -173,7 +172,7 @@ class InferManager(base.InferManager):
                 
             save_path = '%s/json/%s.json' % (self.output_dir, img_name)
             self.__save_json(save_path, inst_info_dict, None)
-            return base_name
+            return img_name
 
         def detach_items_of_uid(items_list, uid, nr_expected_items):            
             item_counter = 0
