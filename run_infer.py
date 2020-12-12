@@ -15,7 +15,8 @@ Options:
                               and expected overlaid color. [default: '']
 
   --model_path=<path>         Path to saved checkpoint.
-  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke, 'original' or 'fast'. [default: fast]
+  --model_mode=<mode>         Original HoVer-Net or the reduced version in Pannuke, 
+                              'original' or 'fast'. [default: fast]
   --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
   --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
   --batch_size=<n>            Batch size. [default: 128]
@@ -111,7 +112,7 @@ if __name__ == '__main__':
             },
             'model_path' : args['model_path'],
         },
-        'type_info_path'  : None if args['type_info_path'] == 'None' \
+        'type_info_path'  : None if args['type_info_path'] == '' \
                             else args['type_info_path'],
     }
 

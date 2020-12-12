@@ -3,12 +3,17 @@ import pandas as pd
 import numpy as np
 import torch
 
-mapping = pd.read_csv('tf2pytorch_variable_mapping.csv', sep='\t')
-mapping = {v['Tensorflow'] : v['Pytorch'] for k, v in mapping.T.to_dict().items()}
+model_mode = 'Pytorch-Original' # or 'Pytorch-Fast'
+mapping = pd.read_csv('tf_to_pytorch_variable_mapping.csv', sep='\t', index_col=False)
+mapping = {v['Tensorflow'] : v[model_mode] for k, v in mapping.T.to_dict().items()}
 # mapping 
 
-tf_path = '../pretrained/pecan-hover-net.npz'
-pt_path = 'dumped_pytorch_chkpt.tar'
+# tf_path = '../pretrained/pecan-hover-net.npz'
+tf_path = '../pretrained/hover_seg_&_class_CoNSeP.npz'
+# tf_path = '../pretrained/hover_seg_CoNSeP.npz'
+pt_path = '../pretrained/hover_seg_consep_type-pytorch.tar'
+
+# pt_path = 'dumped_pytorch_chkpt.tar'
 
 pt = {}
 tf = np.load(tf_path)
