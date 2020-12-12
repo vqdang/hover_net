@@ -7,7 +7,8 @@ from scipy.ndimage.morphology import (binary_dilation, binary_fill_holes,
                                       distance_transform_cdt,
                                       distance_transform_edt)
 
-from skimage.morphology import remove_small_objects, watershed
+from skimage.morphology import remove_small_objects
+from skimage.segmentation import watershed
 from misc.utils import get_bounding_box
 
 import warnings
@@ -69,7 +70,7 @@ def __proc_np_hv(pred):
     marker = measurements.label(marker)[0]
     marker = remove_small_objects(marker, min_size=10)
 
-    proced_pred = watershed(dist, marker, mask=blb)
+    proced_pred = watershed(dist, markers=marker, mask=blb)
 
     return proced_pred
 
