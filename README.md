@@ -117,15 +117,15 @@ Model weights obtained from training HoVer-Net as a result of the above instruct
 
 **IMPORTANT:** CoNSeP, Kumar and CPM17 checkpoints use the original model mode, whereas PanNuke and MoNuSAC use the fast model mode. Refer to the inference instructions below for more information. 
 
-Segmentation Only:
-- [CoNSeP checkpoint](https://drive.google.com/file/d/1_b6pYTSdT6k5C7wYW_OlXydUb6c6xfiW/view?usp=sharing)
-- [Kumar checkpoint](https://drive.google.com/file/d/1e5f5OeyYFeq1RRAJl9inEJOMyQ1Xo6NY/view?usp=sharing) 
-- [CPM17 checkpoint](https://drive.google.com/file/d/1hSJGY_SJFLe-6thutXjQDpZJVO5UDDIi/view?usp=sharing) 
-
 Segmentation and Classification:
 - [CoNSeP checkpoint](https://drive.google.com/file/d/1BbtVD5RZ2QSOFg1XfFpFJSGFHdflSwR6/view?usp=sharing)
 - [PanNuke checkpoint](https://drive.google.com/file/d/1p5qaGdyXDfTwS2ZxgAfhgKa22rp0L2a2/view?usp=sharing)
 - [MoNuSAC checkpoint](https://drive.google.com/file/d/1L2DzR7Lb15wFy91E0zLAC_vRwk2MhKTh/view?usp=sharing)
+
+Segmentation Only:
+- [CoNSeP checkpoint](https://drive.google.com/file/d/1_b6pYTSdT6k5C7wYW_OlXydUb6c6xfiW/view?usp=sharing)
+- [Kumar checkpoint](https://drive.google.com/file/d/1e5f5OeyYFeq1RRAJl9inEJOMyQ1Xo6NY/view?usp=sharing) 
+- [CPM17 checkpoint](https://drive.google.com/file/d/1hSJGY_SJFLe-6thutXjQDpZJVO5UDDIi/view?usp=sharing) 
 
 If any of the above checkpoints are used, please ensure to cite the corresponding paper.
 
