@@ -21,7 +21,7 @@ class FileHandler(object):
             ('mpp  '        , None),
             ('base_shape'   , None),
         }
-        raise NotImplementedError
+        pass
 
     def __load_metadata(self):
         raise NotImplementedError
