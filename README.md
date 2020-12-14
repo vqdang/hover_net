@@ -101,15 +101,15 @@ Input: <br />
 
 Output: <br />
 - Both image tiles and whole-slide images output a .JSON file with keys:
-        - 'bbox' - bounding box coordinates for each nucleus
-        - 'centroid' - centroid coordinates for each nucleus
-        - 'contours' - contour coordinates for each nucleus 
-        - 'prob'- per class probabilities for each nucleus (default configuration doesn't output this)
+    - 'bbox' - bounding box coordinates for each nucleus
+    - 'centroid' - centroid coordinates for each nucleus
+    - 'contours' - contour coordinates for each nucleus 
+    - 'prob'- per class probabilities for each nucleus (default configuration doesn't output this)
 - Image tiles also output a .mat file, with keys:
-        - 'raw' - raw output of network (default configuration doesn't output this)
-        - 'inst_map' - instance map containing values from 0 to N, where N is the number of nuclei
-        - 'inst_type'- list of length N containing predictions for each nucleus
-        - 'overlay' - overlay of nuclear boundaries on top of RGB image
+    - 'raw' - raw output of network (default configuration doesn't output this)
+    - 'inst_map' - instance map containing values from 0 to N, where N is the number of nuclei
+    - 'inst_type'- list of length N containing predictions for each nucleus
+    - 'overlay' - overlay of nuclear boundaries on top of RGB image
   
 ### Model Weights
 
