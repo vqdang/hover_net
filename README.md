@@ -101,19 +101,20 @@ Input: <br />
 
 Output: <br />
 - Both image tiles and whole-slide images output a `json` file with keys:
-    - 'bbox' - bounding box coordinates for each nucleus
-    - 'centroid' - centroid coordinates for each nucleus
-    - 'contours' - contour coordinates for each nucleus 
-    - 'prob'- per class probabilities for each nucleus (default configuration doesn't output this)
-- Image tiles also output a .mat file, with keys:
-    - 'raw' - raw output of network (default configuration doesn't output this)
-    - 'inst_map' - instance map containing values from 0 to N, where N is the number of nuclei
-    - 'inst_type'- list of length N containing predictions for each nucleus
-    - 'overlay' - overlay of nuclear boundaries on top of RGB image
+    - 'bbox': bounding box coordinates for each nucleus
+    - 'centroid': centroid coordinates for each nucleus
+    - 'contour': contour coordinates for each nucleus 
+    - 'type_prob': per class probabilities for each nucleus (default configuration doesn't output this)
+    - 'type': prediction of category for each nucleus
+- Image tiles output a `mat` file, with keys:
+    - 'raw': raw output of network (default configuration doesn't output this)
+    - 'inst_map': instance map containing values from 0 to N, where N is the number of nuclei
+    - 'inst_type': list of length N containing predictions for each nucleus
+  - Image tiles output a `png` overlay of nuclear boundaries on top of original RGB image
   
 ### Model Weights
 
-Model weights obtained from training HoVer-Net as a result of the above instructions can be supplied to process input images / WSIs. Alternatively, any of the below pre-trained model weights can be used to process the data. Provided checkpoints either are either trained for segmentation alone or for simultaneous segmentation and classification. Note, we do not provide a segmentation and classification model for CPM17 and Kumar because classification labels aren't available.
+Model weights obtained from training HoVer-Net as a result of the above instructions can be supplied to process input images / WSIs. Alternatively, any of the below pre-trained model weights can be used to process the data. These checkpoints were initially trained using TensorFlow and were converted using `convert_chkpt_tf2pytorch.py`. Provided checkpoints either are either trained for segmentation alone or for simultaneous segmentation and classification. Note, we do not provide a segmentation and classification model for CPM17 and Kumar because classification labels aren't available.
 
 **IMPORTANT:** CoNSeP, Kumar and CPM17 checkpoints use the original model mode, whereas PanNuke and MoNuSAC use the fast model mode. Refer to the inference instructions below for more information. 
 
@@ -189,22 +190,6 @@ Note, it is important to select the correct model mode when running inference. '
 
 Take a look at some working examples on how to run inference and utilise the output in `examples/inference.ipynb`. As part of our tile processing implementation, we add an option to save the output in a form compatible with QuPath. 
 
-## Citation
-
-If any part of this code is used, please give appropriate citation to our paper. <br />
-
-BibTex entry: <br />
-```
-@article{graham2019hover,
-  title={Hover-net: Simultaneous segmentation and classification of nuclei in multi-tissue histology images},
-  author={Graham, Simon and Vu, Quoc Dang and Raza, Shan E Ahmed and Azam, Ayesha and Tsang, Yee Wah and Kwak, Jin Tae and Rajpoot, Nasir},
-  journal={Medical Image Analysis},
-  pages={101563},
-  year={2019},
-  publisher={Elsevier}
-}
-```
-
 ## Overlaid Segmentation and Classification Prediction
 
 <p float="left">
@@ -224,6 +209,31 @@ Download the Kumar, CPM-15, CPM-17 and TNBC datsets from [this link](https://dri
 Down
 
 Ground truth files are in `.mat` format, refer to the README included with the datasets for further information. 
+
+## Comparison to Original TensorFlow Implementation
+
+Below we report the difference in results trained using this repository (PyTorch) and the results reported in the original manuscript (TensorFlow).
+
+| Syntax      | Description |
+| ----------- | ----------- |
+| Header      | Title       |
+| Paragraph   | Text        |
+
+## Citation
+
+If any part of this code is used, please give appropriate citation to our paper. <br />
+
+BibTex entry: <br />
+```
+@article{graham2019hover,
+  title={Hover-net: Simultaneous segmentation and classification of nuclei in multi-tissue histology images},
+  author={Graham, Simon and Vu, Quoc Dang and Raza, Shan E Ahmed and Azam, Ayesha and Tsang, Yee Wah and Kwak, Jin Tae and Rajpoot, Nasir},
+  journal={Medical Image Analysis},
+  pages={101563},
+  year={2019},
+  publisher={Elsevier}
+}
+```
 
 ## Authors
 
