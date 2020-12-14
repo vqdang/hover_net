@@ -149,10 +149,11 @@ class InferManager(base.InferManager):
             """
             img_name, pred_map, pred_inst, inst_info_dict, overlaid_img = results
 
-            inst_type_dict = {k : v['type'] for k, v in inst_info_dict.items()}
+            inst_type = [[k, v['type']] for k, v in inst_info_dict.items()]
+            inst_type = np.array(inst_type)
             mat_dict = {
                 'inst_map'  : pred_inst,
-                'inst_type' : inst_type_dict,
+                'inst_type' : inst_type,
             }
             if self.save_raw_map:
                 mat_dict['raw_map'] = pred_map
