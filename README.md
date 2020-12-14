@@ -100,7 +100,7 @@ Input: <br />
 - WSIs supported by [OpenSlide](https://openslide.org/), including `svs`, `tif`, `ndpi` and `mrxs`.
 
 Output: <br />
-- Both image tiles and whole-slide images output a .JSON file with keys:
+- Both image tiles and whole-slide images output a `json` file with keys:
     - 'bbox' - bounding box coordinates for each nucleus
     - 'centroid' - centroid coordinates for each nucleus
     - 'contours' - contour coordinates for each nucleus 
