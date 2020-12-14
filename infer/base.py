@@ -35,6 +35,10 @@ class InferManager(object):
             self.type_info_dict = {
                 int(k) : (v[0], tuple(v[1])) for k, v in self.type_info_dict.items()
             }
+            # availability check
+            for k in range(self.nr_types):
+                if k not in self.type_info_dict:
+                    assert False, 'Not detect type_id=%d defined in json.' % k 
 
         if self.nr_types is not None and self.type_info_path is None:
             cmap = plt.get_cmap('hot')
