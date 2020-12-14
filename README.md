@@ -212,12 +212,19 @@ Ground truth files are in `.mat` format, refer to the README included with the d
 
 ## Comparison to Original TensorFlow Implementation
 
-Below we report the difference in results trained using this repository (PyTorch) and the results reported in the original manuscript (TensorFlow).
+Below we report the difference in segmentation results trained using this repository (PyTorch) and the results reported in the original manuscript (TensorFlow). 
 
-| Syntax      | Description |
-| ----------- | ----------- |
-| Header      | Title       |
-| Paragraph   | Text        |
+Results on CoNSeP dataset: 
+| Platform   | DICE       | PQ         | AJI       |
+| -----------|----------- | -----------|-----------|
+| TensorFlow | 0.8525     | 0.5477     | 0.5995    |
+| PyTorch    | 0.8504     | 0.5464     | 0.6009    |
+
+Results on the Kumar dataset:
+| Platform   | DICE       | PQ         | AJI       |
+| -----------|----------- | -----------|-----------|
+| TensorFlow | 0.8258     | 0.5971     | 0.6412    |
+| PyTorch    | 0.8211     | 0.5904     | 0.6321    |
 
 ## Citation
 
