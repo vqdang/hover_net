@@ -447,9 +447,8 @@ def create_model(mode=None, **kwargs):
     if mode == "original":
         return HoVerNet(**kwargs)
     elif mode == "fast":
-        from .net_desc_fast import HoVerNet
-
-        return HoVerNet(**kwargs)
+        from .net_desc_fast import HoVerNet as HoVerNetFast
+        return HoVerNetFast(**kwargs)
     else:
         assert "Unknown Model Mode %s" % mode
 

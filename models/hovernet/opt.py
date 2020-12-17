@@ -63,7 +63,7 @@ train_config = {
                 # may need more dynamic for each network
                 "net": {
                     "desc": lambda: create_model(
-                        input_ch=3, nr_types=5, freeze=False, mode="pannuke"
+                        input_ch=3, nr_types=5, freeze=False, mode="original"
                     ),
                     "optimizer": [
                         optim.Adam,
