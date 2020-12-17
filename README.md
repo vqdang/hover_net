@@ -188,6 +188,8 @@ Intermediate results are stored in cache. Therefore ensure that the specified ca
 
 Note, it is important to select the correct model mode when running inference. 'original' model mode refers to the method described in the original medical image analysis paper with a 270x270 patch input and 80x80 patch output. 'fast' model mode uses a 256x256 patch input and 164x164 patch output. Model checkpoints trained on Kumar, CPM17 and CoNSeP are from our original publication and therefore the 'original' mode **must** be used. For PanNuke and MoNuSAC, the 'fast' mode **must** be selected.
 
+`type_info.json` is used to specify what RGB colours are used in the overlay. Make sure to modify this for different datasets and if you would like to generally control overlay boundary colours.
+
 Take a look at some working examples on how to run inference and utilise the output in `examples/inference.ipynb`. As part of our tile processing implementation, we add an option to save the output in a form compatible with QuPath. 
 
 ## Overlaid Segmentation and Classification Prediction
@@ -214,17 +216,24 @@ Ground truth files are in `.mat` format, refer to the README included with the d
 
 Below we report the difference in segmentation results trained using this repository (PyTorch) and the results reported in the original manuscript (TensorFlow). 
 
-Results on CoNSeP dataset: 
+Segmentation results on the Kumar dataset:
+| Platform   | DICE       | PQ         | AJI       |
+| -----------|----------- | -----------|-----------|
+| TensorFlow | 0.8258     | 0.5971     | 0.6412    |
+| PyTorch    | 0.8211     | 0.5904     | 0.6321    |
+
+Segmentation results on CoNSeP dataset: 
 | Platform   | DICE       | PQ         | AJI       |
 | -----------|----------- | -----------|-----------|
 | TensorFlow | 0.8525     | 0.5477     | 0.5995    |
 | PyTorch    | 0.8504     | 0.5464     | 0.6009    |
 
-Results on the Kumar dataset:
-| Platform   | DICE       | PQ         | AJI       |
-| -----------|----------- | -----------|-----------|
-| TensorFlow | 0.8258     | 0.5971     | 0.6412    |
-| PyTorch    | 0.8211     | 0.5904     | 0.6321    |
+Simultaneous Segmentation and Classification results on CoNSeP dataset: 
+| Platform   | F1<sub>d</sub> | F1<sub>e</sub> | F1<sub>i</sub> | F1<sub>s</sub> | F1<sub>m</sub> |
+| -----------|----------------| ---------------|----------------|----------------|----------------|
+| TensorFlow | 0.748          | 0.635          | 0.631          | 0.566          | 0.426          |
+| PyTorch    | 0.756          | 0.636          | 0.559          | 0.557          | 0.348          |
+
 
 ## Citation
 
