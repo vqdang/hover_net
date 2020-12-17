@@ -454,7 +454,7 @@ def create_model(mode=None, **kwargs):
     if mode == "original":
         return HoVerNet(**kwargs)
     elif mode == "fast":
-        from .net_desc_fast import NetDesc
+        from .net_desc_fast import HoVerNet
 
         return NetDesc(**kwargs)
     else:
