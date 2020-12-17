@@ -299,7 +299,7 @@ class HoVerNet(Net):
     """Initialise HoVer-Net."""
 
     def __init__(self, input_ch=3, nr_types=None, freeze=False):
-        super(NetDesc, self).__init__()
+        super().__init__()
         self.freeze = freeze
         self.nr_types = nr_types
         self.output_ch = 3 if nr_types is None else 4
