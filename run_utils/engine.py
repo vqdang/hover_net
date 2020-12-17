@@ -1,4 +1,3 @@
-
 import tqdm
 from enum import Enum
 
@@ -16,10 +15,7 @@ class Events(Enum):
 
 ####
 class State(object):
-    """
-    An object that is used to pass internal and 
-    user-defined state between event handlers
-    """
+    """An object that is used to pass internal and user-defined state between event handlers."""
 
     def __init__(self):
         # settings propagated from config
@@ -40,8 +36,8 @@ class State(object):
         # ! naming should match with types supported for serialize
         # TODO: Need way to dynamically adding new types
         self.tracked_step_output = {
-            'scalar': {},  # type : {variable_name : variablee_value}
-            'image': {},
+            "scalar": {},  # type : {variable_name : variablee_value}
+            "image": {},
         }
         # TODO: find way to known which method bind/interact with which value
 
@@ -59,8 +55,7 @@ class State(object):
 
     def reset_variable(self):
         # type : {variable_name : variable_value}
-        self.tracked_step_output = {k: {}
-                                    for k in self.tracked_step_output.keys()}
+        self.tracked_step_output = {k: {} for k in self.tracked_step_output.keys()}
 
         # TODO: [CRITICAL] refactor this
         if self.curr_epoch % self.pertain_n_epoch_output == 0:
@@ -79,13 +74,14 @@ class RunEngine(object):
     TODO: Include docstring
     """
 
-    def __init__(self,
-                 engine_name=None,
-                 dataloader=None,
-                 run_step=None,
-                 run_info=None,
-                 log_info=None,  # TODO: refactor this with trainer.py
-                 ):
+    def __init__(
+        self,
+        engine_name=None,
+        dataloader=None,
+        run_step=None,
+        run_info=None,
+        log_info=None,  # TODO: refactor this with trainer.py
+    ):
 
         # * auto set all input as object variables
         self.engine_name = engine_name
@@ -101,7 +97,7 @@ class RunEngine(object):
         self.state.batch_size = dataloader.batch_size
 
         # TODO: [CRITICAL] match all the mechanism outline with opt
-        self.state.pertain_n_epoch_output = 1 if engine_name == 'valid' else 1
+        self.state.pertain_n_epoch_output = 1 if engine_name == "valid" else 1
 
         self.event_handler_dict = {event: [] for event in Events}
 
@@ -144,24 +140,34 @@ class RunEngine(object):
             self.state.reset_variable()  # * reset all EMA holder per epoch
 
             if not chained:
-                print('----------------EPOCH %d' % (self.state.curr_epoch+1))
+                print("----------------EPOCH %d" % (self.state.curr_epoch + 1))
 
             self.__trigger_events(Events.EPOCH_STARTED)
 
-            pbar_format = 'Processing: |{bar}| '\
-                          '{n_fmt}/{total_fmt}[{elapsed}<{remaining},{rate_fmt}]'
-            if self.engine_name == 'train':
-                pbar_format += 'Batch = {postfix[1][Batch]:0.5f}|'\
-                               'EMA = {postfix[1][EMA]:0.5f}'
+            pbar_format = (
+                "Processing: |{bar}| "
+                "{n_fmt}/{total_fmt}[{elapsed}<{remaining},{rate_fmt}]"
+            )
+            if self.engine_name == "train":
+                pbar_format += (
+                    "Batch = {postfix[1][Batch]:0.5f}|" "EMA = {postfix[1][EMA]:0.5f}"
+                )
                 # * changing print char may break the bar so avoid it
-                pbar = tqdm.tqdm(total=len(self.dataloader),
-                                 leave=True, initial=0,
-                                 bar_format=pbar_format, ascii=True,
-                                 postfix=['', dict(Batch=float('NaN'),
-                                                   EMA=float('NaN'))])
+                pbar = tqdm.tqdm(
+                    total=len(self.dataloader),
+                    leave=True,
+                    initial=0,
+                    bar_format=pbar_format,
+                    ascii=True,
+                    postfix=["", dict(Batch=float("NaN"), EMA=float("NaN"))],
+                )
             else:
-                pbar = tqdm.tqdm(total=len(self.dataloader), leave=True,
-                                 bar_format=pbar_format, ascii=True)
+                pbar = tqdm.tqdm(
+                    total=len(self.dataloader),
+                    leave=True,
+                    bar_format=pbar_format,
+                    ascii=True,
+                )
 
             for data_batch in self.dataloader:
                 self.__trigger_events(Events.STEP_STARTED)
@@ -169,9 +175,9 @@ class RunEngine(object):
                 step_run_info = [
                     self.state.run_info,
                     {
-                        'epoch' : self.state.curr_epoch,
-                        'step' : self.state.curr_global_step
-                    }
+                        "epoch": self.state.curr_epoch,
+                        "step": self.state.curr_global_step,
+                    },
                 ]
                 step_output = self.run_step(data_batch, step_run_info)
                 self.state.step_output = step_output
@@ -180,9 +186,11 @@ class RunEngine(object):
                 self.state.curr_global_step += 1
                 self.state.curr_epoch_step += 1
 
-                if self.engine_name == 'train':
-                    pbar.postfix[1]["Batch"] = step_output['EMA']['overall_loss']
-                    pbar.postfix[1]["EMA"] = self.state.tracked_step_output['scalar']['overall_loss']
+                if self.engine_name == "train":
+                    pbar.postfix[1]["Batch"] = step_output["EMA"]["overall_loss"]
+                    pbar.postfix[1]["EMA"] = self.state.tracked_step_output["scalar"][
+                        "overall_loss"
+                    ]
                 pbar.update()
             pbar.close()  # to flush out the bar before doing end of epoch reporting
             self.state.curr_epoch += 1
@@ -190,6 +198,8 @@ class RunEngine(object):
 
             # TODO: [CRITICAL] align the protocol
             self.state.run_accumulated_output.append(
-                self.state.epoch_accumulated_output)
+                self.state.epoch_accumulated_output
+            )
 
         return
+

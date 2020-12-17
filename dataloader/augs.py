@@ -16,9 +16,9 @@ from misc.utils import cropping_center, get_bounding_box
 
 ####
 def fix_mirror_padding(ann):
-    """
-    Deal with duplicated instances due to mirroring in interpolation
-    during shape augmentation (scale, rotation etc.)
+    """Deal with duplicated instances due to mirroring in interpolation
+    during shape augmentation (scale, rotation etc.).
+    
     """
     current_max_id = np.amax(ann)
     inst_list = list(np.unique(ann))
@@ -31,20 +31,25 @@ def fix_mirror_padding(ann):
         current_max_id = np.amax(ann)
     return ann
 
+
 ####
 def gaussian_blur(images, random_state, parents, hooks, max_ksize=3):
+    """Apply Gaussian blur to input images."""
     img = images[0]  # aleju input batch as default (always=1 in our case)
     ksize = random_state.randint(0, max_ksize, size=(2,))
     ksize = tuple((ksize * 2 + 1).tolist())
 
-    ret = cv2.GaussianBlur(img, ksize, sigmaX=0, sigmaY=0,
-                           borderType=cv2.BORDER_REPLICATE)
+    ret = cv2.GaussianBlur(
+        img, ksize, sigmaX=0, sigmaY=0, borderType=cv2.BORDER_REPLICATE
+    )
     ret = np.reshape(ret, img.shape)
     ret = ret.astype(np.uint8)
     return [ret]
 
+
 ####
 def median_blur(images, random_state, parents, hooks, max_ksize=3):
+    """Apply median blur to input images."""
     img = images[0]  # aleju input batch as default (always=1 in our case)
     ksize = random_state.randint(0, max_ksize)
     ksize = ksize * 2 + 1
@@ -52,8 +57,10 @@ def median_blur(images, random_state, parents, hooks, max_ksize=3):
     ret = ret.astype(np.uint8)
     return [ret]
 
+
 ####
 def add_to_hue(images, random_state, parents, hooks, range=None):
+    """Perturbe the hue of input images."""
     img = images[0]  # aleju input batch as default (always=1 in our case)
     hue = random_state.uniform(*range)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
@@ -67,8 +74,10 @@ def add_to_hue(images, random_state, parents, hooks, range=None):
     ret = ret.astype(np.uint8)
     return [ret]
 
+
 ####
 def add_to_saturation(images, random_state, parents, hooks, range=None):
+    """Perturbe the saturation of input images."""
     img = images[0]  # aleju input batch as default (always=1 in our case)
     value = 1 + random_state.uniform(*range)
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
@@ -77,8 +86,10 @@ def add_to_saturation(images, random_state, parents, hooks, range=None):
     ret = ret.astype(np.uint8)
     return [ret]
 
+
 ####
 def add_to_contrast(images, random_state, parents, hooks, range=None):
+    """Perturbe the contrast of input images."""
     img = images[0]  # aleju input batch as default (always=1 in our case)
     value = random_state.uniform(*range)
     mean = np.mean(img, axis=(0, 1), keepdims=True)
@@ -87,8 +98,10 @@ def add_to_contrast(images, random_state, parents, hooks, range=None):
     ret = ret.astype(np.uint8)
     return [ret]
 
+
 ####
 def add_to_brightness(images, random_state, parents, hooks, range=None):
+    """Perturbe the brightness of input images."""
     img = images[0]  # aleju input batch as default (always=1 in our case)
     value = random_state.uniform(*range)
     ret = np.clip(img + value, 0, 255)

@@ -15,8 +15,7 @@ from dataloader.augs import fix_mirror_padding
 
 ####
 def gen_instance_hv_map(ann, crop_shape):
-    """
-    Input annotation must be of original shape.
+    """Input annotation must be of original shape.
     
     The map is calculated only for instances within the crop portion
     but based on the original shape in original image.
@@ -24,6 +23,7 @@ def gen_instance_hv_map(ann, crop_shape):
     Perform following operation:
     Obtain the horizontal and vertical distance maps for each
     nuclear instance.
+
     """
     orig_ann = ann.copy()  # instance ID map
     fixed_ann = fix_mirror_padding(orig_ann)
@@ -49,11 +49,9 @@ def gen_instance_hv_map(ann, crop_shape):
         inst_box[1] += 2
         inst_box[3] += 2
 
-        inst_map = inst_map[inst_box[0]:inst_box[1],
-                            inst_box[2]:inst_box[3]]
+        inst_map = inst_map[inst_box[0] : inst_box[1], inst_box[2] : inst_box[3]]
 
-        if inst_map.shape[0] < 2 or \
-                inst_map.shape[1] < 2:
+        if inst_map.shape[0] < 2 or inst_map.shape[1] < 2:
             continue
 
         # instance center of mass, rounded to nearest pixel
@@ -62,8 +60,8 @@ def gen_instance_hv_map(ann, crop_shape):
         inst_com[0] = int(inst_com[0] + 0.5)
         inst_com[1] = int(inst_com[1] + 0.5)
 
-        inst_x_range = np.arange(1, inst_map.shape[1]+1)
-        inst_y_range = np.arange(1, inst_map.shape[0]+1)
+        inst_x_range = np.arange(1, inst_map.shape[1] + 1)
+        inst_y_range = np.arange(1, inst_map.shape[0] + 1)
         # shifting center of pixels grid to instance center of mass
         inst_x_range -= inst_com[1]
         inst_y_range -= inst_com[0]
@@ -73,37 +71,34 @@ def gen_instance_hv_map(ann, crop_shape):
         # remove coord outside of instance
         inst_x[inst_map == 0] = 0
         inst_y[inst_map == 0] = 0
-        inst_x = inst_x.astype('float32')
-        inst_y = inst_y.astype('float32')
+        inst_x = inst_x.astype("float32")
+        inst_y = inst_y.astype("float32")
 
         # normalize min into -1 scale
         if np.min(inst_x) < 0:
-            inst_x[inst_x < 0] /= (-np.amin(inst_x[inst_x < 0]))
+            inst_x[inst_x < 0] /= -np.amin(inst_x[inst_x < 0])
         if np.min(inst_y) < 0:
-            inst_y[inst_y < 0] /= (-np.amin(inst_y[inst_y < 0]))
+            inst_y[inst_y < 0] /= -np.amin(inst_y[inst_y < 0])
         # normalize max into +1 scale
         if np.max(inst_x) > 0:
-            inst_x[inst_x > 0] /= (np.amax(inst_x[inst_x > 0]))
+            inst_x[inst_x > 0] /= np.amax(inst_x[inst_x > 0])
         if np.max(inst_y) > 0:
-            inst_y[inst_y > 0] /= (np.amax(inst_y[inst_y > 0]))
+            inst_y[inst_y > 0] /= np.amax(inst_y[inst_y > 0])
 
         ####
-        x_map_box = x_map[inst_box[0]:inst_box[1],
-                          inst_box[2]:inst_box[3]]
+        x_map_box = x_map[inst_box[0] : inst_box[1], inst_box[2] : inst_box[3]]
         x_map_box[inst_map > 0] = inst_x[inst_map > 0]
 
-        y_map_box = y_map[inst_box[0]:inst_box[1],
-                          inst_box[2]:inst_box[3]]
+        y_map_box = y_map[inst_box[0] : inst_box[1], inst_box[2] : inst_box[3]]
         y_map_box[inst_map > 0] = inst_y[inst_map > 0]
 
     hv_map = np.dstack([x_map, y_map])
     return hv_map
 
+
 ####
 def gen_targets(ann, crop_shape, **kwargs):
-    """
-    Generate the targets for the network
-    """
+    """Generate the targets for the network."""
     hv_map = gen_instance_hv_map(ann, crop_shape)
     np_map = ann.copy()
     np_map[np_map > 0] = 1
@@ -112,33 +107,34 @@ def gen_targets(ann, crop_shape, **kwargs):
     np_map = cropping_center(np_map, crop_shape)
 
     target_dict = {
-        'hv_map': hv_map,
-        'np_map': np_map,
+        "hv_map": hv_map,
+        "np_map": np_map,
     }
 
     return target_dict
+
 
 ####
 def prep_sample(data, **kwargs):
     shape_array = [np.array(v.shape[:2]) for v in data.values()]
     shape = np.maximum(*shape_array)
 
-    cmap = plt.get_cmap('jet')
+    cmap = plt.get_cmap("jet")
 
     def colorize(ch, vmin, vmax):
-        ch = np.squeeze(ch.astype('float32'))
+        ch = np.squeeze(ch.astype("float32"))
         ch = ch / (vmax - vmin + 1.0e-16)
         # take RGB from RGBA heat map
-        ch_cmap = (cmap(ch)[..., :3] * 255).astype('uint8')
+        ch_cmap = (cmap(ch)[..., :3] * 255).astype("uint8")
         ch_cmap = center_pad_to_shape(ch_cmap, shape)
         return ch_cmap
 
     viz_list = []
     # cmap may randomly fails if of other types
-    viz_list.append(colorize(data['np_map'], 0, 1))
+    viz_list.append(colorize(data["np_map"], 0, 1))
     # map to [0,2] for better visualisation.
     # Note, [-1,1] is used for training.
-    viz_list.append(colorize(data['hv_map'][..., 0] + 1, 0, 2))
-    viz_list.append(colorize(data['hv_map'][..., 1] + 1, 0, 2))
-    img = center_pad_to_shape(data['img'], shape)
+    viz_list.append(colorize(data["hv_map"][..., 0] + 1, 0, 2))
+    viz_list.append(colorize(data["hv_map"][..., 1] + 1, 0, 2))
+    img = center_pad_to_shape(data["img"], shape)
     return np.concatenate([img] + viz_list, axis=1)
