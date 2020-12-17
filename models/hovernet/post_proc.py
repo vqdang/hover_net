@@ -7,9 +7,8 @@ from scipy.ndimage.morphology import (binary_dilation, binary_fill_holes,
                                       distance_transform_cdt,
                                       distance_transform_edt)
 
-from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
-from misc.utils import get_bounding_box
+from misc.utils import get_bounding_box, remove_small_objects
 
 import warnings
 def noop(*args, **kargs): pass
