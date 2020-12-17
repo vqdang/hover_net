@@ -214,7 +214,7 @@ class TrainManager(Config):
             optimizer = optimizer(net_desc.parameters(), **optimizer_args)
             # TODO: expand for external aug for scheduler
             nr_iter = opt["nr_epochs"] * len(loader_dict["train"])
-            scheduler = net_info["lr_scheduler"](optimizer, nr_iter)
+            scheduler = net_info["lr_scheduler"](optimizer)
             net_run_info[net_name] = {
                 "desc": net_desc,
                 "optimizer": optimizer,

@@ -30,7 +30,7 @@ train_config = {
                 # may need more dynamic for each network
                 "net": {
                     "desc": lambda: create_model(
-                        input_ch=3, nr_types=5, freeze=True, mode="original"
+                        input_ch=3, nr_types=5, freeze=True, mode="fast"
                     ),
                     "optimizer": [
                         optim.Adam,
@@ -50,12 +50,12 @@ train_config = {
                     },
                     # path to load, -1 to auto load checkpoint from previous phase,
                     # None to start from scratch
-                    "pretrained": "../pretrained/ImageNet-ResNet50-Preact-Pytorch.npz",
+                    "pretrained": "pretrained/ImageNet-ResNet50-Preact-Pytorch.npz",
                     # 'pretrained': None,
                 },
             },
             "target_info": {"gen": (gen_targets, {}), "viz": (prep_sample, {})},
-            "batch_size": {"train": 32, "valid": 32,},  # engine name : value
+            "batch_size": {"train": 8, "valid": 8,},  # engine name : value
             "nr_epochs": 50,
         },
         {
@@ -63,7 +63,7 @@ train_config = {
                 # may need more dynamic for each network
                 "net": {
                     "desc": lambda: create_model(
-                        input_ch=3, nr_types=5, freeze=False, mode="original"
+                        input_ch=3, nr_types=5, freeze=False, mode="fast"
                     ),
                     "optimizer": [
                         optim.Adam,
@@ -87,7 +87,7 @@ train_config = {
                 },
             },
             "target_info": {"gen": (gen_targets, {}), "viz": (prep_sample, {})},
-            "batch_size": {"train": 16, "valid": 32,},
+            "batch_size": {"train": 8, "valid": 16,},
             "nr_epochs": 50,
         },
     ],

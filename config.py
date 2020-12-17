@@ -26,8 +26,8 @@ class Config(object):
         # shape information - 
         # below config is for original mode. If fast mode is used, use [256,256] and [164,164] for act_shape and out_shape respectively
         aug_shape = [540, 540] # patch shape used during augmentation (larger patch may have less border artefacts)
-        act_shape = [270, 270] # patch shape used as input to network - central crop performed after augmentation
-        out_shape = [80, 80] # patch shape at output of network
+        act_shape = [256, 256] # patch shape used as input to network - central crop performed after augmentation
+        out_shape = [164, 164] # patch shape at output of network
 
         self.dataset_name = "consep" # extracts dataset info from dataset.py
         self.log_dir = "logs/" # where checkpoints will be saved
