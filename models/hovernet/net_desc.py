@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 from .utils import crop_op, crop_to_shape
 
+
 ####
 class Net(nn.Module):
     """ A base class provides a common weight initialisation scheme."""

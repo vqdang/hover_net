@@ -23,18 +23,21 @@ class Config(object):
         # whether to predict the nuclear type, availability depending on dataset!
         self.type_classification = True
 
-        aug_shape = [540, 540]
-        act_shape = [256, 256]
-        out_shape = [164, 164]
+        # shape information - 
+        # below config is for original mode. If fast mode is used, use [256,256] and [164,164] for act_shape and out_shape respectively
+        aug_shape = [540, 540] # patch shape used during augmentation (larger patch may have less border artefacts)
+        act_shape = [270, 270] # patch shape used as input to network - central crop performed after augmentation
+        out_shape = [80, 80] # patch shape at output of network
 
-        self.dataset_name = "pannuke_full_v0"
-        self.log_dir = "exp_output/models/hovernet/continual_data=[v0.0]_run=[v0.1]/"
+        self.dataset_name = "consep" # extracts dataset info from dataset.py
+        self.log_dir = "logs/" # where checkpoints will be saved
 
+        # paths to training and validation patches
         self.train_dir_list = [
-            "dataset/training_data/continual_v0.0/rmt/train/540x540_164x164"
+            "/home/simon/Desktop/hover_net_pytorch/simon_patches"
         ]
         self.valid_dir_list = [
-            "dataset/training_data/continual_v0.0/rmt/valid/540x540_164x164"
+            "/home/simon/Desktop/hover_net_pytorch/simon_patches"
         ]
 
         self.shape_info = {
@@ -45,5 +48,5 @@ class Config(object):
         # * parsing config to the running state and set up associated variables
         self.dataset = get_dataset(self.dataset_name)
         self.model_config_file = importlib.import_module(
-            "models.%s.opt_continual_v00" % model_name
+            "models.%s.opt" % model_name
         )

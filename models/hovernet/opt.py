@@ -2,7 +2,7 @@ import torch.optim as optim
 
 from run_utils.callbacks.base import (
     AccumulateRawOutput,
-    CheckpointSaver,
+    PeriodicSaver,
     ProcessAccumulatedRawOutput,
     ScalarMovingAverage,
     ScheduleLr,
@@ -17,6 +17,7 @@ from .targets import gen_targets, prep_sample
 from .net_desc import create_model
 from .run_desc import proc_valid_step_output, train_step, valid_step, viz_step_output
 
+
 # TODO: training config only ?
 # TODO: switch all to function name String for all option
 train_config = {
@@ -29,7 +30,7 @@ train_config = {
                 # may need more dynamic for each network
                 "net": {
                     "desc": lambda: create_model(
-                        input_ch=3, nr_types=5, freeze=True, mode="fast"
+                        input_ch=3, nr_types=5, freeze=True, mode="original"
                     ),
                     "optimizer": [
                         optim.Adam,
@@ -109,7 +110,7 @@ train_config = {
                 ],
                 Events.EPOCH_COMPLETED: [
                     TrackLr(),
-                    CheckpointSaver(),
+                    PeriodicSaver(),
                     VisualizeOutput(viz_step_output),
                     LoggingEpochOutput(),
                     TriggerEngine("valid"),
