@@ -232,6 +232,8 @@ Segmentation results on CoNSeP dataset:
 | TensorFlow | 0.8525     | 0.5477     | 0.5995    |
 | PyTorch    | 0.8504     | 0.5464     | 0.6009    |
 
+Checkpoints to reproduce the above results can be found [here](https://drive.google.com/drive/folders/17IBOqdImvZ7Phe0ZdC5U1vwPFJFkttWp?usp=sharing).
+
 Simultaneous Segmentation and Classification results on CoNSeP dataset: 
 | Platform   | F1<sub>d</sub> | F1<sub>e</sub> | F1<sub>i</sub> | F1<sub>s</sub> | F1<sub>m</sub> |
 | -----------|----------------| ---------------|----------------|----------------|----------------|
