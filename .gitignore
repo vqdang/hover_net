@@ -9,3 +9,4 @@ exp_output/
 # checkpoint paths
 *.npz
 *.png
+*.log

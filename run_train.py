@@ -68,7 +68,6 @@ class TrainManager(Config):
 
     def __init__(self):
         super().__init__()
-        self.model_config = self.model_config_file.__getattribute__("train_config")
         return
 
     ####
@@ -214,7 +213,7 @@ class TrainManager(Config):
             optimizer = optimizer(net_desc.parameters(), **optimizer_args)
             # TODO: expand for external aug for scheduler
             nr_iter = opt["nr_epochs"] * len(loader_dict["train"])
-            scheduler = net_info["lr_scheduler"](optimizer, nr_iter)
+            scheduler = net_info["lr_scheduler"](optimizer)
             net_run_info[net_name] = {
                 "desc": net_desc,
                 "optimizer": optimizer,

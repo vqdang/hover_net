@@ -18,7 +18,9 @@ class Config(object):
         # turn on debug flag to trace some parallel processing problems more easily
         self.debug = False
 
-        model_name = "hovernet"
+        model_name = 'hovernet'
+        model_mode = 'fast'
+        nr_type = 5
 
         # whether to predict the nuclear type, availability depending on dataset!
         self.type_classification = True
@@ -26,18 +28,18 @@ class Config(object):
         # shape information - 
         # below config is for original mode. If fast mode is used, use [256,256] and [164,164] for act_shape and out_shape respectively
         aug_shape = [540, 540] # patch shape used during augmentation (larger patch may have less border artefacts)
-        act_shape = [270, 270] # patch shape used as input to network - central crop performed after augmentation
-        out_shape = [80, 80] # patch shape at output of network
+        act_shape = [256, 256] # patch shape used as input to network - central crop performed after augmentation
+        out_shape = [164, 164] # patch shape at output of network
 
         self.dataset_name = "consep" # extracts dataset info from dataset.py
         self.log_dir = "logs/" # where checkpoints will be saved
 
         # paths to training and validation patches
         self.train_dir_list = [
-            "/home/simon/Desktop/hover_net_pytorch/simon_patches"
+            "dataset/simon_patches"
         ]
         self.valid_dir_list = [
-            "/home/simon/Desktop/hover_net_pytorch/simon_patches"
+            "dataset/simon_patches"
         ]
 
         self.shape_info = {
@@ -47,6 +49,8 @@ class Config(object):
 
         # * parsing config to the running state and set up associated variables
         self.dataset = get_dataset(self.dataset_name)
-        self.model_config_file = importlib.import_module(
+
+        module = importlib.import_module(
             "models.%s.opt" % model_name
         )
+        self.model_config = module.get_config(nr_type, model_mode)
