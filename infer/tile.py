@@ -180,6 +180,9 @@ class InferManager(base.InferManager):
                 "inst_map": pred_inst,
                 "inst_type": inst_type,
             }
+            if self.nr_types is None: # matlab does not have None type array
+                mat_dict.pop("inst_type", None) 
+
             if self.save_raw_map:
                 mat_dict["raw_map"] = pred_map
             save_path = "%s/mat/%s.mat" % (self.output_dir, img_name)
