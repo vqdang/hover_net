@@ -60,7 +60,7 @@ Before training:
 
 - Set path to the data directories in `config.py`
 - Set path where checkpoints will be saved  in `config.py`
-- Set path to pretrained Preact-ResNet50weights in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/open?id=187C9pGjlVmlqz-PlKW1K8AYfxDONrB0n).
+- Set path to pretrained Preact-ResNet50weights in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/file/d/1KntZge40tAHgyXmHYVqZZ5d2p_4Qr2l5/view?usp=sharing).
 - Modify hyperparameters, including number of epochs and learning rate in `models/hovernet/opt.py`.
 
 ### Usage and Options
@@ -119,14 +119,16 @@ Model weights obtained from training HoVer-Net as a result of the above instruct
 **IMPORTANT:** CoNSeP, Kumar and CPM17 checkpoints use the original model mode, whereas PanNuke and MoNuSAC use the fast model mode. Refer to the inference instructions below for more information. 
 
 Segmentation and Classification:
-- [CoNSeP checkpoint](https://drive.google.com/file/d/1BbtVD5RZ2QSOFg1XfFpFJSGFHdflSwR6/view?usp=sharing)
-- [PanNuke checkpoint](https://drive.google.com/file/d/1p5qaGdyXDfTwS2ZxgAfhgKa22rp0L2a2/view?usp=sharing)
-- [MoNuSAC checkpoint](https://drive.google.com/file/d/1L2DzR7Lb15wFy91E0zLAC_vRwk2MhKTh/view?usp=sharing)
+- [CoNSeP checkpoint](https://drive.google.com/file/d/1FtoTDDnuZShZmQujjaFSLVJLD5sAh2_P/view?usp=sharing)
+- [PanNuke checkpoint](https://drive.google.com/file/d/1SbSArI3KOOWHxRlxnjchO7_MbWzB4lNR/view?usp=sharing)
+- [MoNuSAC checkpoint](https://drive.google.com/file/d/13qkxDqv7CUqxN-l5CpeFVmc24mDw6CeV/view?usp=sharing)
 
 Segmentation Only:
-- [CoNSeP checkpoint](https://drive.google.com/file/d/1_b6pYTSdT6k5C7wYW_OlXydUb6c6xfiW/view?usp=sharing)
-- [Kumar checkpoint](https://drive.google.com/file/d/1e5f5OeyYFeq1RRAJl9inEJOMyQ1Xo6NY/view?usp=sharing) 
-- [CPM17 checkpoint](https://drive.google.com/file/d/1hSJGY_SJFLe-6thutXjQDpZJVO5UDDIi/view?usp=sharing) 
+- [CoNSeP checkpoint](https://drive.google.com/file/d/1BF0GIgNGYpfyqEyU0jMsA6MqcUpVQx0b/view?usp=sharing)
+- [Kumar checkpoint](https://drive.google.com/file/d/1NUnO4oQRGL-b0fyzlT8LKZzo6KJD0_6X/view?usp=sharing) 
+- [CPM17 checkpoint](https://drive.google.com/file/d/1lR7yJbEwnF6qP8zu4lrmRPukylw9g-Ms/view?usp=sharing) 
+
+Access the entire checkpoint directory, along with a README on the filename description [here](https://drive.google.com/drive/folders/17IBOqdImvZ7Phe0ZdC5U1vwPFJFkttWp?usp=sharing).
 
 If any of the above checkpoints are used, please ensure to cite the corresponding paper.
 
@@ -150,7 +152,7 @@ Options:
                               and expected overlay color. [default: '']
 
   --model_path=<path>         Path to saved checkpoint.
-  --model_mode=<mode>         Original HoVer-Net or the reduced version used in PanNuke, 'original' or 'fast'. [default: fast]
+  --model_mode=<mode>         Original HoVer-Net or the reduced version used in PanNuke / MoNuSAC, 'original' or 'fast'. [default: fast]
   --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
   --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
   --batch_size=<n>            Batch size. [default: 128]
@@ -186,11 +188,13 @@ The above command can be used from the command line or via an executable script.
 
 Intermediate results are stored in cache. Therefore ensure that the specified cache location has enough space! Preferably ensure that the cache location is SSD.
 
-Note, it is important to select the correct model mode when running inference. 'original' model mode refers to the method described in the original medical image analysis paper with a 270x270 patch input and 80x80 patch output. 'fast' model mode uses a 256x256 patch input and 164x164 patch output. Model checkpoints trained on Kumar, CPM17 and CoNSeP are from our original publication and therefore the 'original' mode **must** be used. For PanNuke and MoNuSAC, the 'fast' mode **must** be selected.
+Note, it is important to select the correct model mode when running inference. 'original' model mode refers to the method described in the original medical image analysis paper with a 270x270 patch input and 80x80 patch output. 'fast' model mode uses a 256x256 patch input and 164x164 patch output. Model checkpoints trained on Kumar, CPM17 and CoNSeP are from our original publication and therefore the 'original' mode **must** be used. For PanNuke and MoNuSAC, the 'fast' mode **must** be selected. The model mode for each checkpoint that we provide is given in the filename. Also, if using a model trained only for segmentation, `nr_types` must be set to 0.
 
 `type_info.json` is used to specify what RGB colours are used in the overlay. Make sure to modify this for different datasets and if you would like to generally control overlay boundary colours.
 
-Take a look at some working examples on how to run inference and utilise the output in `examples/inference.ipynb`. As part of our tile processing implementation, we add an option to save the output in a form compatible with QuPath. 
+As part of our tile processing implementation, we add an option to save the output in a form compatible with QuPath. 
+
+Take a look on how to utilise the output in `examples/usage.ipynb`. 
 
 ## Overlaid Segmentation and Classification Prediction
 
