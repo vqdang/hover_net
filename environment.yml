@@ -1,0 +1,11 @@
+name: hovernet
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.6.12
+  - pip=20.3.1
+  - openslide
+  - pip:
+    - -r file:requirements.txt
+    - openslide-python==1.1.2
