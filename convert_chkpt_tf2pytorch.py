@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import torch
 
-mapping = pd.read_csv("variables_tf2pytorch.csv", sep="\t", index_col=False)
+mapping = pd.read_csv("variables_tf2pytorch.csv", index_col=False)
 mapping = {v["Tensorflow"]: v['Pytorch'] for k, v in mapping.T.to_dict().items()}
 
 # mapping
