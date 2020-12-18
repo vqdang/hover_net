@@ -1,11 +1,11 @@
-"""trainer.py
+"""run_train.py
 
 Main HoVer-Net training script.
 
 Usage:
-  trainer.py [--gpu=<id>] [--view=<dset>]
-  trainer.py (-h | --help)
-  trainer.py --version
+  run_train.py [--gpu=<id>] [--view=<dset>]
+  run_train.py (-h | --help)
+  run_train.py --version
 
 Options:
   -h --help       Show this string.
