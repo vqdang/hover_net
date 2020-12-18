@@ -4,7 +4,7 @@ A multiple branch network that performs nuclear instance segmentation and classi
 
 [Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. <br />
 
-This is the official PyTorch implementation of HoVer-Net. For a TensorFlow version of this code, please refer to the [original repository](https://github.com/vqdang/hover_net). The repository can be used for training HoVer-Net and to process image tiles or whole-slide images. As part of this repository, we supply model weights trained on the following datasets:
+This is the official PyTorch implementation of HoVer-Net. For the original TensorFlow version of this code, please refer to [this branch](https://github.com/vqdang/hover_net/tree/tensorflow-final). The repository can be used for training HoVer-Net and to process image tiles or whole-slide images. As part of this repository, we supply model weights trained on the following datasets:
 
 - [CoNSeP](https://www.sciencedirect.com/science/article/pii/S1361841519301045)
 - [PanNuke](https://arxiv.org/abs/2003.10778)
