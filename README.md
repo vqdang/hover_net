@@ -60,7 +60,7 @@ Before training:
 
 - Set path to the data directories in `config.py`
 - Set path where checkpoints will be saved  in `config.py`
-- Set path to pretrained Preact-ResNet50weights in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/file/d/1KntZge40tAHgyXmHYVqZZ5d2p_4Qr2l5/view?usp=sharing).
+- Set path to pretrained Preact-ResNet50 weights in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/file/d/1KntZge40tAHgyXmHYVqZZ5d2p_4Qr2l5/view?usp=sharing).
 - Modify hyperparameters, including number of epochs and learning rate in `models/hovernet/opt.py`.
 
 ### Usage and Options
@@ -110,7 +110,7 @@ Output: <br />
     - 'raw': raw output of network (default configuration doesn't output this)
     - 'inst_map': instance map containing values from 0 to N, where N is the number of nuclei
     - 'inst_type': list of length N containing predictions for each nucleus
-  - Image tiles output a `png` overlay of nuclear boundaries on top of original RGB image
+ - Image tiles output a `png` overlay of nuclear boundaries on top of original RGB image
   
 ### Model Weights
 
