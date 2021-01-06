@@ -19,7 +19,7 @@ Options:
                               'original' or 'fast'. [default: fast]
   --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
   --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
-  --batch_size=<n>            Batch size. [default: 128]
+  --batch_size=<n>            Batch size per 1 GPU. [default: 32]
 
 Two command mode are `tile` and `wsi` to enter corresponding inference mode
     tile  run the inference on tile
@@ -68,9 +68,11 @@ options:
     --save_mask             To save mask. [default: False]
 """
 
+import torch
 import logging
 import os
 import copy
+from misc.utils import log_info
 from docopt import docopt
 
 #-------------------------------------------------------------------------------------------------------
@@ -81,6 +83,16 @@ if __name__ == '__main__':
                     version='HoVer-Net Pytorch Inference v1.0')
     sub_cmd = args.pop('<command>')
     sub_cmd_args = args.pop('<args>')
+
+    # ! TODO: where to save logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='|%(asctime)s.%(msecs)03d| [%(levelname)s] %(message)s',datefmt='%Y-%m-%d|%H:%M:%S',
+        handlers=[
+            logging.FileHandler("debug.log"),
+            logging.StreamHandler()
+        ]
+    )
 
     if args['--help'] and sub_cmd is not None:
         if sub_cmd in sub_cli_dict: 
@@ -97,6 +109,9 @@ if __name__ == '__main__':
     args.pop('--version')
     gpu_list = args.pop('--gpu')
     os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
+
+    nr_gpus = torch.cuda.device_count()
+    log_info('Detect #GPUS: %d' % nr_gpus)
 
     args = {k.replace('--', '') : v for k, v in args.items()}
     sub_args = {k.replace('--', '') : v for k, v in sub_args.items()}
@@ -118,7 +133,7 @@ if __name__ == '__main__':
 
     # ***
     run_args = {
-        'batch_size' : int(args['batch_size']),
+        'batch_size' : int(args['batch_size']) * nr_gpus,
 
         'nr_inference_workers' : int(args['nr_inference_workers']),
         'nr_post_proc_workers' : int(args['nr_post_proc_workers']),
@@ -156,17 +171,7 @@ if __name__ == '__main__':
             'save_mask'      : sub_args['save_mask'],
         })
     # ***
-    
-    # ! TODO: where to save logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='|%(asctime)s.%(msecs)03d| [%(levelname)s] %(message)s',datefmt='%Y-%m-%d|%H:%M:%S',
-        handlers=[
-            logging.FileHandler("debug.log"),
-            logging.StreamHandler()
-        ]
-    )
-
+    exit()
     if sub_cmd == 'tile':
         from infer.tile import InferManager
         infer = InferManager(**method_args)

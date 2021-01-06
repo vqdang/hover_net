@@ -115,7 +115,7 @@ class TrainManager(Config):
         dataloader = DataLoader(
             input_dataset,
             num_workers=nr_procs,
-            batch_size=batch_size,
+            batch_size=batch_size * self.nr_gpus,
             shuffle=run_mode == "train",
             drop_last=run_mode == "train",
             worker_init_fn=worker_init_fn,
@@ -264,6 +264,9 @@ class TrainManager(Config):
     ####
     def run(self):
         """Define multi-stage run or cross-validation or whatever in here."""
+        self.nr_gpus = torch.cuda.device_count()
+        print('Detect #GPUS: %d' % self.nr_gpus)
+
         phase_list = self.model_config["phase_list"]
         engine_opt = self.model_config["run_engine"]
 
