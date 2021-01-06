@@ -95,6 +95,8 @@ class SerializeArray(data.Dataset):
             patch_info[0] : patch_info[0] + self.patch_size[0],
             patch_info[1] : patch_info[1] + self.patch_size[1],
         ]
+        # deep copy to prevent creating too many fptr
+        patch_data = np.copy(patch_data)
         if self.preproc is not None:
             patch_data = self.preproc(patch_data)
         return patch_data, patch_info
