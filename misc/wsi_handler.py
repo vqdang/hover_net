@@ -191,7 +191,14 @@ class OpenSlideHandler(FileHandler):
 
 
 def get_file_handler(path, backend):
-    if backend in [".svs", ".ndpi"]:
+    if backend in [
+            '.svs', '.tif', 
+            '.vms', '.vmu', '.ndpi',
+            '.scn', '.mrxs', '.tiff',
+            '.svslide',
+            '.bif',
+            ]:
         return OpenSlideHandler(path)
     else:
         assert False, "Unknown WSI format `%s`" % backend
+
