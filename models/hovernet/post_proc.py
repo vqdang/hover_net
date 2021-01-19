@@ -139,6 +139,8 @@ def process(pred_map, nr_types=None, return_centroids=False):
             # as the contours obtained via approximation => too small or sthg
             if inst_contour.shape[0] < 3:
                 continue
+            if len(inst_contour.shape) != 2:
+                continue # ! check for trickery shape
             inst_centroid = [
                 (inst_moment["m10"] / inst_moment["m00"]),
                 (inst_moment["m01"] / inst_moment["m00"]),
