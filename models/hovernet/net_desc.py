@@ -21,6 +21,9 @@ class HoVerNet(Net):
         self.nr_types = nr_types
         self.output_ch = 3 if nr_types is None else 4
 
+        assert mode == 'original' or mode == 'fast', \
+                'Unknown mode `%s` for HoVerNet %s. Only support `original` or `fast`.' % mode
+
         module_list = [
             ("/", nn.Conv2d(input_ch, 64, 7, stride=1, padding=0, bias=False)),
             ("bn", nn.BatchNorm2d(64, eps=1e-5)),
