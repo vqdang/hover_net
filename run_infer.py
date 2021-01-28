@@ -33,12 +33,15 @@ Arguments for processing tiles.
 
 usage:
     tile (--input_dir=<path>) (--output_dir=<path>) \
-         [--draw_dot] [--save_qupath] [--save_raw_map]
+         [--draw_dot] [--save_qupath] [--save_raw_map] [--mem_usage=<n>]
     
 options:
    --input_dir=<path>     Path to input data directory. Assumes the files are not nested within directory.
    --output_dir=<path>    Path to output directory..
 
+   --mem_usage=<n>        Declare how much memory (physical + swap) should be used for caching. 
+                          By default it will load as many tiles as possible till reaching the 
+                          declared limit. [default: 0.2]
    --draw_dot             To draw nuclei centroid on overlay. [default: False]
    --save_qupath          To optionally output QuPath v0.2.3 compatible format. [default: False]
    --save_raw_map         To save raw prediction or not. [default: False]
@@ -151,6 +154,7 @@ if __name__ == '__main__':
             'input_dir'      : sub_args['input_dir'],
             'output_dir'     : sub_args['output_dir'],
 
+            'mem_usage'   : float(sub_args['mem_usage']),
             'draw_dot'    : sub_args['draw_dot'],
             'save_qupath' : sub_args['save_qupath'],
             'save_raw_map': sub_args['save_raw_map'],

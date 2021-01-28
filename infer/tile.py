@@ -153,6 +153,7 @@ class InferManager(base.InferManager):
         """
         for variable, value in run_args.items():
             self.__setattr__(variable, value)
+        assert self.mem_usage < 1.0 and self.mem_usage > 0.0
 
         # * depend on the number of samples and their size, this may be less efficient
         patterning = lambda x: re.sub("([\[\]])", "[\\1]", x)
@@ -231,7 +232,7 @@ class InferManager(base.InferManager):
 
             hardware_stats = psutil.virtual_memory()
             available_ram = getattr(hardware_stats, "available")
-            available_ram = int(available_ram * 0.6)
+            available_ram = int(available_ram * self.mem_usage)
             # available_ram >> 20 for MB, >> 30 for GB
 
             # TODO: this portion looks clunky but seems hard to detach into separate func

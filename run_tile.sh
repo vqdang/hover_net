@@ -8,7 +8,6 @@ python run_infer.py \
 --nr_inference_workers=8 \
 --nr_post_proc_workers=16 \
 tile \
---input_dir=dataset/sample_tiles/imgs/ \
---output_dir=dataset/sample_tiles/pred/ \
+--mem_usage=0.1 \
 --draw_dot \
 --save_qupath
