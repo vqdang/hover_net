@@ -224,7 +224,6 @@ class InferManager(base.InferManager):
             return detached_items_list, remained_items_list
 
         proc_pool = None
-        future_list = []
         if self.nr_post_proc_workers > 0:
             proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
 
@@ -313,6 +312,7 @@ class InferManager(base.InferManager):
             pbar.close()
 
             # * parallely assemble the processed cache data for each file if possible
+            future_list = []
             for file_idx, file_path in enumerate(use_path_list):
                 image_info = cache_image_info_list[file_idx]
                 file_ouput_data, accumulated_patch_output = detach_items_of_uid(
