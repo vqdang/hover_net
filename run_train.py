@@ -72,16 +72,25 @@ class TrainManager(Config):
 
     ####
     def view_dataset(self, mode="train"):
+        """
+        Manually change to plt.savefig or plt.show 
+        if using on headless machine or not
+        """
+        self.nr_gpus = 1
+        import matplotlib.pyplot as plt
         check_manual_seed(self.seed)
         # TODO: what if each phase want diff annotation ?
         phase_list = self.model_config["phase_list"][0]
         target_info = phase_list["target_info"]
-        dataloader = self.get_datagen(1, mode, target_info["gen"])
-        for batch_data in dataloader:  # convert from Tensor to Numpy
-            batch_data_np = {k: v.numpy() for k, v in batch_data.items()}
-            # TODO: a separate func, not static method ?
-            FileLoader.view(batch_data_np, target_info["viz"])
-            continue
+        prep_func, prep_kwargs = target_info["viz"]
+        dataloader = self._get_datagen(2, mode, target_info["gen"])
+        for batch_data in dataloader:  
+            # convert from Tensor to Numpy
+            batch_data = {k: v.numpy() for k, v in batch_data.items()}
+            viz = prep_func(batch_data, is_batch=True, **prep_kwargs)
+            plt.imshow(viz)
+            plt.show()
+        self.nr_gpus = -1
         return
 
     ####
@@ -286,9 +295,6 @@ class TrainManager(Config):
 if __name__ == "__main__":
     args = docopt(__doc__, version="HoVer-Net v1.0")
     trainer = TrainManager()
-
-    if args["--view"] and args["--gpu"]:
-        raise Exception("Supply only one of --view and --gpu.")
 
     if args["--view"]:
         if args["--view"] != "train" and args["--view"] != "valid":

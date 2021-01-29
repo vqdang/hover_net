@@ -115,13 +115,13 @@ def gen_targets(ann, crop_shape, **kwargs):
 
 
 ####
-def prep_sample(data, **kwargs):
-    shape_array = [np.array(v.shape[:2]) for v in data.values()]
-    shape = np.maximum(*shape_array)
-
+def prep_sample(data, is_batch=False, **kwargs):
+    """
+    Designed to process direct output from loader
+    """
     cmap = plt.get_cmap("jet")
 
-    def colorize(ch, vmin, vmax):
+    def colorize(ch, vmin, vmax, shape):
         ch = np.squeeze(ch.astype("float32"))
         ch = ch / (vmax - vmin + 1.0e-16)
         # take RGB from RGBA heat map
@@ -129,12 +129,25 @@ def prep_sample(data, **kwargs):
         ch_cmap = center_pad_to_shape(ch_cmap, shape)
         return ch_cmap
 
-    viz_list = []
+    def prep_one_sample(data):
+        shape_array = [np.array(v.shape[:2]) for v in data.values()]
+        shape = np.maximum(*shape_array)
+        viz_list = []
+        viz_list.append(colorize(data["np_map"], 0, 1, shape))
+        # map to [0,2] for better visualisation.
+        # Note, [-1,1] is used for training.
+        viz_list.append(colorize(data["hv_map"][..., 0] + 1, 0, 2, shape))
+        viz_list.append(colorize(data["hv_map"][..., 1] + 1, 0, 2, shape))
+        img = center_pad_to_shape(data["img"], shape)
+        return np.concatenate([img] + viz_list, axis=1)
+
     # cmap may randomly fails if of other types
-    viz_list.append(colorize(data["np_map"], 0, 1))
-    # map to [0,2] for better visualisation.
-    # Note, [-1,1] is used for training.
-    viz_list.append(colorize(data["hv_map"][..., 0] + 1, 0, 2))
-    viz_list.append(colorize(data["hv_map"][..., 1] + 1, 0, 2))
-    img = center_pad_to_shape(data["img"], shape)
-    return np.concatenate([img] + viz_list, axis=1)
+    if is_batch:
+        viz_list = []
+        data_shape = list(data.values())[0].shape
+        for batch_idx in range(data_shape[0]):
+            sub_data = {k : v[batch_idx] for k, v in data.items()}
+            viz_list.append(prep_one_sample(sub_data))
+        return np.concatenate(viz_list, axis=0)
+    else:
+        return prep_one_sample(data)
