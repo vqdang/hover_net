@@ -362,21 +362,21 @@ class InferManager(base.InferManager):
                     proc_output = _post_process_patches(*func_args)
                     proc_callback(proc_output)
 
-        if proc_pool is not None:
-            # loop over all to check state a.k.a polling
-            for future in as_completed(future_list):
-                # TODO: way to retrieve which file crashed ?
-                # ! silent crash, cancel all and raise error
-                if future.exception() is not None:
-                    log_info("Silent Crash")
-                    # ! cancel somehow leads to cascade error later
-                    # ! so just poll it then crash once all future
-                    # ! acquired for now
-                    # for future in future_list:
-                    #     future.cancel()
-                    # break
-                else:
-                    file_path = proc_callback(future.result())
-                    log_info("Done Assembling %s" % file_path)
+            if proc_pool is not None:
+                # loop over all to check state a.k.a polling
+                for future in as_completed(future_list):
+                    # TODO: way to retrieve which file crashed ?
+                    # ! silent crash, cancel all and raise error
+                    if future.exception() is not None:
+                        log_info("Silent Crash")
+                        # ! cancel somehow leads to cascade error later
+                        # ! so just poll it then crash once all future
+                        # ! acquired for now
+                        # for future in future_list:
+                        #     future.cancel()
+                        # break
+                    else:
+                        file_path = proc_callback(future.result())
+                        log_info("Done Assembling %s" % file_path)
         return
 
