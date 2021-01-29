@@ -1,9 +1,10 @@
 import warnings
-import numpy as np
-from scipy.optimize import linear_sum_assignment
 
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
+import scipy
+from scipy.optimize import linear_sum_assignment
 
 
 # --------------------------Optimised for Speed
@@ -407,32 +408,23 @@ def pair_coordinates(setA, setB, radius):
 
     """
     # * Euclidean distance as the cost matrix
-    setA_tile = np.expand_dims(setA, axis=1)
-    setB_tile = np.expand_dims(setB, axis=0)
-    setA_tile = np.repeat(setA_tile, setB.shape[0], axis=1)
-    setB_tile = np.repeat(setB_tile, setA.shape[0], axis=0)
-    pair_distance = (setA_tile - setB_tile) ** 2
-    # set A is row, and set B is paired against set A
-    pair_distance = np.sqrt(np.sum(pair_distance, axis=-1))
+    pair_distance = scipy.spatial.distance.cdist(setA, setB, metric='euclidean')
+    print(setA.shape, setB.shape)
 
     # * Munkres pairing with scipy library
     # the algorithm return (row indices, matched column indices)
-    # if there is multiple same cost in a row, index of first occurence
+    # if there is multiple same cost in a row, index of first occurence 
     # is return, thus the unique pairing is ensured
     indicesA, paired_indicesB = linear_sum_assignment(pair_distance)
 
-    # extract the paired cost and remove instances
+    # extract the paired cost and remove instances 
     # outside of designated radius
     pair_cost = pair_distance[indicesA, paired_indicesB]
 
     pairedA = indicesA[pair_cost <= radius]
     pairedB = paired_indicesB[pair_cost <= radius]
 
-    unpairedA = [idx for idx in range(setA.shape[0]) if idx not in list(pairedA)]
-    unpairedB = [idx for idx in range(setB.shape[0]) if idx not in list(pairedB)]
-
-    pairing = np.array(list(zip(pairedA, pairedB)))
-    unpairedA = np.array(unpairedA, dtype=np.int64)
-    unpairedB = np.array(unpairedB, dtype=np.int64)
-
+    pairing = np.concatenate([pairedA[:,None], pairedB[:,None]], axis=-1)
+    unpairedA = np.delete(np.arange(setA.shape[0]), pairedA)
+    unpairedB = np.delete(np.arange(setB.shape[0]), pairedB)
     return pairing, unpairedA, unpairedB
