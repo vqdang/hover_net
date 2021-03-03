@@ -164,7 +164,28 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
             ], axis=1)
         return info_list
     info_list = get_info_stack(output_tl, output_br)
+    # flag surrounding ambiguous (left margin, right margin)
+    # |----|------------|----|
+    # |\\\\\\\\\\\\\\\\\\\\\\|  
+    # |\\\\              \\\\|
+    # |\\\\              \\\\|
+    # |\\\\              \\\\|
+    # |\\\\\\\\\\\\\\\\\\\\\\|  
+    # |----|------------|----|
+    removal_flag = np.full((info_list.shape[0], 4,), 1) # left, right, top, bot
+    # exclude those contain left most boundary
+    removal_flag[(info_list[:,1,0,1] == np.min(output_tl[:,1])),0] = 0
+    # exclude those contain right most boundary
+    removal_flag[(info_list[:,1,1,1] == np.max(output_br[:,1])),1] = 0
+    # exclude those contain top most boundary
+    removal_flag[(info_list[:,1,0,0] == np.min(output_tl[:,0])),2] = 0
+    # exclude those contain bot most boundary
+    removal_flag[(info_list[:,1,1,0] == np.max(output_br[:,0])),3] = 0
+    print(removal_flag)
+    print(info_list[...,::-1][:,1])
+    exit()
 
+    # * -------------------------------
     br_most = np.max(output_br, axis=0)
     # get the fix grid tile info
     y_fix_output_tl = output_tl - np.array([margin_size[0], 0])[None,:]
@@ -220,6 +241,7 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     print(removal_flag)
     print(x_info_list[...,::-1][:,1])
 
+    # * define the tile cross section
     return info_list
 
 info_list = _get_tile_info(
