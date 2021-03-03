@@ -1,6 +1,5 @@
 import multiprocessing as mp
 from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, as_completed, wait
-from multiprocessing import Lock, Pool
 
 mp.set_start_method("spawn", True)  # ! must be at top for VScode debugging
 
@@ -23,21 +22,44 @@ import numpy as np
 import psutil
 import scipy.io as sio
 import torch
+import torch.multiprocessing as torch_mp
 import torch.utils.data as data
 import tqdm
 from docopt import docopt
 
-# from dataloader.infer_loader import SerializeArray, SerializeFileList
-# from misc.utils import (
-#     cropping_center,
-#     get_bounding_box,
-#     log_debug,
-#     log_info,
-#     rm_n_mkdir,
-# )
-# from misc.wsi_handler import get_file_handler
-# from . import base
+from misc.utils import (
+    cropping_center,
+    get_bounding_box,
+    log_debug,
+    log_info,
+    rm_n_mkdir,
+)
+from misc.wsi_handler import get_file_handler
+from . import base
 
+
+####
+class SerializeArray(data.Dataset):
+    def __init__(self, mp_shared_space, preproc=None):
+        super().__init__()
+        self.mp_shared_space = mp_shared_space
+
+        self.preproc = preproc
+        return
+
+    def __len__(self):
+        return len(self.mp_shared_space.patch_info_list)
+
+    def __getitem__(self, idx):
+        patch_info = self.mp_shared_space.patch_info_list[idx]
+        patch_data = self.mp_shared_space.tile_img[
+            patch_info[0,0] : patch_info[1,0],
+            patch_info[0,1] : patch_info[1,1],
+        ]
+        if self.preproc is not None:
+            patch_dat = patch_data.copy()
+            patch_data = self.preproc(patch_data)
+        return patch_data, patch_info
 
 ####
 def _remove_inst(inst_map, remove_id_list):
@@ -50,7 +72,6 @@ def _remove_inst(inst_map, remove_id_list):
     for inst_id in remove_id_list:
         inst_map[inst_map == inst_id] = 0
     return inst_map
-
 
 ####
 def _get_patch_info(img_shape, input_size, output_size):
@@ -90,7 +111,7 @@ def _get_patch_info(img_shape, input_size, output_size):
             np.stack([ input_tl[~sel],  input_br[~sel]], axis=1),
             np.stack([output_tl[~sel], output_br[~sel]], axis=1),
         ], axis=1)
-    print(info_list.shape)
+    # print(info_list.shape)
     return info_list
 
 # info_list = _get_patch_info(
@@ -163,7 +184,8 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
                 np.stack([output_tl, output_br], axis=1),
             ], axis=1)
         return info_list
-    info_list = get_info_stack(output_tl, output_br)
+    info_list = get_info_stack(output_tl, output_br).astype(np.int64)
+
     # flag surrounding ambiguous (left margin, right margin)
     # |----|------------|----|
     # |\\\\\\\\\\\\\\\\\\\\\\|  
@@ -181,17 +203,19 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     removal_flag[(info_list[:,1,0,0] == np.min(output_tl[:,0])),2] = 0
     # exclude those contain bot most boundary
     removal_flag[(info_list[:,1,1,0] == np.max(output_br[:,0])),3] = 0
-    print(removal_flag)
-    print(info_list[...,::-1][:,1])
-    exit()
+    # print(removal_flag)
+    # print(info_list[...,::-1][:,1])
+    # exit()
 
-    # * -------------------------------
     br_most = np.max(output_br, axis=0)
+    tl_most = np.min(output_tl, axis=0)
+    # * -------------------------------
     # get the fix grid tile info
     y_fix_output_tl = output_tl - np.array([margin_size[0], 0])[None,:]
     y_fix_output_br = np.stack([output_tl[:,0], output_br[:,1]], axis=-1)
     y_fix_output_br = y_fix_output_br + np.array([margin_size[0], 0])[None,:]
     # bound reassignment
+    # ? do we need to do bound check for tl ? (extreme case of 1 tile of size < margin size ?)
     y_fix_output_br[y_fix_output_br[:,0] > br_most[0], 0] = br_most[0]  
     y_fix_output_br[y_fix_output_br[:,1] > br_most[1], 1] = br_most[1]  
     # sel position not on the image boundary
@@ -210,8 +234,8 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     removal_flag[(y_info_list[:,1,0,1] == np.min(output_tl[:,1])),0] = 0
     # exclude the right most boundary   
     removal_flag[(y_info_list[:,1,1,1] == np.max(output_br[:,1])),1] = 0
-    print(removal_flag)
-    print(y_info_list[...,::-1][:,1])
+    # print(removal_flag)
+    # print(y_info_list[...,::-1][:,1])
 
     x_fix_output_br = output_br + np.array([0, margin_size[1]])[None,:]
     x_fix_output_tl = np.stack([output_tl[:,0], output_br[:,1]], axis=-1)
@@ -238,98 +262,147 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     removal_flag[(x_info_list[:,1,0,0] == np.min(output_tl[:,0])),2] = 0
     # exclude the right most boundary   
     removal_flag[(x_info_list[:,1,1,0] == np.max(output_br[:,0])),3] = 0
-    print(removal_flag)
-    print(x_info_list[...,::-1][:,1])
+    # print(removal_flag)
+    # print(x_info_list[...,::-1][:,1])
 
     # * define the tile cross section
+    sel = np.any(output_br == br_most, axis=-1)
+    xsect = output_br[~sel]
+    xsect_tl = xsect - margin_size * 2
+    xsect_br = xsect + margin_size * 2
+    # do the bound check to ensure range stay within
+    xsect_br[xsect_br[:,0] > br_most[0], 0] = br_most[0]  
+    xsect_br[xsect_br[:,1] > br_most[1], 1] = br_most[1]  
+    xsect_tl[xsect_tl[:,0] < tl_most[0], 0] = tl_most[0]  
+    xsect_tl[xsect_tl[:,1] < tl_most[1], 1] = tl_most[1]  
+    xsect_info = get_info_stack(xsect_tl, xsect_br)
+
     return info_list
 
-info_list = _get_tile_info(
-                np.array([170, 100]), # [130, 100], [140, 100]
-                np.array([80, 80]), 
-                np.array([60, 60]), 
-                np.array([20, 20]),
-                np.array([20, 20]),)
+# info_list = _get_tile_info(
+#                 np.array([170, 100]), # [130, 100], [140, 100]
+#                 np.array([80, 80]), 
+#                 np.array([60, 60]), 
+#                 np.array([20, 20]),
+#                 np.array([20, 20]),)
 # print(info_list[:,0])
-exit()
+# exit()
 
 ####
-def _get_tile_patch_info(
-    img_shape, tile_shape, patch_input_shape, patch_output_shape
-):
-    """Get chunk patch info. Here, chunk refers to tiles used during inference.
+def run_model(
+        mp_queue_output,
+        tile_info_list,
+        wsi_path, wsi_ext, wsi_proc_mag,):
 
-    Args:
-        img_shape: input image shape
-        tile_input_shape: shape of tiles used for processing
-        patch_input_shape: input patch shape
-        patch_output_shape: output patch shape
+    # wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
+    # # ! cache here is for legacy and to deal with esoteric internal wsi format
+    # wsi_handler.prepare_reading(
+    #     read_mag=self.proc_mag, cache_path="%s/src_wsi.npy" % self.cache_path
+    # )
 
-    """
-    def flat_mesh_grid_coord(y, x):
-        y, x = np.meshgrid(y, x)
-        return np.stack([y.flatten(), x.flatten()], axis=-1)
+    # using shared memory namespace so all the loader workers use same 
+    # underlying image data, also allowing persistent worker and fast data switching 
+    mp_manager = torch_mp.Manager()
+    mp_shared_space = mp_manager.Namespace()
 
-    patch_diff_shape = patch_input_shape - patch_output_shape
-    patch_info_list = _get_patch_info(img_shape, 
-                        patch_input_shape, patch_output_shape, 
-                        drop_out_of_range=True)
+    ds = SerializeArray(mp_shared_space)
+    loader = data.DataLoader(ds,
+                            num_workers=32,
+                            batch_size=16,
+                            drop_last=False,
+                            persistent_workers=True,
+                        )
 
-    round_to_multiple = lambda x, y: np.floor(x / y) * y
-    # derive tile output placement as consecutive tiling with step size of 0
-    # and tile output will have shape of multiple of patch_output_shape (round down)
-    tile_output_shape = int(tile_shape / patch_output_shape) * patch_output_shape
-    tile_input_shape = tile_output_shape + patch_diff_shape
-    tile_info_list = _get_patch_info(img_shape, 
-                        patch_input_shape, patch_output_shape, 
-                        drop_out_of_range=False)   
-    tile_i_list = tile_info_list[:,0]
-    tile_o_list = tile_info_list[:,1]
+    for i in range (1000000):
+        patch_info_list = np.array([[[0, 0], [180, 180]]]*256, dtype=np.int32)
+        tile_img = np.full([5000, 5000, 3], i)
+        mp_shared_space.tile_img = torch.from_numpy(tile_img).share_memory_()
+        mp_shared_space.patch_info_list = torch.from_numpy(patch_info_list).share_memory_()
 
-    return
-
-####
-class InferManager(base.InferManager):
-    def __run_model(self, patch_top_left_list, pbar_desc):
-        # TODO: the cost of creating dataloader may not be cheap ?
-        dataset = SerializeArray(
-            "%s/cache_chunk.npy" % self.cache_path,
-            patch_top_left_list,
-            self.patch_input_shape,
-        )
-
-        dataloader = data.DataLoader(
-            dataset,
-            num_workers=self.nr_inference_workers,
-            batch_size=self.batch_size,
-            drop_last=False,
-        )
-
-        pbar = tqdm.tqdm(
-            desc=pbar_desc,
-            leave=True,
-            total=int(len(dataloader)),
-            ncols=80,
-            ascii=True,
-            position=0,
-        )
-
-        # run inference on input patches
-        accumulated_patch_output = []
-        for batch_idx, batch_data in enumerate(dataloader):
+        # change the data without changing the loader
+        # so that the loader multiproc stays alives
+        for batch_idx, batch_data in enumerate(loader):
             sample_data_list, sample_info_list = batch_data
-            sample_output_list = self.run_step(sample_data_list)
+            print(sample_data_list[:,0,0,0])
+            break
+
+    while len(mp_queue_input > 0):
+        tile_info, patch_info_list = mp_queue_input.pop()
+        tile_tl, tile_br = tile_info
+        tile_img = wsi_handler.read_region(
+                 tile_tl[::-1], (tile_br - tile_tl)[::-1]
+            )
+        # change the data without changing the loader
+        # so that the loader multiproc stays alives
+
+        accumulated_patch_output = []
+        for batch_idx, batch_data in enumerate(loader):
+            sample_data_list, sample_info_list = batch_data
+            sample_output_list = run_step(sample_data_list)
             sample_info_list = sample_info_list.numpy()
             curr_batch_size = sample_output_list.shape[0]
             sample_output_list = np.split(sample_output_list, curr_batch_size, axis=0)
             sample_info_list = np.split(sample_info_list, curr_batch_size, axis=0)
             sample_output_list = list(zip(sample_info_list, sample_output_list))
             accumulated_patch_output.extend(sample_output_list)
-            pbar.update()
-        pbar.close()
-        return accumulated_patch_output
+        mp_queue_output.append(accumulated_patch_output)
+        run inference on input patches
+    return 
 
-    def __select_valid_patches(self, patch_info_list, has_output_info=True):
+def mp_dispatcher(data_list, nr_worker=0, show_pbar=True):
+    """
+    data_list is alist of [[func, arg1, arg2, etc.]]
+    Resutls are alway sorted according to source position
+    """
+    if nr_worker > 0:
+        proc_pool = ProcessPoolExecutor(nr_worker)
+
+    result_list = []
+    future_list = []
+
+    if show_pbar:
+        pbar = tqdm(total=len(data_list), ascii=True, position=0)
+    for run_idx, dat in enumerate(data_list):
+        func = dat[0]
+        args = dat[1:]
+        if nr_worker > 0:
+            future = proc_pool.submit(func, run_idx, *args)
+            future_list.append(future)
+        else:
+            # ! assume 1st return is alwasy run_id
+            result = func(run_idx, *args)
+            result_list.append(result)
+            if show_pbar:
+                pbar.update()
+    if nr_worker > 0:
+        for future in as_completed(future_list):
+            if future.exception() is not None:
+                logging.info(future.exception())
+            else:
+                result = future.result()
+                result_list.append(result)
+            if show_pbar:
+                pbar.update()
+    if show_pbar:
+        pbar.close()
+    
+    result_list = sorted(result_list, key=lambda k : k[0])
+    result_list = [v[1:] for v in result_list]
+    return result_list
+
+####
+def check_valid(run_idx, info, wsi_mask):
+    output_bbox = np.rint(info[1]).astype(np.int64)
+    output_roi = wsi_mask[
+        output_bbox[0][0] : output_bbox[1][0],
+        output_bbox[0][1] : output_bbox[1][1],
+    ]
+    return run_idx, (torch.sum(output_roi) > 0).item()
+
+####
+class InferManager(base.InferManager):
+
+    def __select_valid_patches(self, patch_info_list):
         """Select valid patches from the list of input patch information.
 
         Args:
@@ -337,26 +410,23 @@ class InferManager(base.InferManager):
             has_output_info: whether output information is given
         
         """
+
         down_sample_ratio = self.wsi_mask.shape[0] / self.wsi_proc_shape[0]
-        selected_indices = []
-        for idx in range(patch_info_list.shape[0]):
-            patch_info = patch_info_list[idx]
-            patch_info = np.squeeze(patch_info)
-            # get the box at corresponding mag of the mask
-            if has_output_info:
-                output_bbox = patch_info[1] * down_sample_ratio
-            else:
-                output_bbox = patch_info * down_sample_ratio
-            output_bbox = np.rint(output_bbox).astype(np.int64)
-            # coord of the output of the patch (i.e center regions)
-            output_roi = self.wsi_mask[
-                output_bbox[0][0] : output_bbox[1][0],
-                output_bbox[0][1] : output_bbox[1][1],
-            ]
-            if np.sum(output_roi) > 0:
-                selected_indices.append(idx)
-        sub_patch_info_list = patch_info_list[selected_indices]
-        return sub_patch_info_list
+        torch_mask = torch.from_numpy(self.wsi_mask).share_memory_()
+        run_list = [[check_valid, info * down_sample_ratio, torch_mask] for info in patch_info_list]
+        # somehow multiproc is slower than single thread
+        valid_indices = mp_dispatcher(run_list, nr_worker=0, show_pbar=False)
+        valid_indices = np.concatenate(valid_indices, axis=0)
+        return patch_info_list[valid_indices]
+
+    def __select_patches_in_tile(self, tile_info, patch_info_list):
+        # checking basing on the output alignment
+        tile_tl, tile_br = tile_info[1]
+        patch_tl_list = patch_info_list[:,1,0] 
+        patch_br_list = patch_info_list[:,1,1]
+        sel = (patch_tl_list[:,0] == tile_tl[0]) | (patch_tl_list[:,1] == tile_tl[1])
+        sel |= (patch_br_list[:,0] == tile_br[0]) | (patch_br_list[:,1] == tile_br[1])
+        return patch_info_list[sel]     
 
     def _parse_args(self, run_args):
         """Parse command line arguments and set as instance variables."""
@@ -365,6 +435,7 @@ class InferManager(base.InferManager):
         # to tuple
         make_shape_array = lambda x : np.array([x, x]).astype(np.int64)
         self.tile_shape = make_shape_array(self.tile_shape)
+        self.ambiguous_size = make_shape_array(self.ambiguous_size)
         self.patch_input_shape = make_shape_array(self.patch_input_shape)
         self.patch_output_shape = make_shape_array(self.patch_output_shape)
         return
@@ -432,13 +503,75 @@ class InferManager(base.InferManager):
                 cv2.cvtColor(wsi_thumb_rgb, cv2.COLOR_RGB2BGR),
             )
 
-        # * raw prediction
-        chunk_info_list, patch_info_list = _get_chunk_patch_info(
-            self.wsi_proc_shape,
-            chunk_input_shape,
-            patch_input_shape,
-            patch_output_shape,
+        # * retrieve patch and tile placement
+        patch_info_list = _get_patch_info(
+            self.wsi_proc_shape, self.patch_input_shape, self.patch_output_shape,
         )
+        patch_diff_shape = self.patch_input_shape - self.patch_output_shape
+        # derive tile output placement as consecutive tiling with step size of 0
+        # and tile output will have shape of multiple of patch_output_shape (round down)
+        tile_output_shape = np.floor(self.tile_shape / self.patch_output_shape) * self.patch_output_shape
+        tile_input_shape = tile_output_shape + patch_diff_shape
+        tile_info_list = _get_tile_info(
+            self.wsi_proc_shape, tile_input_shape, tile_output_shape, 
+            self.ambiguous_size, self.patch_output_shape
+        )
+
+        # * Async Inference
+        # * launch a seperate process to do forward and store the future, 
+        # * the loader_workers may not need, to be spawned by the forward processs
+        # * then while polling for forward result, launch separate process for
+        # * doing the postproc
+        #
+        #         / forward \ (loop)
+        # main ------------- main----------------main
+        #                       \ postproc (loop)/
+
+        # future_list = collections.deque()
+        # mp_pool = ProcessPoolExecutor(self.nr_post_proc_workers + 1)
+
+        patch_info_list = self.__select_valid_patches(patch_info_list)
+        tile_info_list = self.__select_valid_patches(tile_info_list)
+        
+        mp_manager = mp.Manager()
+        # contain at most 5 tile ouput before polling
+        mp_forward_o_queue = mp_manager.Queue(maxsize=5)
+
+        import collections
+        forward_info_list = collections.deque()
+
+        nr_tile = tile_info_list.shape[0]
+        for tile_info in tile_info_list:
+            # retrieve valid patch within tile
+            patch_in_tile_info_list = self.__select_patches_in_tile(tile_info, patch_info_list)
+            # shifting patch coord from wrt wsi to wrt to tile
+            tile_input_info = tile_info[0]
+            patch_input_info_list = patch_in_tile_info_list[:,0]
+            patch_input_info_list -= tile_input_info
+            forward_info_list.append([tile_input_info, patch_input_info_list])
+
+        forward_process = mp.Process(target=run_model, 
+                                     args=(mp_forward_o_queue, forward_info_list,
+                                            wsi_path, wsi_ext, self.proc_mag))
+
+        forward_process.start()
+        forward_process.join()
+        
+        # do double queue polling
+        # while len(future_list) > 0:
+        #     while not future_list[0].done(): 
+        #         future_list.rotate()
+        #     proc_future = future_list.popleft()
+        #     if proc_future.exception() is not None:
+        #         print(proc_future.exception())
+        #     proc_run_id, proc_result = proc_future.result()
+        #     if proc_run_id == 'forward':
+        #         proc_future = postproc_mp_pool.submit()
+        #         future_list.append(proc_future)
+        #     elif proc_run_id == 'postproc':
+        #         proc_future.result()
+        #     else:
+        #         assert False
 
         return
 
@@ -465,21 +598,24 @@ class InferManager(base.InferManager):
 
         wsi_path_list = glob.glob(self.input_dir + "/*")
         wsi_path_list.sort()  # ensure ordering
-        for wsi_path in wsi_path_list[:]:
+        for wsi_path in wsi_path_list[::-1]:
             wsi_base_name = pathlib.Path(wsi_path).stem
             msk_path = "%s/%s.png" % (self.input_mask_dir, wsi_base_name)
             if self.save_thumb or self.save_mask:
                 output_file = "%s/json/%s.json" % (self.output_dir, wsi_base_name)
             else:
                 output_file = "%s/%s.json" % (self.output_dir, wsi_base_name)
-            if os.path.exists(output_file):
-                log_info("Skip: %s" % wsi_base_name)
-                continue
-            try:
-                log_info("Process: %s" % wsi_base_name)
-                self.process_single_file(wsi_path, msk_path, self.output_dir)
-                log_info("Finish")
-            except:
-                logging.exception("Crash")
+
+            # if os.path.exists(output_file):
+            #     log_info("Skip: %s" % wsi_base_name)
+            #     continue
+            # try:
+                # log_info("Process: %s" % wsi_base_name)
+                # self.process_single_file(wsi_path, msk_path, self.output_dir)
+                # log_info("Finish")
+            # except:
+            #     logging.exception("Crash")
+            self.process_single_file(wsi_path, msk_path, self.output_dir)
+            break
         rm_n_mkdir(self.cache_path)  # clean up all cache
         return
