@@ -165,21 +165,60 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
         return info_list
     info_list = get_info_stack(output_tl, output_br)
 
+    br_most = np.max(output_br, axis=0)
     # get the fix grid tile info
-    # sel position not on the image boundary
-    sel = (output_tl[:,0] == np.min(output_tl[:,0]))
     y_fix_output_tl = output_tl - np.array([margin_size[0], 0])[None,:]
     y_fix_output_br = np.stack([output_tl[:,0], output_br[:,1]], axis=-1)
     y_fix_output_br = y_fix_output_br + np.array([margin_size[0], 0])[None,:]
+    # bound reassignment
+    y_fix_output_br[y_fix_output_br[:,0] > br_most[0], 0] = br_most[0]  
+    y_fix_output_br[y_fix_output_br[:,1] > br_most[1], 1] = br_most[1]  
+    # sel position not on the image boundary
+    sel = (output_tl[:,0] == np.min(output_tl[:,0]))
     y_info_list = get_info_stack(y_fix_output_tl[~sel], y_fix_output_br[~sel])
-    print(y_info_list[:,1])
+    # print(y_info_list[...,::-1][:,1],'\n')
 
-    sel = (output_tl[:,1] == np.min(output_tl[:,1]))
-    x_fix_output_tl = output_tl - np.array([0, margin_size[1]])[None,:]
-    x_fix_output_br = np.stack([output_tl[:,1], output_br[:,0]], axis=-1)
-    x_fix_output_br = x_fix_output_br + np.array([0, margin_size[1]])[None,:]
+    # flag horizontal ambiguous region for y (left margin, right margin)
+    # |----|------------|----|
+    # |\\\\|            |\\\\|  
+    # |----|------------|----|
+    # ambiguous         ambiguous (margin size)
+    removal_flag = np.zeros((y_info_list.shape[0], 4,)) # left, right, top, bot
+    removal_flag[:,[0,1]] = 1
+    # exclude the left most boundary
+    removal_flag[(y_info_list[:,1,0,1] == np.min(output_tl[:,1])),0] = 0
+    # exclude the right most boundary   
+    removal_flag[(y_info_list[:,1,1,1] == np.max(output_br[:,1])),1] = 0
+    print(removal_flag)
+    print(y_info_list[...,::-1][:,1])
+
+    x_fix_output_br = output_br + np.array([0, margin_size[1]])[None,:]
+    x_fix_output_tl = np.stack([output_tl[:,0], output_br[:,1]], axis=-1)
+    x_fix_output_tl = x_fix_output_tl - np.array([0, margin_size[1]])[None,:]
+    # bound reassignment
+    x_fix_output_br[x_fix_output_br[:,0] > br_most[0], 0] = br_most[0]  
+    x_fix_output_br[x_fix_output_br[:,1] > br_most[1], 1] = br_most[1]  
+    # sel position not on the image boundary
+    sel = (output_br[:,1] == np.max(output_br[:,1]))
     x_info_list = get_info_stack(x_fix_output_tl[~sel], x_fix_output_br[~sel])
-    print(x_info_list[:,1])
+    # print(x_info_list[...,::-1][:,1],'\n')
+    # flag vertical ambiguous region for x (top margin, bottom margin)
+    # |----|
+    # |\\\\| ambiguous
+    # |----|
+    # |    |
+    # |    |
+    # |----|
+    # |\\\\| ambiguous
+    # |----|
+    removal_flag = np.zeros((x_info_list.shape[0], 4,)) # left, right, top, bot
+    removal_flag[:,[2,3]] = 1
+    # exclude the left most boundary
+    removal_flag[(x_info_list[:,1,0,0] == np.min(output_tl[:,0])),2] = 0
+    # exclude the right most boundary   
+    removal_flag[(x_info_list[:,1,1,0] == np.max(output_br[:,0])),3] = 0
+    print(removal_flag)
+    print(x_info_list[...,::-1][:,1])
 
     return info_list
 
