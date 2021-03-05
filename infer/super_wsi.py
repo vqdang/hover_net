@@ -1,9 +1,11 @@
 import multiprocessing as mp
-from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, as_completed, wait
+from concurrent.futures import (FIRST_EXCEPTION, ProcessPoolExecutor,
+                                as_completed, wait)
 
 mp.set_start_method("spawn", True)  # ! must be at top for VScode debugging
 
 import argparse
+import collections
 import glob
 import json
 import logging
@@ -25,16 +27,11 @@ import torch
 import torch.multiprocessing as torch_mp
 import torch.utils.data as data
 import tqdm
-from docopt import docopt
 
-from misc.utils import (
-    cropping_center,
-    get_bounding_box,
-    log_debug,
-    log_info,
-    rm_n_mkdir,
-)
+from misc.utils import (cropping_center, get_bounding_box, log_debug, log_info,
+                        rm_n_mkdir)
 from misc.wsi_handler import get_file_handler
+
 from . import base
 
 
@@ -118,19 +115,7 @@ def _get_patch_info(img_shape, input_size, output_size):
     # print(info_list.shape)
     return info_list
 
-# info_list = _get_patch_info(
-#                 np.array([70, 100]), 
-#                 np.array([40, 40]), 
-#                 np.array([20, 20]))
-# print(info_list[:,1,0])
-
-# info_list = _get_patch_info(
-#                 np.array([100, 100]), 
-#                 np.array([80, 80]), 
-#                 np.array([60, 60]))
-# print(info_list[:,0,1])
-# exit()
-
+####
 def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     """Get top left coordinate information of patches from original image.
 
@@ -188,6 +173,8 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
                 np.stack([output_tl, output_br], axis=1),
             ], axis=1)
         return info_list
+
+    # * Full Tile Grid
     info_list = get_info_stack(output_tl, output_br).astype(np.int64)
 
     # flag surrounding ambiguous (left margin, right margin)
@@ -207,13 +194,12 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     removal_flag[(info_list[:,1,0,0] == np.min(output_tl[:,0])),2] = 0
     # exclude those contain bot most boundary
     removal_flag[(info_list[:,1,1,0] == np.max(output_br[:,0])),3] = 0
-    # print(removal_flag)
-    # print(info_list[...,::-1][:,1])
-    # exit()
+    mode_list = np.full(info_list.shape[0], 0)
+    all_info = [[info_list, removal_flag, mode_list]]
 
     br_most = np.max(output_br, axis=0)
     tl_most = np.min(output_tl, axis=0)
-    # * -------------------------------
+    # * Tile Boundary Redo with Margin
     # get the fix grid tile info
     y_fix_output_tl = output_tl - np.array([margin_size[0], 0])[None,:]
     y_fix_output_br = np.stack([output_tl[:,0], output_br[:,1]], axis=-1)
@@ -225,21 +211,20 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     # sel position not on the image boundary
     sel = (output_tl[:,0] == np.min(output_tl[:,0]))
     y_info_list = get_info_stack(y_fix_output_tl[~sel], y_fix_output_br[~sel])
-    # print(y_info_list[...,::-1][:,1],'\n')
 
     # flag horizontal ambiguous region for y (left margin, right margin)
     # |----|------------|----|
     # |\\\\|            |\\\\|  
     # |----|------------|----|
-    # ambiguous         ambiguous (margin size)
+    # <----> ambiguous (margin size)
     removal_flag = np.zeros((y_info_list.shape[0], 4,)) # left, right, top, bot
     removal_flag[:,[0,1]] = 1
     # exclude the left most boundary
     removal_flag[(y_info_list[:,1,0,1] == np.min(output_tl[:,1])),0] = 0
     # exclude the right most boundary   
     removal_flag[(y_info_list[:,1,1,1] == np.max(output_br[:,1])),1] = 0
-    # print(removal_flag)
-    # print(y_info_list[...,::-1][:,1])
+    mode_list = np.full(y_info_list.shape[0], 1)
+    # all_info.append([y_info_list, removal_flag, mode_list])
 
     x_fix_output_br = output_br + np.array([0, margin_size[1]])[None,:]
     x_fix_output_tl = np.stack([output_tl[:,0], output_br[:,1]], axis=-1)
@@ -250,11 +235,10 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     # sel position not on the image boundary
     sel = (output_br[:,1] == np.max(output_br[:,1]))
     x_info_list = get_info_stack(x_fix_output_tl[~sel], x_fix_output_br[~sel])
-    # print(x_info_list[...,::-1][:,1],'\n')
     # flag vertical ambiguous region for x (top margin, bottom margin)
-    # |----|
-    # |\\\\| ambiguous
-    # |----|
+    # |----| ^
+    # |\\\\| | ambiguous
+    # |----| V
     # |    |
     # |    |
     # |----|
@@ -266,8 +250,8 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     removal_flag[(x_info_list[:,1,0,0] == np.min(output_tl[:,0])),2] = 0
     # exclude the right most boundary   
     removal_flag[(x_info_list[:,1,1,0] == np.max(output_br[:,0])),3] = 0
-    # print(removal_flag)
-    # print(x_info_list[...,::-1][:,1])
+    mode_list = np.full(x_info_list.shape[0], 2)
+    # all_info.append([x_info_list, removal_flag, mode_list])
 
     # * define the tile cross section
     sel = np.any(output_br == br_most, axis=-1)
@@ -279,18 +263,18 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     xsect_br[xsect_br[:,1] > br_most[1], 1] = br_most[1]  
     xsect_tl[xsect_tl[:,0] < tl_most[0], 0] = tl_most[0]  
     xsect_tl[xsect_tl[:,1] < tl_most[1], 1] = tl_most[1]  
-    xsect_info = get_info_stack(xsect_tl, xsect_br)
+    xsect_info_list = get_info_stack(xsect_tl, xsect_br)
+    mode_list = np.full(xsect_info_list.shape[0], 3)
+    removal_flag = np.full((xsect_info_list.shape[0], 4,), 0) # left, right, top, bot
+    # all_info.append([xsect_info_list, removal_flag, mode_list]) 
 
-    return info_list
+    # ! combine all
+    info_list, removal_flag, mode_list = list(zip(*all_info))
+    info_list = np.concatenate(info_list, axis=0).astype(np.int32)
+    mode_list = np.concatenate(mode_list, axis=0)
+    removal_flag = np.concatenate(removal_flag, axis=0)
 
-# info_list = _get_tile_info(
-#                 np.array([170, 100]), # [130, 100], [140, 100]
-#                 np.array([80, 80]), 
-#                 np.array([60, 60]), 
-#                 np.array([20, 20]),
-#                 np.array([20, 20]),)
-# print(info_list[:,0])
-# exit()
+    return info_list, removal_flag, mode_list
 
 ####
 def run_model(
@@ -340,14 +324,106 @@ def run_model(
             sample_output_list = run_step(sample_data_list, model)
             sample_info_list = sample_info_list.numpy()
             accumulated_patch_output.append([sample_info_list, sample_output_list])
-        forward_output_queue.put(accumulated_patch_output)
-    return True
+        forward_output_queue.put([tile_idx, accumulated_patch_output])
 
+        print('%d/%d' % (tile_idx, len(tile_info_list)))
+    return 
 ####
-def postproc_tile(tile_info, patch_info_list, func_opt):
+####
+# ! seem to be 1 pix off at cross section or sthg
+def get_inst_in_margin(arr, margin_size, tile_pp_info):
+    """
+    include the margin line itself
+    """
+    tile_pp_info = np.array(tile_pp_info)
+
+    inst_in_margin = []
+    # extract those lie within margin region
+    if tile_pp_info[0] == 1: # left edge
+        inst_in_margin.append(arr[:,:(margin_size+1)])
+    if tile_pp_info[1] == 1: # right edge
+        inst_in_margin.append(arr[:,-(margin_size+1):])
+    if tile_pp_info[2] == 1: # top edge
+        inst_in_margin.append(arr[:(margin_size+1),:])
+    if tile_pp_info[3] == 1: # bottom edge
+        inst_in_margin.append(arr[-(margin_size+1):,:])
+    inst_in_margin = [v.flatten() for v in inst_in_margin]
+    if len(inst_in_margin) > 0:
+        inst_in_margin = np.concatenate(inst_in_margin, axis=0)
+        inst_in_margin = np.unique(inst_in_margin)
+    else:
+        inst_in_margin = np.array([]) # empty array
+    return inst_in_margin
+####
+# ! BUG: fix this, this create exclusive problem due wildcard mass selection
+def get_inst_on_margin(arr, margin_size, tile_pp_info):
+    tile_pp_info = np.array(tile_pp_info)
+    # extract those lie on the margin line
+    # l r t b
+    # ! define the line crossing and derive the cross point replacement will be
+    # ! much easier to manage !
+    inst_on_margin = [] # just need to do 1 pix check
+    if (tile_pp_info == [1, 1, 1, 1]).all():
+        inst_on_margin.append(arr[margin_size:-margin_size,  margin_size   ])            
+        inst_on_margin.append(arr[margin_size:-margin_size,-(margin_size+1)])            
+        inst_on_margin.append(arr[  margin_size   ,margin_size:-margin_size])            
+        inst_on_margin.append(arr[-(margin_size+1),margin_size:-margin_size])            
+    elif (tile_pp_info == [1, 0, 1, 0]).all():
+        inst_on_margin.append(arr[  margin_size   ,margin_size:-margin_size])            
+        inst_on_margin.append(arr[-(margin_size+1),margin_size:-margin_size])            
+    elif (tile_pp_info == [1, 0, 0, 1]).all():
+        inst_on_margin.append(arr[  margin_size   ,margin_size:-margin_size])            
+        inst_on_margin.append(arr[-(margin_size+1),margin_size:-margin_size])            
+    elif (tile_pp_info == [0, 1, 1, 0]).all():
+        inst_on_margin.append(arr[  margin_size   ,margin_size:-margin_size])            
+        inst_on_margin.append(arr[-(margin_size+1),margin_size:-margin_size])            
+    elif (tile_pp_info == [0, 1, 0, 1]).all():
+        inst_on_margin.append(arr[  margin_size   ,margin_size:-margin_size])            
+        inst_on_margin.append(arr[-(margin_size+1),margin_size:-margin_size])            
+    elif (tile_pp_info == [1, 0, 0, 0]).all() or \
+            (tile_pp_info == [0, 1, 0, 0]).all() or \
+            (tile_pp_info == [1, 1, 0, 0]).all() or \
+            (tile_pp_info == [0, 0, 1, 1]).all() or \
+            (tile_pp_info == [0, 0, 1, 0]).all() or \
+            (tile_pp_info == [0, 0, 0, 1]).all():
+            if tile_pp_info[0] == 1:
+                inst_on_margin.append(arr[:,margin_size])
+            if tile_pp_info[1] == 1:
+                inst_on_margin.append(arr[:,-(margin_size+1)])
+            if tile_pp_info[2] == 1:
+                inst_on_margin.append(arr[margin_size,:])
+            if tile_pp_info[3] == 1:
+                inst_on_margin.append(arr[-(margin_size+1),:])
+    else:
+        assert False
+    inst_on_margin = [v.flatten() for v in inst_on_margin]
+
+    if len(inst_on_margin) > 0:
+        inst_on_margin = np.concatenate(inst_on_margin, axis=0)
+        inst_on_margin = np.unique(inst_on_margin)
+    else:
+        inst_on_margin = np.array([]) # empty array
+
+    return inst_on_margin
+# a = np.reshape(np.arange(0, 64), [8, 8])
+# print(a)
+# print(get_inst_on_margin(a, 2, [1, 1 ,1, 1]))
+# print(get_inst_on_margin(a, 1, [1, 1 ,1, 1]))
+# print(get_inst_on_margin(a, 1, [1, 1 ,0, 0]))
+# print(get_inst_on_margin(a, 1, [0, 0 ,1, 1]))
+# print('')
+# print(get_inst_in_margin(a, 1, [1, 1 ,1, 1]))
+# print(get_inst_in_margin(a, 1, [0, 1 ,1, 1]))
+# print(get_inst_in_margin(a, 1, [1, 0 ,1, 1]))
+# print(get_inst_in_margin(a, 1, [0, 0 ,1, 1]))
+# print(get_inst_in_margin(a, 1, [0, 1 ,1, 0]))
+# exit()
+####
+def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
+                margin_size, patch_info_list, func_opt):
     # output pos of the tile within the source wsi
-    tile_input_tl, tile_output_br = tile_info[0]
-    tile_output_tl, tile_output_br = tile_info[1] # Y, X
+    tile_input_tl, tile_output_br = tile_io_info[0]
+    tile_output_tl, tile_output_br = tile_io_info[1] # Y, X
     offset = tile_output_tl - tile_input_tl
 
     # ! shape may be uneven hence just detach all into a big list
@@ -358,6 +434,7 @@ def postproc_tile(tile_info, patch_info_list, func_opt):
         patch_pos_list.extend(split_inst(batch_pos))
         patch_feat_list.extend(split_inst(batch_feat))
 
+    # * assemble patch to tile
     nr_ch = patch_feat_list[-1].shape[-1]
     tile_shape = (tile_output_br - tile_output_tl).tolist()
     pred_map = np.zeros(tile_shape + [nr_ch], dtype=np.float32)
@@ -371,10 +448,81 @@ def postproc_tile(tile_info, patch_info_list, func_opt):
             pos_tl[0] : pos_br[0],
             pos_tl[1] : pos_br[1]
         ] = patch_feat_list[idx][0]
+    del patch_pos_list, patch_feat_list
 
+    # * retrieve actual output
     postproc_func, postproc_kwargs = func_opt
     pred_inst, inst_info_dict = postproc_func(pred_map, **postproc_kwargs)
-    return inst_info_dict
+    del pred_map
+
+    # * perform removal for ambiguous region
+
+    # Consider each symbol as 1 pixel    
+    # This is margin inner area //// 
+    # ----------------------------- ^  ^
+    # |///////////////////////////| |  | margin area 
+    # |///////////////////////////| |  | (yes including the inner and outer edge)
+    # |///|-------------------|///| |  V
+    # |///|   ^margin_size    |///| |
+    # |///|                   |///| |
+    # |///| <-- margin line   |///| | Image area
+    # |///|      |            |///| |
+    # |///|      v            |///| |
+    # |///|-------------------|///| |
+    # |///////////////////////////| |
+    # |///////////////////////////| |
+    # ----------------------------| V
+
+
+    if tile_mode == 0: 
+        # for `full grid tile`
+        # -- extend from the boundary by the margin size, remove 
+        #    nuclei lie within the margin area but exclude those
+        #    lie on the margin line
+        # also contain those lying on the edges
+        inst_in_margin = get_inst_in_margin(pred_inst, margin_size, tile_pp_info)
+        # those lying on the margin line
+        inst_on_margin = get_inst_on_margin(pred_inst, margin_size, tile_pp_info) 
+        inst_within_margin = np.setdiff1d(inst_in_margin, inst_on_margin, assume_unique=True)        
+        remove_inst_set = inst_within_margin.tolist()
+    elif tile_mode == 1 or tile_mode == 2:
+        # for `horizontal/vertical strip tiles` for fixing artifacts
+        # -- extend from the marked edges (top/bot or left/right) by the margin size, 
+        #    remove all nuclei lie within the margin area (including on the margin line)
+        # -- nuclei on all edges are removed (as these are alrd within `full grid tile`)
+        inst_in_margin = get_inst_in_margin(margin_size, tile_pp_info) # also contain those lying on the edges
+        if np.sum(tile_pp_info) == 1:
+            holder_flag = tile_pp_info.copy()
+            if tile_mode == 1: 
+                holder_flag[[2, 3]] = 1
+            else: 
+                holder_flag[[0, 1]] = 1
+        else:
+            holder_flag = [1, 1, 1, 1]
+        print(tile_mode, tile_pp_info, holder_flag)
+        inst_on_edge = get_inst_on_margin(0, holder_flag)
+        remove_inst_set = np.union1d(inst_in_margin, inst_on_edge)   
+        remove_inst_set = remove_inst_set.tolist()
+    else:
+        # inst within the tile after excluding margin area out
+        # only for a tile at cross-section, which is designed such that 
+        # their shape >= 3* margin size        
+        all_inst = np.unique()
+        remove_inst_set = []
+
+    remove_inst_set = set(remove_inst_set)
+
+    # * move pos back to wsi position
+    renew_id = 0
+    new_inst_info_dict = {}
+    for k, v in inst_info_dict.items():
+        if k not in remove_inst_set:            
+            v['bbox'] += tile_output_tl[::-1]
+            v['centroid'] += tile_output_tl[::-1]
+            v['contour'] += tile_output_tl[::-1]
+            new_inst_info_dict[renew_id] = v
+            renew_id += 1
+    return new_inst_info_dict
 
 ####
 class InferManager(base.InferManager):
@@ -493,38 +641,37 @@ class InferManager(base.InferManager):
         )
         patch_diff_shape = self.patch_input_shape - self.patch_output_shape
         # derive tile output placement as consecutive tiling with step size of 0
-        # and tile output will have shape of multiple of patch_output_shape (round down)
+        # and tile output will have shape being of multiple of patch_output_shape (round down)
         tile_output_shape = np.floor(self.tile_shape / self.patch_output_shape) * self.patch_output_shape
         tile_input_shape = tile_output_shape + patch_diff_shape
-        tile_info_list = _get_tile_info(
+        
+        tile_io_info_list, \
+            tile_pp_info_list, \
+            tile_mode_list = _get_tile_info(
             self.wsi_proc_shape, tile_input_shape, tile_output_shape, 
             self.ambiguous_size, self.patch_output_shape
         )
 
         # * Async Inference
-        # * launch a seperate process to do forward and store the result in a queue
-        # * then while polling for forward result, launch separate process for
-        # * doing the postproc
+        # * launch a seperate process to do forward and store the result in a queue.
+        # * main thread will poll for forward result and launch separate process for
+        # * doing the postproc for every newly predicted tiles
         #
         #         / forward \ (loop)
         # main ------------- main----------------main
         #                       \ postproc (loop)/
 
-        # future_list = collections.deque()
-        # mp_pool = ProcessPoolExecutor(self.nr_post_proc_workers + 1)
-
         patch_info_list = self.__select_valid_patches(patch_info_list)
-        tile_info_list = self.__select_valid_patches(tile_info_list)
+        tile_io_info_list = self.__select_valid_patches(tile_io_info_list)
         
         mp_manager = torch_mp.Manager()
-        # contain at most 5 tile ouput before polling
+        # contain at most 5 tile ouput before polling forward func
         mp_forward_output_queue = mp_manager.Queue(maxsize=5)
 
-        import collections
         forward_info_list = collections.deque()
 
-        nr_tile = tile_info_list.shape[0]
-        for tile_info in tile_info_list:
+        nr_tile = tile_io_info_list.shape[0]
+        for tile_info in tile_io_info_list:
             # retrieve valid patch within tile
             patch_in_tile_info_list = self.__select_patches_in_tile(tile_info, patch_info_list)
             forward_info_list.append([tile_info, patch_in_tile_info_list])
@@ -539,7 +686,6 @@ class InferManager(base.InferManager):
                                      args=(mp_forward_output_queue, forward_info_list,
                                             wsi_path, wsi_ext, self.proc_mag, wsi_cache_path,
                                             self.run_step, self.net, loader_kwargs))
-
         forward_process.start()
 
         post_proc_kwargs = {
@@ -547,35 +693,63 @@ class InferManager(base.InferManager):
             "return_centroids": True,
         }
 
-        proced_tile_counter = 0
+        self.wsi_inst_info = {}
         future_list = collections.deque()
         proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
         # will this lead to infinite loop ?
-        while forward_process.exitcode is None:
+        while True:
+            if forward_process.exitcode is not None \
+                and mp_forward_output_queue.empty():
+                break
+
             if not mp_forward_output_queue.empty():
-                # ! assume the forward result are in 
-                # ! sequential as defined above
-                tile_info = tile_info_list[proced_tile_counter]
-                forward_output = mp_forward_output_queue.get()
-                future = proc_pool.submit(postproc_tile, 
-                                    tile_info, forward_output, 
-                                    (self.post_proc_func, post_proc_kwargs))
-                # postproc_tile(tile_info, forward_output, 
+                # ! assume the forward result are spit out in 
+                # ! same order as defined in `forward_info_list`
+                tile_idx, forward_output = mp_forward_output_queue.get()
+                tile_io_info = tile_io_info_list[tile_idx]
+                tile_pp_info = tile_pp_info_list[tile_idx]
+                tile_mode = tile_mode_list[tile_idx]
+
+                # future = proc_pool.submit(postproc_tile, 
+                #                     tile_info, forward_output, 
                 #                     (self.post_proc_func, post_proc_kwargs))
-                future_list.append(future) # deal when forward finish or stick callback ?
-                proced_tile_counter += 1
+
+                tile_inst_dict = postproc_tile(
+                                        tile_io_info, tile_pp_info, tile_mode, 
+                                        self.ambiguous_size[0],
+                                        forward_output, 
+                                        (self.post_proc_func, post_proc_kwargs))
+
+                # ! may not work if output id range > maximum #inst in return dict
+                offset_id = len(self.wsi_inst_info)
+                for tile_inst_id, tile_inst_info in tile_inst_dict.items():
+                    inst_wsi_id = offset_id + tile_inst_id + 1
+                    self.wsi_inst_info[inst_wsi_id] = tile_inst_info
+
+                print('Post proc %d' % tile_idx)
+                # future_list.append(future) # deal when forward finish or stick callback ?
         if forward_process.exitcode > 0:
             raise ValueError(f'Forward process exited with code {forward_process.exitcode}')
         forward_process.join()
 
-        while len(future_list) > 0:
-            if not future_list[0].done(): 
-                future_list.rotate()
-                continue
-            proc_future = future_list.popleft()
-            if proc_future.exception() is not None:
-                print(proc_future.exception())
-            proc_future.result()        
+        # while len(future_list) > 0:
+        #     if not future_list[0].done(): 
+        #         future_list.rotate()
+        #         continue
+        #     proc_future = future_list.popleft()
+        #     if proc_future.exception() is not None:
+        #         print(proc_future.exception())
+        #     proc_future.result()        
+
+        if self.save_mask or self.save_thumb:
+            json_path = "%s/json/%s.json" % (output_dir, wsi_name)
+        else:
+            json_path = "%s/%s.json" % (output_dir, wsi_name)
+        # self.__save_json(json_path, self.wsi_inst_info)
+        wsi_thumb_rgb = self.wsi_handler.get_full_img(read_mag=self.proc_mag)
+        from misc.viz_utils import visualize_instances_dict
+        wsi_overlay = visualize_instances_dict(wsi_thumb_rgb, self.wsi_inst_info, draw_dot=True)
+        cv2.imwrite('dump.png', cv2.cvtColor(wsi_overlay, cv2.COLOR_RGB2BGR))
 
         return
 
@@ -602,7 +776,7 @@ class InferManager(base.InferManager):
 
         wsi_path_list = glob.glob(self.input_dir + "/*")
         wsi_path_list.sort()  # ensure ordering
-        for wsi_path in wsi_path_list[::-1]:
+        for wsi_path in wsi_path_list[1:2]:
             wsi_base_name = pathlib.Path(wsi_path).stem
             msk_path = "%s/%s.png" % (self.input_mask_dir, wsi_base_name)
             if self.save_thumb or self.save_mask:
