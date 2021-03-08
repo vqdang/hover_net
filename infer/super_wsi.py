@@ -268,7 +268,7 @@ def _get_tile_info(img_shape, input_size, output_size, margin_size, unit_size):
     removal_flag = np.full((xsect_info_list.shape[0], 4,), 0) # left, right, top, bot
     # all_info.append([xsect_info_list, removal_flag, mode_list]) 
 
-    all_info = all_info[:1]
+    # all_info = all_info[:1]
     # ! combine all
     info_list, removal_flag, mode_list = list(zip(*all_info))
     info_list = np.concatenate(info_list, axis=0).astype(np.int32)
@@ -288,13 +288,13 @@ def get_inst_in_margin(arr, margin_size, tile_pp_info):
     inst_in_margin = []
     # extract those lie within margin region
     if tile_pp_info[0] == 1: # left edge
-        inst_in_margin.append(arr[:,:margin_size])
+        inst_in_margin.append(arr[:,:(margin_size+1)])
     if tile_pp_info[1] == 1: # right edge
-        inst_in_margin.append(arr[:,-margin_size:])
+        inst_in_margin.append(arr[:,-(margin_size+1):])
     if tile_pp_info[2] == 1: # top edge
-        inst_in_margin.append(arr[:margin_size,:])
+        inst_in_margin.append(arr[:(margin_size+1),:])
     if tile_pp_info[3] == 1: # bottom edge
-        inst_in_margin.append(arr[-margin_size:,:])
+        inst_in_margin.append(arr[-(margin_size+1):,:])
     inst_in_margin = [v.flatten() for v in inst_in_margin]
     if len(inst_in_margin) > 0:
         inst_in_margin = np.concatenate(inst_in_margin, axis=0)
@@ -302,6 +302,7 @@ def get_inst_in_margin(arr, margin_size, tile_pp_info):
     else:
         inst_in_margin = np.array([]) # empty array
     return inst_in_margin
+
 ####
 def get_inst_on_margin(arr, margin_size, tile_pp_info):
     """
@@ -357,41 +358,27 @@ def get_inst_on_margin(arr, margin_size, tile_pp_info):
         line_intersection(line_list[3], line_list[1]), # x4
     ]
 
-    def sel_between_pts(p1, p2):
-        arr[p1[0]:p2[0]+1,
-            p1[1]:p2[1]+1] = 1       
-
+    pt_index = lambda p1, p2: arr[p1[0]:p2[0]+1,
+                                  p1[1]:p2[1]+1]                        
     line_pix_list = []
     if tile_pp_info[0] == 1:
-        sel_between_pts(pts_list[0], pts_list[2])
+        line_pix_list.append(pt_index(pts_list[0], pts_list[2])),
     if tile_pp_info[1] == 1:
-        sel_between_pts(pts_list[1], pts_list[3])
+        line_pix_list.append(pt_index(pts_list[1], pts_list[3])),
     if tile_pp_info[2] == 1:
-        sel_between_pts(pts_list[0], pts_list[1])
+        line_pix_list.append(pt_index(pts_list[0], pts_list[1])),
     if tile_pp_info[3] == 1:
-        sel_between_pts(pts_list[2], pts_list[3])
+        line_pix_list.append(pt_index(pts_list[2], pts_list[3])),
 
-    # pt_index = lambda p1, p2: arr[p1[0]:p2[0]+1,
-    #                               p1[1]:p2[1]+1]                        
-    # line_pix_list = []
-    # if tile_pp_info[0] == 1:
-    #     line_pix_list.append(pt_index(pts_list[0], pts_list[2])),
-    # if tile_pp_info[1] == 1:
-    #     line_pix_list.append(pt_index(pts_list[1], pts_list[3])),
-    # if tile_pp_info[2] == 1:
-    #     line_pix_list.append(pt_index(pts_list[0], pts_list[1])),
-    # if tile_pp_info[3] == 1:
-    #     line_pix_list.append(pt_index(pts_list[2], pts_list[3])),
+    inst_on_margin = [v.flatten() for v in line_pix_list]
 
-    # inst_on_margin = [v.flatten() for v in line_pix_list]
+    if len(inst_on_margin) > 0:
+        inst_on_margin = np.concatenate(inst_on_margin, axis=0)
+        inst_on_margin = np.unique(inst_on_margin)
+    else:
+        inst_on_margin = np.array([]) # empty array
 
-    # if len(inst_on_margin) > 0:
-    #     inst_on_margin = np.concatenate(inst_on_margin, axis=0)
-    #     inst_on_margin = np.unique(inst_on_margin)
-    # else:
-    #     inst_on_margin = np.array([]) # empty array
-
-    # return inst_on_margin
+    return inst_on_margin
 ####
 def get_inst_on_edge(arr, tile_pp_info):
     inst_on_edge = []
@@ -413,81 +400,7 @@ def get_inst_on_edge(arr, tile_pp_info):
         inst_on_edge = np.array([]) # empty array
     return inst_on_edge
 ####
-# a = np.reshape(np.arange(0, 64), [8, 8])
-# print(a)
-# print(get_inst_on_margin(a, 2, [1, 1 ,1, 1]))
-# print(get_inst_on_margin(a, 1, [1, 1 ,1, 1]))
-# print(get_inst_on_margin(a, 1, [1, 1 ,0, 0]))
-# print(get_inst_on_margin(a, 1, [0, 0 ,1, 1]))
-# print(get_inst_on_margin(a, 1, [0, 1 ,1, 0]))
-# print(get_inst_on_margin(a, 1, [0, 1 ,1, 1]))
-# print(get_inst_on_margin(a, 1, [1, 1 ,0, 1]))
-# print('')
-# print(get_inst_in_margin(a, 1, [1, 1 ,1, 1]))
-# print(get_inst_in_margin(a, 1, [0, 1 ,1, 1]))
-# print(get_inst_in_margin(a, 1, [1, 0 ,1, 1]))
-# print(get_inst_in_margin(a, 1, [0, 0 ,1, 1]))
-# print(get_inst_in_margin(a, 1, [0, 1 ,1, 0]))
-# exit()
-####
-tile_shape = np.array([2048, 2048])
-image_shape = np.array([3600, 3600])
-patch_input_shape = np.array([256,256])
-patch_output_shape = np.array([164,164])
-ambiguous_size = patch_output_shape * 2
-patch_info_list = _get_patch_info(image_shape, patch_input_shape, patch_output_shape)
 
-patch_diff_shape = patch_input_shape - patch_output_shape
-# derive tile output placement as consecutive tiling with step size of 0
-# and tile output will have shape being of multiple of patch_output_shape (round down)
-tile_output_shape = np.floor(tile_shape / patch_output_shape) * patch_output_shape
-tile_input_shape = tile_output_shape + patch_diff_shape
-
-tile_io_info_list, \
-    tile_pp_info_list, \
-    tile_mode_list = _get_tile_info(
-    image_shape, tile_input_shape, tile_output_shape, 
-    ambiguous_size, patch_output_shape
-)
-
-import matplotlib.pyplot as plt
-cmap = plt.get_cmap('jet')
-
-# canvas = np.zeros(image_shape)
-# nr_patch = patch_info_list.shape[0]
-# for idx in range(0, nr_patch):
-#     tl, br = patch_info_list[idx][1]
-#     # canvas[tl[0]:br[0],tl[1]:br[1]] += (idx+1)
-#     patch = canvas[tl[0]:br[0],tl[1]:br[1]]
-#     patch[0,:] = 1
-#     patch[-1,:] = 1
-#     patch[:,0] = 1
-#     patch[:,-1] = 1
-#     # canvas[tl[0]:br[0],tl[1]:br[1]] += (idx+1)
-
-# canvas_color = (cmap(canvas / np.max(canvas)) * 255).astype(np.uint8)[...,:3]
-# canvas_color[canvas==0] = 0 # background
-# cv2.imwrite('patch.png', cv2.cvtColor(canvas_color, cv2.COLOR_RGB2BGR))
-
-canvas = np.zeros(image_shape)
-nr_tile = tile_io_info_list.shape[0]
-for idx in range(0, nr_tile):
-    tl, br = tile_io_info_list[idx][1]
-    canvas[tl[0]:br[0],tl[1]:br[1]] += (idx+1)
-canvas_color = (cmap(canvas / np.max(canvas)) * 255).astype(np.uint8)[...,:3]
-canvas_color[canvas==0] = 0 # background
-cv2.imwrite('tile.png', cv2.cvtColor(canvas_color, cv2.COLOR_RGB2BGR))
-
-canvas = np.zeros(image_shape)
-for idx in range(0, nr_tile):
-    tl, br = tile_io_info_list[idx][1]
-    print(tl, br, tile_pp_info_list[idx])
-    sub_canvas = canvas[tl[0]:br[0],tl[1]:br[1]]
-    canvas[tl[0]:br[0],tl[1]:br[1]] = get_inst_on_margin(sub_canvas, ambiguous_size[0], tile_pp_info_list[idx])
-canvas_color = (cmap(canvas / np.max(canvas)) * 255).astype(np.uint8)[...,:3]
-canvas_color[canvas==0] = 0 # background
-cv2.imwrite('tile_fix.png', cv2.cvtColor(canvas_color, cv2.COLOR_RGB2BGR))
-exit()
 ####
 def run_model(
         forward_output_queue,
@@ -596,7 +509,6 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
     # ----------------------------| V
 
     # tile_mode = 3 # no fixing debug
-    print(tile_pp_info)
     if tile_mode == 0: 
         # for `full grid tile`
         # -- extend from the boundary by the margin size, remove 
