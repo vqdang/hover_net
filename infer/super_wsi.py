@@ -793,8 +793,9 @@ class InferManager(base.InferManager):
                 if forward_process.exitcode is not None \
                     and mp_forward_output_queue.empty():
                     break
-
+                
                 if not mp_forward_output_queue.empty():
+                    print(mp_forward_output_queue.qsize())
                     tile_idx, forward_output = mp_forward_output_queue.get()
                     foward_pbar.update()
 
@@ -925,6 +926,14 @@ class InferManager(base.InferManager):
                 output_file = "%s/json/%s.json" % (self.output_dir, wsi_base_name)
             else:
                 output_file = "%s/%s.json" % (self.output_dir, wsi_base_name)
+
+            # ! cache in case of loading across network
+            start = time.perf_counter()
+            wsi_holder_path = self.cache_src_wsi_path
+            shutil.copyfile(wsi_path, wsi_holder_path)
+            end = time.perf_counter()
+            log_info('Move WSI: {0}'.format(end - start))
+
 
             if os.path.exists(output_file):
                 log_info("Skip: %s" % wsi_base_name)

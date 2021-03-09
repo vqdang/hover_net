@@ -181,6 +181,7 @@ if __name__ == '__main__':
         infer = InferManager(**method_args)
         infer.process_file_list(run_args)
     else:
-        from infer.wsi import InferManager
+        # from infer.wsi import InferManager
+        from infer.super_wsi import InferManager
         infer = InferManager(**method_args)
         infer.process_wsi_list(run_args)

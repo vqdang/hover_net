@@ -2,6 +2,7 @@ import multiprocessing as mp
 from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, as_completed, wait
 from multiprocessing import Lock, Pool
 
+# also to ensure similar behavior between linux and windows
 mp.set_start_method("spawn", True)  # ! must be at top for VScode debugging
 
 import argparse

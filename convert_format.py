@@ -55,7 +55,7 @@ if __name__ == "__main__":
     target_format = "qupath"
     # to rescale the coordinate set to match with lv0 mag of the wsi
     scale_factor = 1.0
-    root_dir = "dataset/dummy/out/"
+    root_dir = "exp_output/wsi/pred/"
 
     # to define the name, and color conversion code for each target format
     type_info_dict = {
