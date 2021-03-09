@@ -63,6 +63,39 @@ class SerializeArray(data.Dataset):
         return patch_data, patch_info
 
 ####
+class SerializeWSI(data.Dataset):
+    """
+    `mp_shared_space` must be from torch.multiprocessing, for example
+
+    mp_manager = torch_mp.Manager()
+    mp_shared_space = mp_manager.Namespace()
+    mp_shared_space.image = torch.from_numpy(image)
+    """
+    def __init__(self, wsi_path, wsi_ext, wsi_read_mag, 
+                mp_shared_space, preproc=None):
+        super().__init__()
+        self.mp_shared_space = mp_shared_space
+        self.preproc = preproc
+
+        self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
+        # ! cache here is for legacy and to deal with esoteric internal wsi format
+        self.wsi_handler.prepare_reading(read_mag=wsi_read_mag)
+        return
+
+    def __len__(self):
+        return len(self.mp_shared_space.patch_info_list)
+
+    def __getitem__(self, idx):
+        patch_info = self.mp_shared_space.patch_info_list[idx]
+        patch_info = patch_info.numpy() # else reverse op wont work
+        tl, br = patch_info[0] # retrieve input placement, [1] is output
+        patch_data = self.wsi_handler.read_region(tl[::-1], (br - tl)[::-1])
+        if self.preproc is not None:
+            patch_dat = patch_data.copy()
+            patch_data = self.preproc(patch_data)
+        return patch_data, patch_info
+
+####
 def _remove_inst(inst_map, remove_id_list):
     """Remove instances with id in remove_id_list.
     
@@ -401,15 +434,15 @@ def run_model_forward(
         run_step, model, loader_kwargs):
 
     wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
-    # ! cache here is for legacy and to deal with esoteric internal wsi format
-    wsi_handler.prepare_reading(read_mag=wsi_proc_mag, cache_path=wsi_cache_path)
+    wsi_handler.prepare_reading(read_mag=wsi_proc_mag)
 
     # using shared memory namespace so all the loader workers use same 
     # underlying image data, also allow persistent worker and fast data switching 
     mp_manager = torch_mp.Manager()
     mp_shared_space = mp_manager.Namespace()
 
-    ds = SerializeArray(mp_shared_space)
+    # ds = SerializeArray(mp_shared_space)
+    ds = SerializeWSI(wsi_path, wsi_ext, wsi_proc_mag, mp_shared_space)
     loader = data.DataLoader(ds, **loader_kwargs,
                             drop_last=False,
                             persistent_workers=True,
@@ -425,14 +458,14 @@ def run_model_forward(
         # ! (tile output is within tile input system)
         # ! this will shift both patch input and output placement to tile input system
         # ! hence, output placement need to be shifted (corrected) later for post proc
-        patch_info_list -= np.reshape(tile_input_tl, [1, 1, 1, 2])
+        # patch_info_list -= np.reshape(tile_input_tl, [1, 1, 1, 2])
 
-        tile_img = wsi_handler.read_region(tile_input_tl[::-1], 
-                                (tile_input_br - tile_input_tl)[::-1])
+        # tile_img = wsi_handler.read_region(tile_input_tl[::-1], 
+        #                         (tile_input_br - tile_input_tl)[::-1])
 
         # change the data in namespace to sync across persistent loader worker
         # also no need to do locking as these are assumed to be read only from worker
-        mp_shared_space.tile_img = torch.from_numpy(tile_img).share_memory_()
+        # mp_shared_space.tile_img = torch.from_numpy(tile_img).share_memory_()
         mp_shared_space.patch_info_list = torch.from_numpy(patch_info_list).share_memory_()
 
         accumulated_patch_output = []
@@ -468,8 +501,10 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
     for idx in range(len(patch_pos_list)):
         # zero idx to remove singleton, squeeze may kill h/w/c
         patch_pos = patch_pos_list[idx][0].copy()
-        # ! assume patch pos alrd aligned to be within tile input system
-        patch_pos = patch_pos - offset # shift from wsi to tile output system
+
+        # # ! assume patch pos alrd aligned to be within tile input system
+        # patch_pos = patch_pos - offset # shift from wsi to tile output system
+
         pos_tl, pos_br = patch_pos[1] # retrieve ouput placement
         pred_map[
             pos_tl[0] : pos_br[0],
@@ -684,9 +719,7 @@ class InferManager(base.InferManager):
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
         self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.proc_mag)
         # ! cache here is for legacy and to deal with esoteric internal wsi format
-        self.wsi_handler.prepare_reading(
-            read_mag=self.proc_mag, cache_path="%s/src_wsi.npy" % self.cache_path
-        )
+        self.wsi_handler.prepare_reading(read_mag=self.proc_mag)
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1])  # to Y, X
 
         self.wsi_mask = self._get_wsi_mask(self.wsi_handler, mask_path)
@@ -782,8 +815,9 @@ class InferManager(base.InferManager):
             wsi_inst_info = {} 
             if prev_wsi_inst_dict is not None:
                 wsi_inst_info = copy.deepcopy(prev_wsi_inst_dict)
-                offset_id = max(wsi_inst_info.keys()) + 1
-            
+                if len(wsi_inst_info) > 0:
+                    offset_id = max(wsi_inst_info.keys()) + 1
+
             foward_pbar = pbar_creator('Forward', nr_tile, pos=0)
             postpr_pbar = pbar_creator('PostPro', nr_tile, pos=1)
 
@@ -795,7 +829,6 @@ class InferManager(base.InferManager):
                     break
                 
                 if not mp_forward_output_queue.empty():
-                    print(mp_forward_output_queue.qsize())
                     tile_idx, forward_output = mp_forward_output_queue.get()
                     foward_pbar.update()
 
@@ -862,19 +895,20 @@ class InferManager(base.InferManager):
 
         #
         ## ** process full grid and vert/horiz fixing at the same time
-        start = time.perf_counter()
-        info_list = list(zip(*all_tile_info[:3]))
-        tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
-        tile_pp_info_list = np.concatenate(info_list[1], axis=0)
-        tile_mode_list    = np.concatenate(info_list[2], axis=0)
-        wsi_inst_info = run_once(tile_io_info_list, 
-                                 tile_pp_info_list, 
-                                 tile_mode_list)
-        end = time.perf_counter()
+        # start = time.perf_counter()
+        # info_list = list(zip(*all_tile_info[:3]))
+        # tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
+        # tile_pp_info_list = np.concatenate(info_list[1], axis=0)
+        # tile_mode_list    = np.concatenate(info_list[2], axis=0)
+        # wsi_inst_info = run_once(tile_io_info_list, 
+        #                          tile_pp_info_list, 
+        #                          tile_mode_list)
+        # end = time.perf_counter()
         log_info("Proc Grid: {0}".format(end - start))
 
         # import joblib
         # wsi_inst_info = joblib.load('cache_output.dat')
+        wsi_inst_info = {}
         
         ## ** re-infer and redo postproc for xsect alone
         start = time.perf_counter()
@@ -928,12 +962,11 @@ class InferManager(base.InferManager):
                 output_file = "%s/%s.json" % (self.output_dir, wsi_base_name)
 
             # ! cache in case of loading across network
-            start = time.perf_counter()
-            wsi_holder_path = self.cache_src_wsi_path
-            shutil.copyfile(wsi_path, wsi_holder_path)
-            end = time.perf_counter()
-            log_info('Move WSI: {0}'.format(end - start))
-
+            # start = time.perf_counter()
+            # wsi_holder_path = self.cache_src_wsi_path
+            # shutil.copyfile(wsi_path, wsi_holder_path)
+            # end = time.perf_counter()
+            # log_info('Move WSI: {0}'.format(end - start))
 
             if os.path.exists(output_file):
                 log_info("Skip: %s" % wsi_base_name)
@@ -945,7 +978,5 @@ class InferManager(base.InferManager):
             except:
                 logging.exception("Crash")
 
-            self.process_single_file(wsi_path, msk_path, self.output_dir)
-            break
         rm_n_mkdir(self.cache_path)  # clean up all cache
         return
