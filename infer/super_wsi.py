@@ -394,7 +394,7 @@ def get_inst_on_edge(arr, tile_pp_info):
 ####
 
 ####
-def run_model(
+def run_model_forward(
         forward_output_queue,
         tile_info_list,
         wsi_path, wsi_ext, wsi_proc_mag, wsi_cache_path,
@@ -661,7 +661,9 @@ class InferManager(base.InferManager):
                 mask = morphology.binary_dilation(mask, morphology.disk(16))
                 return mask
 
-            wsi_mask = np.array(simple_get_mask() > 0, dtype=np.uint8)
+            # ! using entire wsi, debugging purpose !
+            # wsi_mask = np.array(simple_get_mask() > 0, dtype=np.uint8)
+            wsi_mask = simple_get_mask()
         return wsi_mask
 
     def process_single_file(self, wsi_path, mask_path, output_dir):
@@ -678,6 +680,7 @@ class InferManager(base.InferManager):
         wsi_name = path_obj.stem
 
         # TODO: expose read mpp mode
+        start = time.perf_counter()
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
         self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.proc_mag)
         # ! cache here is for legacy and to deal with esoteric internal wsi format
@@ -715,6 +718,8 @@ class InferManager(base.InferManager):
             self.wsi_proc_shape, tile_input_shape, tile_output_shape, 
             self.ambiguous_size, self.patch_output_shape
         )
+        end = time.perf_counter()
+        log_info("Preparing Input Output Placement: {0}".format(end - start))
 
         # * Async Inference
         # * launch a seperate process to do forward and store the result in a queue.
@@ -742,7 +747,7 @@ class InferManager(base.InferManager):
             
             mp_manager = torch_mp.Manager()
             # contain at most 5 tile ouput before polling forward func
-            mp_forward_output_queue = mp_manager.Queue(maxsize=5)
+            mp_forward_output_queue = mp_manager.Queue(maxsize=16)
 
             forward_info_list = collections.deque()
             nr_tile = tile_io_info_list.shape[0]
@@ -758,7 +763,7 @@ class InferManager(base.InferManager):
             )
 
             wsi_cache_path = "%s/src_wsi.npy" % self.cache_path
-            forward_process = mp.Process(target=run_model, 
+            forward_process = mp.Process(target=run_model_forward, 
                                         args=(mp_forward_output_queue, forward_info_list,
                                                 wsi_path, wsi_ext, self.proc_mag, wsi_cache_path,
                                                 self.run_step, self.net, loader_kwargs))
@@ -770,8 +775,8 @@ class InferManager(base.InferManager):
             }
 
             proc_pool = None
-            # if self.nr_post_proc_workers > 0:
-            #     proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
+            if self.nr_post_proc_workers > 0:
+                proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
 
             offset_id = 0 # offset id to increment overall saving dict
             wsi_inst_info = {} 
@@ -810,6 +815,7 @@ class InferManager(base.InferManager):
                         # * aggregate
                         # ! the return id should be contiguous to maximuize 
                         # ! counting range in int32
+                        inst_wsi_id = offset_id # barrier in case no output in tile!
                         for inst_id, inst_info in new_inst_dict.items():
                             inst_wsi_id = offset_id + inst_id + 1
                             wsi_inst_info[inst_wsi_id] = inst_info
@@ -837,6 +843,7 @@ class InferManager(base.InferManager):
                 # ! the return id should be contiguous to maximuize 
                 # ! counting range in int32
                 new_inst_dict, remove_uid_list = proc_future.result()
+                inst_wsi_id = offset_id # barrier in case no output in tile!
                 for inst_id, inst_info in new_inst_dict.items():
                     inst_wsi_id = offset_id + inst_id + 1
                     wsi_inst_info[inst_wsi_id] = inst_info
@@ -854,6 +861,7 @@ class InferManager(base.InferManager):
 
         #
         ## ** process full grid and vert/horiz fixing at the same time
+        start = time.perf_counter()
         info_list = list(zip(*all_tile_info[:3]))
         tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
         tile_pp_info_list = np.concatenate(info_list[1], axis=0)
@@ -861,10 +869,14 @@ class InferManager(base.InferManager):
         wsi_inst_info = run_once(tile_io_info_list, 
                                  tile_pp_info_list, 
                                  tile_mode_list)
+        end = time.perf_counter()
+        log_info("Proc Grid: {0}".format(end - start))
+
         # import joblib
         # wsi_inst_info = joblib.load('cache_output.dat')
         
         ## ** re-infer and redo postproc for xsect alone
+        start = time.perf_counter()
         tile_io_info_list = all_tile_info[-1][0]
         tile_pp_info_list = all_tile_info[-1][1]
         tile_mode_list    = all_tile_info[-1][2]
@@ -872,17 +884,14 @@ class InferManager(base.InferManager):
                                  tile_pp_info_list, 
                                  tile_mode_list, 
                                  wsi_inst_info)          
+        end = time.perf_counter()
+        log_info("Proc XSect: {0}".format(end - start))
 
         if self.save_mask or self.save_thumb:
             json_path = "%s/json/%s.json" % (output_dir, wsi_name)
         else:
             json_path = "%s/%s.json" % (output_dir, wsi_name)
-        # self.__save_json(json_path, self.wsi_inst_info)
-        wsi_thumb_rgb = self.wsi_handler.get_full_img(read_mag=self.proc_mag)
-        from misc.viz_utils import visualize_instances_dict
-        wsi_overlay = visualize_instances_dict(wsi_thumb_rgb, wsi_inst_info, draw_dot=True)
-        cv2.imwrite('dump.png', cv2.cvtColor(wsi_overlay, cv2.COLOR_RGB2BGR))
-
+        self.__save_json(json_path, wsi_inst_info)
         return
 
     def process_wsi_list(self, run_args):
@@ -911,23 +920,22 @@ class InferManager(base.InferManager):
         for wsi_path in wsi_path_list:
             wsi_base_name = pathlib.Path(wsi_path).stem
 
-            if wsi_base_name != 'mini_2': continue
-
             msk_path = "%s/%s.png" % (self.input_mask_dir, wsi_base_name)
             if self.save_thumb or self.save_mask:
                 output_file = "%s/json/%s.json" % (self.output_dir, wsi_base_name)
             else:
                 output_file = "%s/%s.json" % (self.output_dir, wsi_base_name)
 
-            # if os.path.exists(output_file):
-            #     log_info("Skip: %s" % wsi_base_name)
-            #     continue
-            # try:
-                # log_info("Process: %s" % wsi_base_name)
-                # self.process_single_file(wsi_path, msk_path, self.output_dir)
-                # log_info("Finish")
-            # except:
-            #     logging.exception("Crash")
+            if os.path.exists(output_file):
+                log_info("Skip: %s" % wsi_base_name)
+                continue
+            try:
+                log_info("Process: %s" % wsi_base_name)
+                self.process_single_file(wsi_path, msk_path, self.output_dir)
+                log_info("Finish")
+            except:
+                logging.exception("Crash")
+
             self.process_single_file(wsi_path, msk_path, self.output_dir)
             break
         rm_n_mkdir(self.cache_path)  # clean up all cache
