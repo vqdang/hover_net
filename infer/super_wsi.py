@@ -442,9 +442,8 @@ def run_model(
             sample_info_list = sample_info_list.numpy()
             accumulated_patch_output.append([sample_info_list, sample_output_list])
         forward_output_queue.put([tile_idx, accumulated_patch_output])
-
-        print('%d/%d' % (tile_idx, len(tile_info_list)))
     return 
+
 ####
 def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
                 margin_size, patch_info_list, func_opt,
@@ -522,10 +521,8 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
             tile_canvas = cv2.drawContours(tile_canvas, [inst_cnt], -1, int(inst_uid), -1)
         return tile_canvas
 
-    # ! for correctness, cross section need specific dedicated sweep wrt to entire wsi to
-    # ! remove those lie within, or for simplicity, need caching the idx location of 4 corner
-    # ! tile to minimize the search effort !
     output_remove_inst_set = None
+    # tile_mode = -1 # ! no fix, debud mode
     if tile_mode == 0: 
         # for `full grid tile`
         # -- extend from the boundary by the margin size, remove 
@@ -556,7 +553,7 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
         inst_on_edge = get_inst_on_edge(pred_inst, holder_flag)
         remove_inst_set = np.union1d(inst_in_margin, inst_on_edge)   
         remove_inst_set = remove_inst_set.tolist()
-    else:
+    elif tile_mode == 3:
         # inst within the tile after excluding margin area out
         # only for a tile at cross-section, which is designed such that 
         # their shape >= 3* margin size     
@@ -576,6 +573,8 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
         inst_on_margin2 = get_inst_on_margin(prev_pred_inst, margin_size  , [1, 1, 1, 1]) 
         inst_on_margin = np.union1d(inst_on_margin1, inst_on_margin2)
         output_remove_inst_set = inst_on_margin.tolist()    
+    else:
+        remove_inst_set = []
 
     remove_inst_set = set(remove_inst_set)
     # * move pos back to wsi position
@@ -593,7 +592,7 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
 ####
 class InferManager(base.InferManager):
 
-    def __select_valid_patches(self, patch_info_list):
+    def __get_valid_patch_idx(self, patch_info_list):
         """Select valid patches from the list of input patch information.
 
         Args:
@@ -615,16 +614,16 @@ class InferManager(base.InferManager):
                          for info in patch_info_list]
         # somehow multiproc is slower than single thread
         valid_indices = np.array(valid_indices)
-        return patch_info_list[valid_indices]
+        return valid_indices
 
-    def __select_patches_in_tile(self, tile_info, patch_info_list):
+    def __get_valid_patch_idx_in_tile(self, tile_info, patch_info_list):
         # checking basing on the output alignment
         tile_tl, tile_br = tile_info[1]
         patch_tl_list = patch_info_list[:,1,0] 
         patch_br_list = patch_info_list[:,1,1]
         sel =  (patch_tl_list[:,0] >= tile_tl[0]) & (patch_tl_list[:,1] >= tile_tl[1])
         sel &= (patch_br_list[:,0] <= tile_br[0]) & (patch_br_list[:,1] <= tile_br[1])
-        return patch_info_list[sel]     
+        return sel     
 
     def _parse_args(self, run_args):
         """Parse command line arguments and set as instance variables."""
@@ -726,23 +725,31 @@ class InferManager(base.InferManager):
         # main ------------- main----------------main
         #                       \ postproc (loop)/
 
-        patch_info_list = self.__select_valid_patches(patch_info_list)
+        sel_index = self.__get_valid_patch_idx(patch_info_list)
+        patch_info_list = patch_info_list[sel_index]
+        
+        pbar_creator = lambda x, y, pos=0, leave=False: tqdm.tqdm(
+            desc=x, leave=leave, total=y, ncols=80, ascii=True, position=pos
+        )
 
         def run_once(tile_io_info_list, tile_pp_info_list, tile_mode_list,
                      prev_wsi_inst_dict=None):
 
-            tile_io_info_list = self.__select_valid_patches(tile_io_info_list)
+            sel_index = self.__get_valid_patch_idx(tile_io_info_list)
+            tile_io_info_list = tile_io_info_list[sel_index]
+            tile_pp_info_list = tile_pp_info_list[sel_index]
+            tile_mode_list    = tile_mode_list[sel_index]
             
             mp_manager = torch_mp.Manager()
             # contain at most 5 tile ouput before polling forward func
             mp_forward_output_queue = mp_manager.Queue(maxsize=5)
 
             forward_info_list = collections.deque()
-
             nr_tile = tile_io_info_list.shape[0]
-            for tile_info in tile_io_info_list:
-                # retrieve valid patch within tile
-                patch_in_tile_info_list = self.__select_patches_in_tile(tile_info, patch_info_list)
+            for tile_idx in range(nr_tile):
+                tile_info = tile_io_info_list[tile_idx]
+                sel_index = self.__get_valid_patch_idx_in_tile(tile_info, patch_info_list)
+                patch_in_tile_info_list = patch_info_list[sel_index]
                 forward_info_list.append([tile_info, patch_in_tile_info_list])
 
             loader_kwargs = dict(
@@ -762,94 +769,109 @@ class InferManager(base.InferManager):
                 "return_centroids": True,
             }
 
+            proc_pool = None
+            # if self.nr_post_proc_workers > 0:
+            #     proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
+
+            offset_id = 0 # offset id to increment overall saving dict
             wsi_inst_info = {} 
             if prev_wsi_inst_dict is not None:
                 wsi_inst_info = copy.deepcopy(prev_wsi_inst_dict)
+                offset_id = max(wsi_inst_info.keys()) + 1
+            
+            foward_pbar = pbar_creator('Forward', nr_tile, pos=0)
+            postpr_pbar = pbar_creator('PostPro', nr_tile, pos=1)
 
             future_list = collections.deque()
-            proc_pool = ProcessPoolExecutor(self.nr_post_proc_workers)
             # will this lead to infinite loop ?
-            offset_id = 0
             while True:
                 if forward_process.exitcode is not None \
                     and mp_forward_output_queue.empty():
                     break
 
                 if not mp_forward_output_queue.empty():
-                    # ! assume the forward result are spit out in 
-                # ! assume the forward result are spit out in 
-                    # ! assume the forward result are spit out in 
-                    # ! same order as defined in `forward_info_list`
                     tile_idx, forward_output = mp_forward_output_queue.get()
+                    foward_pbar.update()
+
                     tile_io_info = tile_io_info_list[tile_idx]
                     tile_pp_info = tile_pp_info_list[tile_idx]
                     tile_mode = tile_mode_list[tile_idx]
+                    args = [tile_io_info, tile_pp_info, tile_mode, 
+                            self.ambiguous_size[0], forward_output, 
+                            (self.post_proc_func, post_proc_kwargs),
+                            prev_wsi_inst_dict]
 
-                    # future = proc_pool.submit(postproc_tile, 
-                # future = proc_pool.submit(postproc_tile, 
-                    # future = proc_pool.submit(postproc_tile, 
-                    #                     tile_info, forward_output, 
-                #                     tile_info, forward_output, 
-                    #                     tile_info, forward_output, 
-                    #                     (self.post_proc_func, post_proc_kwargs))
+                    if proc_pool is not None:
+                        future = proc_pool.submit(postproc_tile, *args)
+                        future_list.append(future)
+                    else:
+                        new_inst_dict, remove_uid_list = postproc_tile(*args)
+    
+                        # * aggregate
+                        # ! the return id should be contiguous to maximuize 
+                        # ! counting range in int32
+                        for inst_id, inst_info in new_inst_dict.items():
+                            inst_wsi_id = offset_id + inst_id + 1
+                            wsi_inst_info[inst_wsi_id] = inst_info
+                        offset_id = inst_wsi_id + 1
 
-                    new_inst_dict, \
-                        remove_uid_list = postproc_tile(
-                                            tile_io_info, tile_pp_info, tile_mode, 
-                                            self.ambiguous_size[0], forward_output, 
-                                            (self.post_proc_func, post_proc_kwargs),
-                                            prev_wsi_inst_dict)
+                        if remove_uid_list is not None:
+                            for inst_uid in remove_uid_list:
+                                if inst_uid in wsi_inst_info:
+                                    wsi_inst_info.pop(inst_uid)
+                        postpr_pbar.update()
 
-                    offset_id = max(offset_id, max(new_inst_dict.keys()))
-                    for inst_id, inst_info in new_inst_dict.items():
-                        inst_wsi_id = offset_id + inst_id + 1
-                        wsi_inst_info[inst_wsi_id] = inst_info
-
-                    for inst_uid in remove_uid_list:
-                        if inst_uid in wsi_inst_info:
-                            wsi_inst_info.pop(inst_uid)
-
-                    print('Post proc %d' % tile_idx)
-                    # future_list.append(future) # deal when forward finish or stick callback ?
             if forward_process.exitcode > 0:
                 raise ValueError(f'Forward process exited with code {forward_process.exitcode}')
             forward_process.join()
+
+            while len(future_list) > 0:
+                if not future_list[0].done(): 
+                    future_list.rotate()
+                    continue
+                proc_future = future_list.popleft()
+                if proc_future.exception() is not None:
+                    print(proc_future.exception())
+
+                # * aggregate
+                # ! the return id should be contiguous to maximuize 
+                # ! counting range in int32
+                new_inst_dict, remove_uid_list = proc_future.result()
+                for inst_id, inst_info in new_inst_dict.items():
+                    inst_wsi_id = offset_id + inst_id + 1
+                    wsi_inst_info[inst_wsi_id] = inst_info
+                offset_id = inst_wsi_id + 1
+
+                if remove_uid_list is not None:
+                    for inst_uid in remove_uid_list:
+                        if inst_uid in wsi_inst_info:
+                            wsi_inst_info.pop(inst_uid)
+                postpr_pbar.update()
+            foward_pbar.close()
+            postpr_pbar.close()
+
             return wsi_inst_info
 
         #
-        # process full grid and vert/horiz fixing at the same time
-        # info_list = list(zip(*all_tile_info[:3]))
-        # tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
-        # tile_pp_info_list = np.concatenate(info_list[1], axis=0)
-        # tile_mode_list    = np.concatenate(info_list[2], axis=0)
-        # wsi_inst_info = run_once(tile_io_info_list, tile_pp_info_list, tile_mode_list)
-        # print('here')
-        import joblib
-        wsi_inst_info = joblib.load('cache_output.dat')
-
-
-        # ! is this costly ?, may need to dispatch multiproc
+        ## ** process full grid and vert/horiz fixing at the same time
+        info_list = list(zip(*all_tile_info[:3]))
+        tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
+        tile_pp_info_list = np.concatenate(info_list[1], axis=0)
+        tile_mode_list    = np.concatenate(info_list[2], axis=0)
+        wsi_inst_info = run_once(tile_io_info_list, 
+                                 tile_pp_info_list, 
+                                 tile_mode_list)
+        # import joblib
+        # wsi_inst_info = joblib.load('cache_output.dat')
+        
+        ## ** re-infer and redo postproc for xsect alone
         tile_io_info_list = all_tile_info[-1][0]
         tile_pp_info_list = all_tile_info[-1][1]
         tile_mode_list    = all_tile_info[-1][2]
         wsi_inst_info = run_once(tile_io_info_list, 
                                  tile_pp_info_list, 
                                  tile_mode_list, 
-                                 wsi_inst_info)
-        
-        # move search warrant for each tile into its own postproc call
-
-        # retrieve all instance and check which instance belong to which xsect tile
-        # then dispacth re-inference and postproc again, inst needed to be copied 
-
-        # while len(future_list) > 0:
-        #     if not future_list[0].done(): 
-        #         future_list.rotate()
-        #         continue
-        #     proc_future = future_list.popleft()
-        #     if proc_future.exception() is not None:
-        #         print(proc_future.exception())
-        #     proc_future.result()        
+                                 wsi_inst_info)          
 
         if self.save_mask or self.save_thumb:
             json_path = "%s/json/%s.json" % (output_dir, wsi_name)
@@ -886,8 +908,11 @@ class InferManager(base.InferManager):
 
         wsi_path_list = glob.glob(self.input_dir + "/*")
         wsi_path_list.sort()  # ensure ordering
-        for wsi_path in wsi_path_list[1:2]:
+        for wsi_path in wsi_path_list:
             wsi_base_name = pathlib.Path(wsi_path).stem
+
+            if wsi_base_name != 'mini_2': continue
+
             msk_path = "%s/%s.png" % (self.input_mask_dir, wsi_base_name)
             if self.save_thumb or self.save_mask:
                 output_file = "%s/json/%s.json" % (self.output_dir, wsi_base_name)
