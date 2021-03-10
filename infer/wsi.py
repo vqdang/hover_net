@@ -25,9 +25,9 @@ import psutil
 import scipy.io as sio
 import torch
 import torch.utils.data as data
+import torch.multiprocessing as torch_mp
 import tqdm
-from dataloader.infer_loader import SerializeArray, SerializeFileList
-from docopt import docopt
+
 from misc.utils import (
     cropping_center,
     get_bounding_box,
@@ -41,11 +41,6 @@ from . import base
 
 thread_lock = Lock()
 
-
-####
-def _init_worker_child(lock_):
-    global lock
-    lock = lock_
 
 
 ####
@@ -256,48 +251,38 @@ def _assemble_and_flush(wsi_pred_map_mmap_path, chunk_info, patch_output_list):
     # print(chunk_info.flatten(), 'pass')
     return
 
+####
+class SerializeArray(data.Dataset):
+    """
+    `mp_shared_space` must be from torch.multiprocessing, for example
+
+    mp_manager = torch_mp.Manager()
+    mp_shared_space = mp_manager.Namespace()
+    mp_shared_space.image = torch.from_numpy(image)
+    """
+    def __init__(self, mp_shared_space, patch_size, preproc=None):
+        super().__init__()
+        self.patch_size = patch_size
+        self.mp_shared_space = mp_shared_space
+        self.preproc = preproc
+        return
+
+    def __len__(self):
+        return len(self.mp_shared_space.patch_info_list)
+
+    def __getitem__(self, idx):
+        patch_info = self.mp_shared_space.patch_info_list[idx]
+        tl, br = patch_info[0] # retrieve input placement, [1] is output
+        patch_data = self.mp_shared_space.tile_img[
+                            tl[0] : tl[0] + self.patch_size[0], 
+                            tl[1] : tl[1] + self.patch_size[1]]
+        if self.preproc is not None:
+            patch_dat = patch_data.copy()
+            patch_data = self.preproc(patch_data)
+        return patch_data, patch_info[0][0]
 
 ####
 class InferManager(base.InferManager):
-    def __run_model(self, patch_top_left_list, pbar_desc):
-        # TODO: the cost of creating dataloader may not be cheap ?
-        dataset = SerializeArray(
-            "%s/cache_chunk.npy" % self.cache_path,
-            patch_top_left_list,
-            self.patch_input_shape,
-        )
-
-        dataloader = data.DataLoader(
-            dataset,
-            num_workers=self.nr_inference_workers,
-            batch_size=self.batch_size,
-            drop_last=False,
-        )
-
-        pbar = tqdm.tqdm(
-            desc=pbar_desc,
-            leave=True,
-            total=int(len(dataloader)),
-            ncols=80,
-            ascii=True,
-            position=0,
-        )
-
-        # run inference on input patches
-        accumulated_patch_output = []
-        for batch_idx, batch_data in enumerate(dataloader):
-            sample_data_list, sample_info_list = batch_data
-            sample_output_list = self.run_step(self.model, sample_data_list)
-            sample_info_list = sample_info_list.numpy()
-            curr_batch_size = sample_output_list.shape[0]
-            sample_output_list = np.split(sample_output_list, curr_batch_size, axis=0)
-            sample_info_list = np.split(sample_info_list, curr_batch_size, axis=0)
-            sample_output_list = list(zip(sample_info_list, sample_output_list))
-            accumulated_patch_output.extend(sample_output_list)
-            pbar.update()
-        pbar.close()
-        return accumulated_patch_output
-
     def __select_valid_patches(self, patch_info_list, has_output_info=True):
         """Select valid patches from the list of input patch information.
 
@@ -335,12 +320,53 @@ class InferManager(base.InferManager):
             patch_info_list: list of patch coordinate information
         
         """
+        pbar_creator = lambda x, y, pos=0, leave=False: tqdm.tqdm(
+            desc=x, leave=leave, total=y, ncols=80, ascii=True, position=pos
+        )
+
+        mp_manager = torch_mp.Manager()
+        mp_shared_space = mp_manager.Namespace()
+
+        dataset = SerializeArray(mp_shared_space, self.patch_input_shape)
+        loader = data.DataLoader(
+            dataset,
+            num_workers=self.nr_inference_workers,
+            batch_size=self.batch_size,
+            drop_last=False,
+            persistent_workers=self.nr_inference_workers > 0
+        )
+        def run_model_forward(mp_manager, chunk_image, patch_info_list):
+
+            mp_shared_space.tile_img = torch.from_numpy(chunk_image).share_memory_()
+            mp_shared_space.patch_info_list = torch.from_numpy(patch_info_list).share_memory_()
+
+            nr_batch = int(patch_info_list.shape[0] / self.batch_size)
+            batch_pbar = pbar_creator('Proc Batch', nr_batch, pos=1)
+
+            # run inference on input patches
+            accumulated_patch_output = []
+            for batch_idx, batch_data in enumerate(loader):
+                sample_data_list, sample_info_list = batch_data
+                sample_output_list = self.run_step(sample_data_list, self.model)
+                sample_info_list = sample_info_list.numpy()
+                curr_batch_size = sample_output_list.shape[0]
+                sample_output_list = np.split(sample_output_list, curr_batch_size, axis=0)
+                sample_info_list = np.split(sample_info_list, curr_batch_size, axis=0)
+                sample_output_list = list(zip(sample_info_list, sample_output_list))
+                accumulated_patch_output.extend(sample_output_list)
+                batch_pbar.update()
+            batch_pbar.close()
+            return accumulated_patch_output
+            
         # 1 dedicated thread just to write results back to disk
         proc_pool = Pool(processes=1)
         wsi_pred_map_mmap_path = "%s/pred_map.npy" % self.cache_path
-
+        
+        nr_chunk = chunk_info_list.shape[0]
+        chunk_pbar = pbar_creator('Proc Chunk', nr_chunk, pos=0)
+        
         masking = lambda x, a, b: (a <= x) & (x <= b)
-        for idx in range(0, chunk_info_list.shape[0]):
+        for idx in range(0, nr_chunk):
             chunk_info = chunk_info_list[idx]
             # select patch basing on top left coordinate of input
             start_coord = chunk_info[0, 0]
@@ -370,15 +396,16 @@ class InferManager(base.InferManager):
             chunk_data = np.array(chunk_data)[..., :3]
             np.save("%s/cache_chunk.npy" % self.cache_path, chunk_data)
 
-            pbar_desc = "Process Chunk %d/%d" % (idx, chunk_info_list.shape[0])
-            patch_output_list = self.__run_model(
-                chunk_patch_info_list[:, 0, 0], pbar_desc
+            patch_output_list = run_model_forward(
+                mp_manager, chunk_data, chunk_patch_info_list
             )
 
             proc_pool.apply_async(
                 _assemble_and_flush,
                 args=(wsi_pred_map_mmap_path, chunk_info, patch_output_list),
             )
+            chunk_pbar.update()
+        chunk_pbar.close()
         proc_pool.close()
         proc_pool.join()
         return
@@ -470,9 +497,7 @@ class InferManager(base.InferManager):
         start = time.perf_counter()
         self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
         self.wsi_proc_shape = self.wsi_handler.get_dimensions(self.proc_mag)
-        self.wsi_handler.prepare_reading(
-            read_mag=self.proc_mag, cache_path="%s/src_wsi.npy" % self.cache_path
-        )
+        self.wsi_handler.prepare_reading(read_mag=self.proc_mag)
         self.wsi_proc_shape = np.array(self.wsi_proc_shape[::-1])  # to Y, X
 
         if msk_path is not None and os.path.isfile(msk_path):
