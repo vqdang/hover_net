@@ -63,39 +63,6 @@ class SerializeArray(data.Dataset):
         return patch_data, patch_info
 
 ####
-class SerializeWSI(data.Dataset):
-    """
-    `mp_shared_space` must be from torch.multiprocessing, for example
-
-    mp_manager = torch_mp.Manager()
-    mp_shared_space = mp_manager.Namespace()
-    mp_shared_space.image = torch.from_numpy(image)
-    """
-    def __init__(self, wsi_path, wsi_ext, wsi_read_mag, 
-                mp_shared_space, preproc=None):
-        super().__init__()
-        self.mp_shared_space = mp_shared_space
-        self.preproc = preproc
-
-        self.wsi_handler = get_file_handler(wsi_path, backend=wsi_ext)
-        # ! cache here is for legacy and to deal with esoteric internal wsi format
-        self.wsi_handler.prepare_reading(read_mag=wsi_read_mag)
-        return
-
-    def __len__(self):
-        return len(self.mp_shared_space.patch_info_list)
-
-    def __getitem__(self, idx):
-        patch_info = self.mp_shared_space.patch_info_list[idx]
-        patch_info = patch_info.numpy() # else reverse op wont work
-        tl, br = patch_info[0] # retrieve input placement, [1] is output
-        patch_data = self.wsi_handler.read_region(tl[::-1], (br - tl)[::-1])
-        if self.preproc is not None:
-            patch_dat = patch_data.copy()
-            patch_data = self.preproc(patch_data)
-        return patch_data, patch_info
-
-####
 def _remove_inst(inst_map, remove_id_list):
     """Remove instances with id in remove_id_list.
     
@@ -441,13 +408,13 @@ def run_model_forward(
     mp_manager = torch_mp.Manager()
     mp_shared_space = mp_manager.Namespace()
 
-    # ds = SerializeArray(mp_shared_space)
-    ds = SerializeWSI(wsi_path, wsi_ext, wsi_proc_mag, mp_shared_space)
+    ds = SerializeArray(mp_shared_space)
     loader = data.DataLoader(ds, **loader_kwargs,
                             drop_last=False,
                             persistent_workers=True,
                         )
 
+    all_time = 0
     for tile_idx, tile_info in enumerate(tile_info_list):
 
         tile_info, patch_info_list = tile_info
@@ -458,15 +425,18 @@ def run_model_forward(
         # ! (tile output is within tile input system)
         # ! this will shift both patch input and output placement to tile input system
         # ! hence, output placement need to be shifted (corrected) later for post proc
-        # patch_info_list -= np.reshape(tile_input_tl, [1, 1, 1, 2])
+        patch_info_list -= np.reshape(tile_input_tl, [1, 1, 1, 2])
 
-        # tile_img = wsi_handler.read_region(tile_input_tl[::-1], 
-        #                         (tile_input_br - tile_input_tl)[::-1])
+        tile_img = wsi_handler.read_region(tile_input_tl[::-1], 
+                                (tile_input_br - tile_input_tl)[::-1])
 
         # change the data in namespace to sync across persistent loader worker
         # also no need to do locking as these are assumed to be read only from worker
-        # mp_shared_space.tile_img = torch.from_numpy(tile_img).share_memory_()
+        start = time.perf_counter()
+        mp_shared_space.tile_img = torch.from_numpy(tile_img).share_memory_()
         mp_shared_space.patch_info_list = torch.from_numpy(patch_info_list).share_memory_()
+        end = time.perf_counter()
+        all_time += (end - start)
 
         accumulated_patch_output = []
         for batch_idx, batch_data in enumerate(loader):
@@ -475,6 +445,7 @@ def run_model_forward(
             sample_info_list = sample_info_list.numpy()
             accumulated_patch_output.append([sample_info_list, sample_output_list])
         forward_output_queue.put([tile_idx, accumulated_patch_output])
+    log_info('Load Time: {0}'.format(all_time))
     return 
 
 ####
@@ -503,7 +474,7 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
         patch_pos = patch_pos_list[idx][0].copy()
 
         # # ! assume patch pos alrd aligned to be within tile input system
-        # patch_pos = patch_pos - offset # shift from wsi to tile output system
+        patch_pos = patch_pos - offset # shift from wsi to tile output system
 
         pos_tl, pos_br = patch_pos[1] # retrieve ouput placement
         pred_map[
@@ -535,18 +506,21 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
     # |///////////////////////////| |
     # ----------------------------| V
 
+    # ! extreme slow down may happen because the aggregated results are huge
     def draw_prev_pred_inst():
+        tile_output = tile_io_info[1]
+        tile_canvas = np.zeros(tile_output[1] - tile_output[0], dtype=np.int32)
+        if len(prev_wsi_inst_dict) == 0: return tile_canvas
+
         wsi_inst_uid_list = np.array(list(prev_wsi_inst_dict.keys()))
         wsi_inst_com_list = np.array([v['centroid'] for v in prev_wsi_inst_dict.values()])
         wsi_inst_com_list = wsi_inst_com_list[:,::-1] # XY to YX       
-        tile_output = tile_io_info[1]
         sel =  (wsi_inst_com_list[:,0] > tile_output[0,0])
         sel &= (wsi_inst_com_list[:,0] < tile_output[1,0])
         sel &= (wsi_inst_com_list[:,1] > tile_output[0,1])
         sel &= (wsi_inst_com_list[:,1] < tile_output[1,1])
         sel_idx = np.nonzero(sel.flatten())[0]
 
-        tile_canvas = np.zeros(tile_output[1] - tile_output[0], dtype=np.int32)
         for inst_idx in sel_idx:
             inst_uid = wsi_inst_uid_list[inst_idx]
             # shift from wsi system to tile output system
@@ -601,7 +575,7 @@ def postproc_tile(tile_io_info, tile_pp_info, tile_mode,
         inst_on_margin = np.union1d(inst_on_margin1, inst_on_margin2)
         inst_within_margin = np.setdiff1d(inst_in_margin, inst_on_margin, assume_unique=True)        
         remove_inst_set = inst_within_margin.tolist()
-        # ! but we also need to remove prev inst exising on the global space of entire wsi
+        # ! but we also need to remove prev inst exist in the global space of entire wsi
         # ! on the margin
         prev_pred_inst = draw_prev_pred_inst()
         inst_on_margin1 = get_inst_on_margin(prev_pred_inst, margin_size-1, [1, 1, 1, 1]) 
@@ -799,7 +773,7 @@ class InferManager(base.InferManager):
             forward_process = mp.Process(target=run_model_forward, 
                                         args=(mp_forward_output_queue, forward_info_list,
                                                 wsi_path, wsi_ext, self.proc_mag, wsi_cache_path,
-                                                self.run_step, self.net, loader_kwargs))
+                                                self.run_step, self.model, loader_kwargs))
             forward_process.start()
 
             post_proc_kwargs = {
@@ -858,7 +832,8 @@ class InferManager(base.InferManager):
                         if remove_uid_list is not None:
                             for inst_uid in remove_uid_list:
                                 if inst_uid in wsi_inst_info:
-                                    wsi_inst_info.pop(inst_uid)
+                                    # faster than pop
+                                    del wsi_inst_info[inst_uid]
                         postpr_pbar.update()
 
             if forward_process.exitcode > 0:
@@ -874,7 +849,7 @@ class InferManager(base.InferManager):
                     print(proc_future.exception())
 
                 # * aggregate
-                # ! the return id should be contiguous to maximuize 
+                # ! the return id should be contiguous to maximize 
                 # ! counting range in int32
                 new_inst_dict, remove_uid_list = proc_future.result()
                 inst_wsi_id = offset_id # barrier in case no output in tile!
@@ -886,30 +861,28 @@ class InferManager(base.InferManager):
                 if remove_uid_list is not None:
                     for inst_uid in remove_uid_list:
                         if inst_uid in wsi_inst_info:
-                            wsi_inst_info.pop(inst_uid)
+                            # faster than pop
+                            del wsi_inst_info[inst_uid]
                 postpr_pbar.update()
             foward_pbar.close()
             postpr_pbar.close()
-
+            proc_pool.shutdown()
             return wsi_inst_info
 
         #
         ## ** process full grid and vert/horiz fixing at the same time
-        # start = time.perf_counter()
-        # info_list = list(zip(*all_tile_info[:3]))
-        # tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
-        # tile_pp_info_list = np.concatenate(info_list[1], axis=0)
-        # tile_mode_list    = np.concatenate(info_list[2], axis=0)
-        # wsi_inst_info = run_once(tile_io_info_list, 
-        #                          tile_pp_info_list, 
-        #                          tile_mode_list)
-        # end = time.perf_counter()
+        start = time.perf_counter()
+        info_list = list(zip(*all_tile_info[:3]))
+        tile_io_info_list = np.concatenate(info_list[0], axis=0).astype(np.int32)
+        tile_pp_info_list = np.concatenate(info_list[1], axis=0)
+        tile_mode_list    = np.concatenate(info_list[2], axis=0)
+        wsi_inst_info = run_once(tile_io_info_list, 
+                                 tile_pp_info_list, 
+                                 tile_mode_list)
+        end = time.perf_counter()
         log_info("Proc Grid: {0}".format(end - start))
-
-        # import joblib
-        # wsi_inst_info = joblib.load('cache_output.dat')
-        wsi_inst_info = {}
         
+        # wsi_inst_info = {}
         ## ** re-infer and redo postproc for xsect alone
         start = time.perf_counter()
         tile_io_info_list = all_tile_info[-1][0]
