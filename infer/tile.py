@@ -299,7 +299,7 @@ class InferManager(base.InferManager):
             accumulated_patch_output = []
             for batch_idx, batch_data in enumerate(dataloader):
                 sample_data_list, sample_info_list = batch_data
-                sample_output_list = self.run_step(sample_data_list)
+                sample_output_list = self.run_step(self.model, sample_data_list)
                 sample_info_list = sample_info_list.numpy()
                 curr_batch_size = sample_output_list.shape[0]
                 sample_output_list = np.split(

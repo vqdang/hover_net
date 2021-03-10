@@ -67,7 +67,7 @@ class InferManager(object):
 
         net.load_state_dict(saved_state_dict, strict=True)
         net = torch.nn.DataParallel(net)
-        self.net = net.to("cuda")
+        self.model = net.to("cuda")
 
         module_lib = import_module("models.hovernet.run_desc")
         self.run_step = getattr(module_lib, "infer_step")
