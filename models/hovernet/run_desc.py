@@ -35,8 +35,8 @@ def train_step(batch_data, run_info):
     imgs = imgs.permute(0, 3, 1, 2).contiguous()
 
     # HWC
-    true_np = torch.squeeze(true_np).to("cuda").type(torch.int64)
-    true_hv = torch.squeeze(true_hv).to("cuda").type(torch.float32)
+    true_np = true_np.to("cuda").type(torch.int64)
+    true_hv = true_hv.to("cuda").type(torch.float32)
 
     true_np_onehot = (F.one_hot(true_np, num_classes=2)).type(torch.float32)
     true_dict = {
