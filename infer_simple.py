@@ -6,8 +6,9 @@ from collections import OrderedDict
 import numpy as np
 import cv2
 import openslide
-from shapely.geometry import shape, MultiPolygon, Polygon, box
+from shapely.geometry import MultiPolygon, Polygon, box
 from shapely.affinity import scale
+from shapely.ops import unary_union
 from PIL import ImageDraw
 import h5py
 
@@ -66,10 +67,17 @@ def construct_tissue_polygon(foreground_contours, hole_contours, min_area):
         if poly.area < min_area:
             continue
 
+        if not poly.is_valid:
+            # This is likely becausee the polygon is self-touching or self-crossing.
+            # Try and 'correct' the polygon using the zero-length buffer() trick.
+            # See https://shapely.readthedocs.io/en/stable/manual.html#object.buffer
+            poly = poly.buffer(0)
+
         # Punch the holes in the polygon
         for hole_contour in holes:
             if len(hole_contour) < 3:
                 continue
+
             hole = Polygon(np.squeeze(hole_contour))
 
             if not hole.is_valid:
@@ -84,7 +92,7 @@ def construct_tissue_polygon(foreground_contours, hole_contours, min_area):
         polys.append(poly)
 
     # Combine all polygons into a MultiPolygon
-    return MultiPolygon(polys)
+    return MultiPolygon(unary_union(polys))
 
 
 def make_tile_QC_fig(tile_sets, slide, level, line_width_pix):
