@@ -91,8 +91,12 @@ def construct_tissue_polygon(foreground_contours, hole_contours, min_area):
 
         polys.append(poly)
 
-    # Combine all polygons into a MultiPolygon
-    return MultiPolygon(unary_union(polys))
+    if len(polys) == 0:
+        raise Exception("Raw tissue mask consists of 0 polygons")
+
+    # If we have multiple polygons, we merge any overlap between them using unary_union().
+    # This will result in a Polygon or MultiPolygon with most tissue masks.
+    return unary_union(polys)
 
 
 def make_tile_QC_fig(tile_sets, slide, level, line_width_pix):
