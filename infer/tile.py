@@ -175,11 +175,17 @@ class InferManager(base.InferManager):
             """
             img_name, pred_map, pred_inst, inst_info_dict, overlaid_img = results
 
-            inst_type = [[k, v["type"]] for k, v in inst_info_dict.items()]
-            inst_type = np.array(inst_type)
+            nuc_val_list = list(inst_info_dict.values())
+            # need singleton to make matlab happy
+            nuc_uid_list = np.array(list(inst_info_dict.keys()))[:,None]
+            nuc_type_list = np.array([v["type"] for v in nuc_val_list])[:,None]
+            nuc_coms_list = np.array([v["centroid"] for v in nuc_val_list])
+
             mat_dict = {
-                "inst_map": pred_inst,
-                "inst_type": inst_type,
+                "inst_map" : pred_inst,
+                "inst_uid" : nuc_uid_list,
+                "inst_type": nuc_type_list,
+                "inst_centroid": nuc_coms_list
             }
             if self.nr_types is None: # matlab does not have None type array
                 mat_dict.pop("inst_type", None) 

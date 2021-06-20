@@ -15,6 +15,7 @@ from metrics.stats_utils import (
     get_fast_dice_2,
     get_fast_pq,
     remap_label,
+    pair_coordinates
 )
 
 

@@ -409,7 +409,6 @@ def pair_coordinates(setA, setB, radius):
     """
     # * Euclidean distance as the cost matrix
     pair_distance = scipy.spatial.distance.cdist(setA, setB, metric='euclidean')
-    print(setA.shape, setB.shape)
 
     # * Munkres pairing with scipy library
     # the algorithm return (row indices, matched column indices)
