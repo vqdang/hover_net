@@ -97,7 +97,7 @@ class FileLoader(torch.utils.data.Dataset):
         if self.with_type:
             type_map = (ann[..., 1]).copy()
             type_map = cropping_center(type_map, self.mask_shape)
-            type_map[type_map == 5] = 1  # merge neoplastic and non-neoplastic
+            #type_map[type_map == 5] = 1  # merge neoplastic and non-neoplastic
             feed_dict["tp_map"] = type_map
 
         # TODO: document hard coded assumption about #input
