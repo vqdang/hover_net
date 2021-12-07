@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 
-from misc.utils import center_pad_to_shape, cropping_center
-from .utils import crop_to_shape, dice_loss, mse_loss, msge_loss, xentropy_loss
+from misc.utils import cropping_center
+from .utils import dice_loss, mse_loss, msge_loss, xentropy_loss
 
 from collections import OrderedDict
 
-####
+
 def train_step(batch_data, run_info):
     # TODO: synchronize the attach protocol
     run_info, state_info = run_info
@@ -44,10 +44,10 @@ def train_step(batch_data, run_info):
         "hv": true_hv,
     }
 
-    if model.module.nr_types is not None:
+    if model.module.num_types is not None:
         true_tp = batch_data["tp_map"]
         true_tp = torch.squeeze(true_tp).to("cuda").type(torch.int64)
-        true_tp_onehot = F.one_hot(true_tp, num_classes=model.module.nr_types)
+        true_tp_onehot = F.one_hot(true_tp, num_classes=model.module.num_types)
         true_tp_onehot = true_tp_onehot.type(torch.float32)
         true_dict["tp"] = true_tp_onehot
 
@@ -60,7 +60,7 @@ def train_step(batch_data, run_info):
         [[k, v.permute(0, 2, 3, 1).contiguous()] for k, v in pred_dict.items()]
     )
     pred_dict["np"] = F.softmax(pred_dict["np"], dim=-1)
-    if model.module.nr_types is not None:
+    if model.module.num_types is not None:
         pred_dict["tp"] = F.softmax(pred_dict["tp"], dim=-1)
 
     ####
@@ -92,12 +92,14 @@ def train_step(batch_data, run_info):
 
     pred_dict["np"] = pred_dict["np"][..., 1]  # return pos only
     pred_dict = {
-        k: v[sample_indices].detach().cpu().numpy() for k, v in pred_dict.items()
+        k: v[sample_indices].detach().cpu().numpy()
+        for k, v in pred_dict.items()
     }
 
     true_dict["np"] = true_np
     true_dict = {
-        k: v[sample_indices].detach().cpu().numpy() for k, v in true_dict.items()
+        k: v[sample_indices].detach().cpu().numpy()
+        for k, v in true_dict.items()
     }
 
     # * Its up to user to define the protocol to process the raw output per step!
@@ -109,7 +111,6 @@ def train_step(batch_data, run_info):
     return result_dict
 
 
-####
 def valid_step(batch_data, run_info):
     run_info, state_info = run_info
     ####
@@ -139,7 +140,7 @@ def valid_step(batch_data, run_info):
         true_dict["tp"] = true_tp
 
     # --------------------------------------------------------------
-    with torch.no_grad():  # dont compute gradient
+    with torch.inference_mode():  # dont compute gradient
         pred_dict = model(imgs_gpu)
         pred_dict = OrderedDict(
             [[k, v.permute(0, 2, 3, 1).contiguous()] for k, v in pred_dict.items()]
@@ -167,7 +168,6 @@ def valid_step(batch_data, run_info):
     return result_dict
 
 
-####
 def infer_step(batch_data, model):
 
     ####
@@ -197,7 +197,6 @@ def infer_step(batch_data, model):
     return pred_output.cpu().numpy()
 
 
-####
 def viz_step_output(raw_data, nr_types=None):
     """
     `raw_data` will be implicitly provided in the similar format as the 
@@ -256,11 +255,7 @@ def viz_step_output(raw_data, nr_types=None):
     return viz_list
 
 
-####
-from itertools import chain
-
-
-def proc_valid_step_output(raw_data, nr_types=None):
+def proc_valid_step_output(raw_data, num_types=None):
     # TODO: add auto populate from main state track list
     track_dict = {"scalar": {}, "image": {}}
 
@@ -295,10 +290,10 @@ def proc_valid_step_output(raw_data, nr_types=None):
     track_value("np_dice", dice_np, "scalar")
 
     # * TP statistic
-    if nr_types is not None:
+    if num_types is not None:
         pred_tp = raw_data["pred_tp"]
         true_tp = raw_data["true_tp"]
-        for type_id in range(0, nr_types):
+        for type_id in range(0, num_types):
             over_inter = 0
             over_total = 0
             for idx in range(len(raw_data["true_np"])):
@@ -334,11 +329,11 @@ def proc_valid_step_output(raw_data, nr_types=None):
     pred_hv = np.array([pred_hv[idx] for idx in selected_idx])
     viz_raw_data = {"img": imgs, "np": (true_np, prob_np), "hv": (true_hv, pred_hv)}
 
-    if nr_types is not None:
+    if num_types is not None:
         true_tp = np.array([true_tp[idx] for idx in selected_idx])
         pred_tp = np.array([pred_tp[idx] for idx in selected_idx])
         viz_raw_data["tp"] = (true_tp, pred_tp)
-    viz_fig = viz_step_output(viz_raw_data, nr_types)
+    viz_fig = viz_step_output(viz_raw_data, num_types)
     track_dict["image"]["output"] = viz_fig
 
     return track_dict

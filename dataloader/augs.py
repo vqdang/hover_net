@@ -18,7 +18,7 @@ from misc.utils import cropping_center, get_bounding_box
 def fix_mirror_padding(ann):
     """Deal with duplicated instances due to mirroring in interpolation
     during shape augmentation (scale, rotation etc.).
-    
+
     """
     current_max_id = np.amax(ann)
     inst_list = list(np.unique(ann))

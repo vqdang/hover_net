@@ -1,7 +1,7 @@
-import glob
 import inspect
 import logging
 import os
+import pathlib
 import shutil
 
 import cv2
@@ -9,12 +9,10 @@ import numpy as np
 from scipy import ndimage
 
 
-####
 def normalize(mask, dtype=np.uint8):
     return (255 * mask / np.amax(mask)).astype(dtype)
 
 
-####
 def get_bounding_box(img):
     """Get bounding box coordinate information."""
     rows = np.any(img, axis=1)
@@ -28,31 +26,29 @@ def get_bounding_box(img):
     return [rmin, rmax, cmin, cmax]
 
 
-####
 def cropping_center(x, crop_shape, batch=False):
     """Crop an input image at the centre.
 
     Args:
         x: input array
         crop_shape: dimensions of cropped array
-    
+
     Returns:
         x: cropped array
-    
+
     """
     orig_shape = x.shape
     if not batch:
         h0 = int((orig_shape[0] - crop_shape[0]) * 0.5)
         w0 = int((orig_shape[1] - crop_shape[1]) * 0.5)
-        x = x[h0 : h0 + crop_shape[0], w0 : w0 + crop_shape[1]]
+        x = x[h0: h0 + crop_shape[0], w0: w0 + crop_shape[1]]
     else:
         h0 = int((orig_shape[1] - crop_shape[0]) * 0.5)
         w0 = int((orig_shape[2] - crop_shape[1]) * 0.5)
-        x = x[:, h0 : h0 + crop_shape[0], w0 : w0 + crop_shape[1]]
+        x = x[:, h0: h0 + crop_shape[0], w0: w0 + crop_shape[1]]
     return x
 
 
-####
 def rm_n_mkdir(dir_path):
     """Remove and make directory."""
     if os.path.isdir(dir_path):
@@ -60,23 +56,48 @@ def rm_n_mkdir(dir_path):
     os.makedirs(dir_path)
 
 
-####
+def rmdir(dir_path):
+    if os.path.isdir(dir_path):
+        shutil.rmtree(dir_path)
+    return
+
+
 def mkdir(dir_path):
     """Make directory."""
     if not os.path.isdir(dir_path):
         os.makedirs(dir_path)
 
 
-####
+def recur_find_ext(root_dir, ext):
+    """
+    recursively find all files in directories end with the `ext`
+    such as `ext='.png'`
+
+    return list is alrd sorted
+    """
+    if not isinstance(ext, list):
+        ext = [ext]
+
+    file_path_list = []
+    for cur_path, dir_list, file_list in os.walk(root_dir):
+        for file_name in file_list:
+            file_ext = pathlib.Path(file_name).suffix
+            if file_ext in ext:
+                full_path = os.path.join(cur_path, file_name)
+                file_path_list.append(full_path)
+    file_path_list.sort()
+    return file_path_list
+
+
 def get_inst_centroid(inst_map):
     """Get instance centroids given an input instance map.
 
     Args:
         inst_map: input instance map
-    
+
     Returns:
         array of centroids
-    
+
     """
     inst_centroid_list = []
     inst_id_list = list(np.unique(inst_map))
@@ -91,7 +112,6 @@ def get_inst_centroid(inst_map):
     return np.array(inst_centroid_list)
 
 
-####
 def center_pad_to_shape(img, size, cval=255):
     """Pad input image."""
     # rounding down, add 1
@@ -107,7 +127,6 @@ def center_pad_to_shape(img, size, cval=255):
     return img
 
 
-####
 def color_deconvolution(rgb, stain_mat):
     """Apply colour deconvolution."""
     log255 = np.log(255)  # to base 10, not base e
@@ -119,9 +138,11 @@ def color_deconvolution(rgb, stain_mat):
     return output
 
 
-####
 def log_debug(msg):
-    frame, filename, line_number, function_name, lines, index = inspect.getouterframes(
+    (
+        frame, filename, line_number,
+        function_name, lines, index
+    ) = inspect.getouterframes(
         inspect.currentframe()
     )[1]
     line = lines[0]
@@ -129,9 +150,11 @@ def log_debug(msg):
     logging.debug("{i} {m}".format(i="." * indentation_level, m=msg))
 
 
-####
 def log_info(msg):
-    frame, filename, line_number, function_name, lines, index = inspect.getouterframes(
+    (
+        frame, filename, line_number,
+        function_name, lines, index
+    ) = inspect.getouterframes(
         inspect.currentframe()
     )[1]
     line = lines[0]
@@ -142,14 +165,14 @@ def log_info(msg):
 def remove_small_objects(pred, min_size=64, connectivity=1):
     """Remove connected components smaller than the specified size.
 
-    This function is taken from skimage.morphology.remove_small_objects, but the warning
-    is removed when a single label is provided. 
+    This function is taken from skimage.morphology.remove_small_objects,
+    but the warning is removed when a single label is provided.
 
     Args:
         pred: input labelled array
         min_size: minimum size of instance in output array
-        connectivity: The connectivity defining the neighborhood of a pixel. 
-    
+        connectivity: The connectivity defining the neighborhood of a pixel.
+
     Returns:
         out: output array with instances removed under min_size
 
