@@ -153,8 +153,8 @@ def get_config(
                     Events.EPOCH_COMPLETED: [
                         # TODO: is there way to preload these ?
                         ProcessAccumulatedRawOutput(
-                            lambda a: proc_valid_step_output(
-                                a, num_types=model_kwargs['num_types'])
+                            lambda name, data: proc_valid_step_output(
+                                data, num_types=model_kwargs['num_types'])
                         ),
                         LoggingEpochOutput(),
                     ],

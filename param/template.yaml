@@ -6,8 +6,8 @@ optimizer_kwargs:
   'weight_decay' : 0.0
 
 loader_kwargs:
-  train: { 'batch_size' : 4, 'nr_procs' : 0}
-  infer: { 'batch_size' : 4, 'nr_procs' : 0}
+  train: { 'batch_size' : 6, 'nr_procs' : 8}
+  infer: { 'batch_size' : 6, 'nr_procs' : 8}
   # train: { 'batch_size' : 32, 'nr_procs' : 0}
   # infer: { 'batch_size' : 32, 'nr_procs' : 0}
 

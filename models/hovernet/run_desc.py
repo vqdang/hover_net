@@ -134,7 +134,7 @@ def valid_step(batch_data, run_info):
         "hv": true_hv,
     }
 
-    if model.module.nr_types is not None:
+    if model.module.num_types is not None:
         true_tp = batch_data["tp_map"]
         true_tp = torch.squeeze(true_tp).to("cuda").type(torch.int64)
         true_dict["tp"] = true_tp
@@ -146,7 +146,7 @@ def valid_step(batch_data, run_info):
             [[k, v.permute(0, 2, 3, 1).contiguous()] for k, v in pred_dict.items()]
         )
         pred_dict["np"] = F.softmax(pred_dict["np"], dim=-1)[..., 1]
-        if model.module.nr_types is not None:
+        if model.module.num_types is not None:
             type_map = F.softmax(pred_dict["tp"], dim=-1)
             type_map = torch.argmax(type_map, dim=-1, keepdim=False)
             type_map = type_map.type(torch.float32)
@@ -162,7 +162,7 @@ def valid_step(batch_data, run_info):
             "pred_hv": pred_dict["hv"].cpu().numpy(),
         }
     }
-    if model.module.nr_types is not None:
+    if model.module.num_types is not None:
         result_dict["raw"]["true_tp"] = true_dict["tp"].cpu().numpy()
         result_dict["raw"]["pred_tp"] = pred_dict["tp"].cpu().numpy()
     return result_dict
@@ -197,7 +197,7 @@ def infer_step(batch_data, model):
     return pred_output.cpu().numpy()
 
 
-def viz_step_output(raw_data, nr_types=None):
+def viz_step_output(raw_data, num_types=None):
     """
     `raw_data` will be implicitly provided in the similar format as the 
     return dict from train/valid step, but may have been accumulated across N running step
@@ -206,7 +206,7 @@ def viz_step_output(raw_data, nr_types=None):
     imgs = raw_data["img"]
     true_np, pred_np = raw_data["np"]
     true_hv, pred_hv = raw_data["hv"]
-    if nr_types is not None:
+    if num_types is not None:
         true_tp, pred_tp = raw_data["tp"]
 
     aligned_shape = [list(imgs.shape), list(true_np.shape), list(pred_np.shape)]
@@ -237,8 +237,8 @@ def viz_step_output(raw_data, nr_types=None):
         true_viz_list.append(colorize(true_np[idx], 0, 1))
         true_viz_list.append(colorize(true_hv[idx][..., 0], -1, 1))
         true_viz_list.append(colorize(true_hv[idx][..., 1], -1, 1))
-        if nr_types is not None:  # TODO: a way to pass through external info
-            true_viz_list.append(colorize(true_tp[idx], 0, nr_types))
+        if num_types is not None:  # TODO: a way to pass through external info
+            true_viz_list.append(colorize(true_tp[idx], 0, num_types))
         true_viz_list = np.concatenate(true_viz_list, axis=1)
 
         pred_viz_list = [img]
@@ -246,8 +246,8 @@ def viz_step_output(raw_data, nr_types=None):
         pred_viz_list.append(colorize(pred_np[idx], 0, 1))
         pred_viz_list.append(colorize(pred_hv[idx][..., 0], -1, 1))
         pred_viz_list.append(colorize(pred_hv[idx][..., 1], -1, 1))
-        if nr_types is not None:
-            pred_viz_list.append(colorize(pred_tp[idx], 0, nr_types))
+        if num_types is not None:
+            pred_viz_list.append(colorize(pred_tp[idx], 0, num_types))
         pred_viz_list = np.concatenate(pred_viz_list, axis=1)
 
         viz_list.append(np.concatenate([true_viz_list, pred_viz_list], axis=0))
