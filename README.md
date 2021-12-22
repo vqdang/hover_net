@@ -1,3 +1,5 @@
+![](docs/conic_banner.png)
+
 # Training HoVer-Net for CoNIC Challenge
 
 This branch is dedicated to training the HoVer-Net for the [CoNIC challenge](https://conic-challenge.grand-challenge.org/). All parameters are hard-coded and expected to be run-able out of the box as long as users follow
