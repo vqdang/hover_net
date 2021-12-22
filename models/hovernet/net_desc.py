@@ -158,6 +158,4 @@ class HoVerNetExt(nn.Module):
 
 ####
 def create_model(mode=None, **kwargs):
-    if mode not in ['original', 'fast']:
-        assert f"Unknown Model Mode {mode}"
-    return HoVerNetExt(mode=mode, **kwargs)
+    return HoVerNetExt(**kwargs)

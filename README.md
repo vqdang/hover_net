@@ -15,7 +15,7 @@ challenge, we use the `FOLD_IDX=0`.
 
 The following files contain the hyper-paramters for training the HoVer-Net
 - `models/hovernet/net_desc.py`: Define the HoVer-Net architecture. Unlike the original paper, we use the ResNet50 from pytorch as backbone and padded convolution in decoders.
-- `models/hovernet/opt.py`: Define the HoVer-Net training phases. If you want to modify the number of training epochs, modify it here.
+- `models/hovernet/opt.py`: Define the arguments for HoVer-Net training phases. If you want to modify the number of training epochs, modify it here. You can also find the weights for each loss component here.
 - `dataloader/train_loader.py`: `FileLoader` defines how the
 images are loaded and pre-processed (this include generating ground-truth from annotation). Compared with original version, we turn off all affine transformation (defined in
 `__get_augmentation`).
