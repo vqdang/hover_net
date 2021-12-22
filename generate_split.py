@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 
 SEED = 5
-info = pd.read_csv('exp_output/local/CoNIC_Challenge/patch_info.csv')
+info = pd.read_csv('exp_output/local/data/patch_info.csv')
 file_names = np.squeeze(info.to_numpy()).tolist()
 
 # %%
