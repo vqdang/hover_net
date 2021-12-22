@@ -46,6 +46,13 @@ BibTex entry: <br />
   year={2019},
   publisher={Elsevier}
 }
+
+@article{graham2021conic,
+  title={CoNIC: Colon Nuclei Identification and Counting Challenge 2022},
+  author={Graham, Simon and Jahanifar, Mostafa and Vu, Quoc Dang and Hadjigeorghiou, Giorgos and Leech, Thomas and Snead, David and Raza, Shan E Ahmed and Minhas, Fayyaz and Rajpoot, Nasir},
+  journal={arXiv preprint arXiv:2111.14485},
+  year={2021}
+}
 ```
 
 ## Authors
