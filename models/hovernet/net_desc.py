@@ -14,18 +14,8 @@ from skimage.segmentation import watershed
 from torchvision.models.resnet import Bottleneck as ResNetBottleneck
 from torchvision.models.resnet import ResNet
 
-from .net_utils import DenseBlock
+from .net_utils import DenseBlock, UpSample2x
 from .utils import crop_op, crop_to_shape
-
-sys.path.append("../../tiatoolbox")
-from typing import List
-
-from tiatoolbox.models.abc import ModelABC
-from tiatoolbox.models.architecture.hovernet import HoVerNet
-from tiatoolbox.models.architecture.utils import (UpSample2x, centre_crop,
-                                                  centre_crop_to_shape)
-from tiatoolbox.utils import misc
-from tiatoolbox.utils.misc import get_bounding_box
 
 
 class ResNetExt(ResNet):
@@ -67,7 +57,7 @@ class ResNetExt(ResNet):
 
 
 ####
-class HoVerNetExt(ModelABC):
+class HoVerNetExt(nn.Module):
     """Initialise HoVer-Net."""
 
     def __init__(
