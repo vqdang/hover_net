@@ -1,7 +1,7 @@
 # Training HoVer-Net for CoNIC Challenge
 
-This branch is dedicated to training the HoVer-Net for the [CoNIC challenge](https://conic-challenge.grand-challenge.org/). All parameters are hard-coded and expected to be run-able immediatelt out of the box as long as users follow
-the preration steps mentioned below:
+This branch is dedicated to training the HoVer-Net for the [CoNIC challenge](https://conic-challenge.grand-challenge.org/). All parameters are hard-coded and expected to be run-able out of the box as long as users follow
+the preparation steps mentioned below:
 
 1. Setup environment as detailed in `requirement.txt`
 2. Download the data from the [CoNIC challenge](https://conic-challenge.grand-challenge.org/)
