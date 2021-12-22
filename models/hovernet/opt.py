@@ -99,7 +99,7 @@ def get_config(
                         # path to load, -1 to auto load checkpoint
                         # from previous phase,
                         # None to start from scratch
-                        'pretrained': None,
+                        'pretrained': -1,
                     },
                 },
                 'target_info': {

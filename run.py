@@ -17,7 +17,7 @@ def load_yaml(path):
         info = yaml.full_load(fptr)
     return info
 
-####
+
 def update_nested_dict(orig_dict, new_dict):
     for key, val in new_dict.items():
         if isinstance(val, collections.Mapping):
@@ -29,10 +29,10 @@ def update_nested_dict(orig_dict, new_dict):
             orig_dict[key] = new_dict[key]
     return orig_dict
 
-####
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process some integers.')
-    parser.add_argument('--gpu', type=str, default='0')
+    parser.add_argument('--gpu', type=str, default='0,1')
 
     args = parser.parse_args()
     # print(args)
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     splits = joblib.load('splits.dat')
 
     def run_one_split_with_param_set(save_path, split_info, param_kwargs):
-        rm_n_mkdir(save_path)
+        mkdir(save_path)
 
         template_paramset = load_yaml('param/template.yaml')
 

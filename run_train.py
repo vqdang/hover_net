@@ -103,24 +103,13 @@ class RunManager(object):
 
         ####
         def get_last_chkpt_path(prev_phase_dir, net_name):
-            stat_file_path = prev_phase_dir + '/stats.yaml'
-            with open(stat_file_path) as fptr:
-                info = yaml.full_load(fptr)
+            info = joblib.load(f'{prev_phase_dir}/stats.dat')
             # ! prioritize epoch over step if both exist
-            epoch_list = [
-                int(v.split('-')[-1]) for v in info.keys() if 'epoch' in v]
-            step_list = [
-                int(v.split('-')[-1]) for v in info.keys() if 'step' in v]
-            if len(epoch_list) > 0:
-                last_chkpts_path = (
-                    f"{prev_phase_dir}/"
-                    f"{net_name}_epoch-{max(epoch_list):06d}.tar"
-                )
-            else:
-                last_chkpts_path = (
-                    f"{prev_phase_dir}/"
-                    f"{net_name}_step-{max(step_list):06d}.tar"
-                )
+            epoch_list = [int(v) for v in info.keys()]
+            last_chkpts_path = (
+                f"{prev_phase_dir}/"
+                f"{net_name}_epoch={max(epoch_list):2d}.tar"
+            )
             return last_chkpts_path
 
         # TODO: adding way to load pretrained weight or resume the training
