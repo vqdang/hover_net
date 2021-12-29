@@ -3,13 +3,16 @@
 This branch is dedicated to training the HoVer-Net for the [CoNIC challenge](https://conic-challenge.grand-challenge.org/). All parameters are hard-coded and expected to be run-able out of the box as long as users follow
 the preparation steps mentioned below:
 
-1. Setup environment as detailed in `requirement.txt`
-2. Download the data from the [CoNIC challenge](https://conic-challenge.grand-challenge.org/)
-3. Extract the data into the `exp_output/local/data` folder.
-4. Run `python generate_split.py` to generate the a number
+1. Download [Pytorch ImageNet ResNet50](https://download.pytorch.org/models/resnet50-0676ba61.pth) and put
+it under `exp_output/local/`.
+2. Edit `pretrained_backbone` variable in the `param/template.yml` to point it to the downloaded weights above.
+2. Setup environment as detailed in `requirement.txt`
+3. Download the data from the [CoNIC challenge](https://conic-challenge.grand-challenge.org/)
+4. Extract the data into the `exp_output/local/data` folder.
+5. Run `python generate_split.py` to generate the a number
 of training and validation subsets. For the baseline in the
 challenge, we use the `FOLD_IDX=0`.
-5. Run `python run.py --gpu 'GPU_DEVICES'` to start the training process. `GPU_DEVICES` should be replaced with the actual GPU ID on your own machine. For example, `GPU_DEVICES` equals `0,1` means using GPU 0 and GPU 1 for training.
+6. Run `python run.py --gpu 'GPU_DEVICES'` to start the training process. `GPU_DEVICES` should be replaced with the actual GPU ID on your own machine. For example, `GPU_DEVICES` equals `0,1` means using GPU 0 and GPU 1 for training.
 
 ## Hyper-parameters
 
