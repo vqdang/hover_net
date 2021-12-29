@@ -1,21 +1,13 @@
-import math
-import sys
+
+import os
 from collections import OrderedDict
 
-import cv2
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from scipy.ndimage import measurements
-from scipy.ndimage.morphology import binary_fill_holes
-from skimage.morphology import remove_small_objects
-from skimage.segmentation import watershed
 from torchvision.models.resnet import Bottleneck as ResNetBottleneck
 from torchvision.models.resnet import ResNet
 
 from .net_utils import DenseBlock, UpSample2x
-from .utils import crop_op, crop_to_shape
 
 
 class ResNetExt(ResNet):
@@ -48,11 +40,15 @@ class ResNetExt(ResNet):
         model = ResNetExt(ResNetBottleneck, [3, 4, 6, 3])
         model.conv1 = nn.Conv2d(
             num_input_channels, 64, 7, stride=1, padding=3)
-        if pretrained is not None:
+        if pretrained is not None and os.path.exists(pretrained):
+            print(f"Loading: {pretrained}")
             pretrained = torch.load(pretrained)
             (
                 missing_keys, unexpected_keys
             ) = model.load_state_dict(pretrained, strict=False)
+        elif not os.path.exists(pretrained):
+            assert os.path.exists(pretrained), \
+                f"Pretrained path is not valid: {pretrained}"
         return model
 
 
