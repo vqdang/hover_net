@@ -15,3 +15,4 @@ loader_kwargs:
 
 model_kwargs:
   num_types: 7  # conic
+  pretrained_backbone: 'exp_output/local/[ImageNet]resnet50-0676ba61.pth'
