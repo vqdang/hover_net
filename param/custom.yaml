@@ -1,0 +1,18 @@
+
+
+optimizer_kwargs:
+  'lr' : 1.0e-4
+  'betas' : [0.9, 0.999]
+  'weight_decay' : 0.0
+
+loader_kwargs:
+  # phase 1
+  # train: { 'batch_size' : 6, 'nr_procs' : 8}
+  # infer: { 'batch_size' : 6, 'nr_procs' : 8}
+  # phase 2
+  train: { 'batch_size' : 12, 'nr_procs' : 8}
+  infer: { 'batch_size' : 12, 'nr_procs' : 8}
+
+model_kwargs:
+  num_types: 7  # conic
+  pretrained_backbone: 'exp_output/local/[ImageNet]resnet50-0676ba61.pth'
