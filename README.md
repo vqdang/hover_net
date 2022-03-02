@@ -36,7 +36,6 @@ conda activate hovernet
 pip install torch==1.10.1+cu102 torchvision==0.11.2+cu102 torchaudio===0.10.1+cu102 -f https://download.pytorch.org/whl/cu102/torch_stable.html
 ```
 
-Above, we install PyTorch version 1.10.1 with CUDA 10.2. 
 
 ## Citation
 
