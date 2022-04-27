@@ -125,8 +125,8 @@ def valid_step(batch_data, run_info):
     imgs_gpu = imgs_gpu.permute(0, 3, 1, 2).contiguous()
 
     # HWC
-    true_np = torch.squeeze(true_np).to("cuda").type(torch.int64)
-    true_hv = torch.squeeze(true_hv).to("cuda").type(torch.float32)
+    true_np = torch.squeeze(true_np).type(torch.int64)
+    true_hv = torch.squeeze(true_hv).type(torch.float32)
 
     true_dict = {
         "np": true_np,
@@ -135,7 +135,7 @@ def valid_step(batch_data, run_info):
 
     if model.module.nr_types is not None:
         true_tp = batch_data["tp_map"]
-        true_tp = torch.squeeze(true_tp).to("cuda").type(torch.int64)
+        true_tp = torch.squeeze(true_tp).type(torch.int64)
         true_dict["tp"] = true_tp
 
     # --------------------------------------------------------------
@@ -155,14 +155,14 @@ def valid_step(batch_data, run_info):
     result_dict = {  # protocol for contents exchange within `raw`
         "raw": {
             "imgs": imgs.numpy(),
-            "true_np": true_dict["np"].cpu().numpy(),
-            "true_hv": true_dict["hv"].cpu().numpy(),
+            "true_np": true_dict["np"].numpy(),
+            "true_hv": true_dict["hv"].numpy(),
             "prob_np": pred_dict["np"].cpu().numpy(),
             "pred_hv": pred_dict["hv"].cpu().numpy(),
         }
     }
     if model.module.nr_types is not None:
-        result_dict["raw"]["true_tp"] = true_dict["tp"].cpu().numpy()
+        result_dict["raw"]["true_tp"] = true_dict["tp"].numpy()
         result_dict["raw"]["pred_tp"] = pred_dict["tp"].cpu().numpy()
     return result_dict
 
