@@ -94,6 +94,13 @@ class __CoNSeP(__AbstractDataset):
 
         return ann
 
+####
+class __PANNUKEskin(__AbstractDataset):
+    """PANNUKE data keeping only skin images
+    
+    """
+
+
 
 ####
 def get_dataset(name):
@@ -102,6 +109,7 @@ def get_dataset(name):
         "kumar": lambda: __Kumar(),
         "cpm17": lambda: __CPM17(),
         "consep": lambda: __CoNSeP(),
+        "pannukeskin": lambda: __PANNUKEskin(),
     }
     if name.lower() in name_dict:
         return name_dict[name]()
