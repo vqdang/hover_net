@@ -26,20 +26,20 @@ if __name__ == "__main__":
     step_size = [164, 164]
     extract_type = "mirror"  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
 
-    # Name of dataset - use Kumar, CPM17 or CoNSeP.
+    # Name of dataset 
     # This used to get the specific dataset img and ann loading scheme from dataset.py
-    dataset_name = "consep"
+    dataset_name = "pannukeskin"
     save_root = "dataset/training_data/%s/" % dataset_name
 
     # a dictionary to specify where the dataset path should be
     dataset_info = {
         "train": {
-            "img": (".png", "dataset/CoNSeP/Train/Images/"),
-            "ann": (".mat", "dataset/CoNSeP/Train/Labels/"),
+            "img": (".png", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Train/Images/"),
+            "ann": (".npy", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Train/Labels/"),
         },
         "valid": {
-            "img": (".png", "dataset/CoNSeP/Test/Images/"),
-            "ann": (".mat", "dataset/CoNSeP/Test/Labels/"),
+            "img": (".png", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Test/Images/"),
+            "ann": (".npy", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Test/Labels/"),
         },
     }
 
@@ -70,15 +70,15 @@ if __name__ == "__main__":
         )
 
         for file_idx, file_path in enumerate(file_list):
-            base_name = pathlib.Path(file_path).stem
-
-            img = parser.load_img("%s/%s%s" % (img_dir, base_name, img_ext))
-            ann = parser.load_ann(
-                "%s/%s%s" % (ann_dir, base_name, ann_ext), type_classification
-            )
-
-            # *
-            img = np.concatenate([img, ann], axis=-1)
+            # REMOVE COMMENTS AFTER CHECK
+            # base_name = pathlib.Path(file_path).stem
+            # img = parser.load_img("%s/%s%s" % (img_dir, base_name, img_ext))
+            # ann = parser.load_ann(
+            #     "%s/%s%s" % (ann_dir, base_name, ann_ext), type_classification
+            # )
+            # # *
+            # img = np.concatenate([img, ann], axis=-1)
+            img = np.load(ann_dir + base_name + ann_ext)
             sub_patches = xtractor.extract(img, extract_type)
 
             pbar_format = "Extracting  : |{bar}| {n_fmt}/{total_fmt}[{elapsed}<{remaining},{rate_fmt}]"
