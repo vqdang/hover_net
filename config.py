@@ -24,7 +24,7 @@ class Config(object):
         if model_mode not in ["original", "fast"]:
             raise Exception("Must use either `original` or `fast` as model mode")
 
-        nr_type = 5 # number of nuclear types (including background)
+        nr_type = 6 # number of nuclear types (including background)
 
         # whether to predict the nuclear type, availability depending on dataset!
         self.type_classification = True
@@ -49,10 +49,10 @@ class Config(object):
 
         # paths to training and validation patches
         self.train_dir_list = [
-            "train_patches_path"
+            "/projects/ag-bozek/lucas/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/pannukeskin/pannukeskin/train/540x540_164x164/"
         ]
         self.valid_dir_list = [
-            "valid_patches_path"
+            "/projects/ag-bozek/lucas/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/pannukeskin/pannukeskin/valid/540x540_164x164/"
         ]
 
         self.shape_info = {

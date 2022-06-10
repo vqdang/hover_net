@@ -5,6 +5,8 @@
 cache/
 dataset/
 exp_output/
+log/
+logs/
 
 # checkpoint paths
 *.npz

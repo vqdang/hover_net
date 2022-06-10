@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
         for file_idx, file_path in enumerate(file_list):
             # REMOVE COMMENTS AFTER CHECK
-            # base_name = pathlib.Path(file_path).stem
+            base_name = pathlib.Path(file_path).stem
             # img = parser.load_img("%s/%s%s" % (img_dir, base_name, img_ext))
             # ann = parser.load_ann(
             #     "%s/%s%s" % (ann_dir, base_name, ann_ext), type_classification
