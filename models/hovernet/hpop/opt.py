@@ -52,7 +52,7 @@ def get_config(nr_type, mode):
                         },
                         # path to load, -1 to auto load checkpoint from previous phase,
                         # None to start from scratch
-                        "pretrained": "/data/lsancere/Data_General/PreTrained_Weights/ImageNet-ResNet50-Preact_pytorch.tar",
+                        "pretrained": "/data/lsancere/Data_General/PreTrained_Weights/Hovernet/ImageNet-ResNet50-Preact_pytorch.tar",
                         #'pretrained': None,
                     },
                 },

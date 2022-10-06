@@ -10,8 +10,9 @@ from dataset import get_dataset
 class Config(object):
     """Configuration file."""
 
-    def __init__(self):
+    def __init__(self, optname='opt'):
         self.seed = 10
+        self.optname = optname
 
         self.logging = True
 
@@ -44,15 +45,15 @@ class Config(object):
             if act_shape != [256,256] or out_shape != [164,164]:
                 raise Exception("If using `original` mode, input shape must be [256,256] and output shape must be [164,164]")
 
-        self.dataset_name = "pannukeskin" # extracts dataset info from dataset.py
-        self.log_dir = "logs/" # where checkpoints will be saved
+        self.dataset_name = "dlbcl" # extracts dataset info from dataset.py
+        self.log_dir = "logs_DLBCL/{}/".format(self.optname) # where checkpoints will be saved
 
         # paths to training and validation patches
         self.train_dir_list = [
-            "/projects/ag-bozek/lucas/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/pannukeskin/pannukeskin/train/540x540_164x164/"
+            "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/dlbcl/dlbcl/train/540x540_164x164/"
         ]
         self.valid_dir_list = [
-            "/projects/ag-bozek/lucas/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/pannukeskin/pannukeskin/valid/540x540_164x164/"
+            "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/dlbcl/dlbcl/valid/540x540_164x164/"
         ]
 
         self.shape_info = {
@@ -64,6 +65,6 @@ class Config(object):
         self.dataset = get_dataset(self.dataset_name)
 
         module = importlib.import_module(
-            "models.%s.opt" % model_name
-        )
+            "models.{}.{}".format(model_name, self.optname)
+            )
         self.model_config = module.get_config(nr_type, model_mode)

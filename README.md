@@ -1,3 +1,9 @@
+
+# HoVer-Net on ADA
+
+Implementation of HoverNet for ADA. I keep seperated the different versions of Hovernet under the cluster used (or locally), because I ofter change the code according to the data present on this ones. I would like to keep at least 2 versions, ADA and local one.
+
+
 # HoVer-Net: Simultaneous Segmentation and Classification of Nuclei in Multi-Tissue Histology Images
 
 A multiple branch network that performs nuclear instance segmentation and classification within a single network. The network leverages the horizontal and vertical distances of nuclear pixels to their centres of mass to separate clustered cells. A dedicated up-sampling branch is used to classify the nuclear type for each segmented instance. <br />
@@ -64,7 +70,7 @@ Before training:
 - Modify hyperparameters, including number of epochs and learning rate in `models/hovernet/opt.py`.
 
 ### Usage and Options
- 
+
 Usage: <br />
 ```
   python run_train.py [--gpu=<id>] [--view=<dset>]
@@ -111,7 +117,7 @@ Output: <br />
     - 'inst_map': instance map containing values from 0 to N, where N is the number of nuclei
     - 'inst_type': list of length N containing predictions for each nucleus
  - Image tiles output a `png` overlay of nuclear boundaries on top of original RGB image
-  
+
 ### Model Weights
 
 Model weights obtained from training HoVer-Net as a result of the above instructions can be supplied to process input images / WSIs. Alternatively, any of the below pre-trained model weights can be used to process the data. These checkpoints were initially trained using TensorFlow and were converted using `convert_chkpt_tf2pytorch.py`. Provided checkpoints either are either trained for segmentation alone or for simultaneous segmentation and classification. Note, we do not provide a segmentation and classification model for CPM17 and Kumar because classification labels aren't available.

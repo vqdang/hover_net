@@ -747,5 +747,5 @@ class InferManager(base.InferManager):
                 log_info("Finish")
             except:
                 logging.exception("Crash")
-        rm_n_mkdir(self.cache_path)  # clean up all cache
+        #rm_n_mkdir(self.cache_path)  # clean up all cache, cannot work if files are generated in the cache at the same time
         return

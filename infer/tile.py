@@ -1,6 +1,12 @@
 import logging
 import multiprocessing
 from multiprocessing import Lock, Pool
+import os
+
+os.environ["OPENCV_IO_MAX_IMAGE_PIXELS"] = str(pow(2,70)).__str__()
+os.environ["CV_IO_MAX_IMAGE_PIXELS"] = str(pow(2,70)).__str__()
+
+
 
 multiprocessing.set_start_method("spawn", True)  # ! must be at top for VScode debugging
 import argparse
@@ -253,7 +259,8 @@ class InferManager(base.InferManager):
             cache_image_info_list = []
             while len(file_path_list) > 0:
                 file_path = file_path_list.pop(0)
-
+                
+                print('Read Image:',file_path)
                 img = cv2.imread(file_path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 src_shape = img.shape

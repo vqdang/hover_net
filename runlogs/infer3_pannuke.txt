@@ -1,0 +1,7 @@
+|2022-07-21|14:14:11.618| [INFO] .... Detect #GPUS: 1
+Traceback (most recent call last):
+  File "run_infer.py", line 182, in <module>
+    infer.process_file_list(run_args)
+  File "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net_ada/infer/tile.py", line 168, in process_file_list
+    assert len(file_path_list) > 0, 'Not Detected Any Files From Path'
+AssertionError: Not Detected Any Files From Path

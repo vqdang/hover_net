@@ -100,6 +100,12 @@ class __PANNUKEskin(__AbstractDataset):
     
     """
 
+####
+class __DLBCL(__AbstractDataset):
+    """DLBCL data set
+    
+    """
+
 
 
 ####
@@ -110,6 +116,7 @@ def get_dataset(name):
         "cpm17": lambda: __CPM17(),
         "consep": lambda: __CoNSeP(),
         "pannukeskin": lambda: __PANNUKEskin(),
+        "dlbcl": lambda: __DLBCL(),
     }
     if name.lower() in name_dict:
         return name_dict[name]()
