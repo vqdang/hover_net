@@ -745,7 +745,7 @@ class InferManager(base.InferManager):
                 log_info("Process: %s" % wsi_base_name)
                 self.process_single_file(wsi_path, msk_path, self.output_dir)
                 log_info("Finish")
-            except:
+            except Exception:
                 logging.exception("Crash")
         rm_n_mkdir(self.cache_path)  # clean up all cache
         return
