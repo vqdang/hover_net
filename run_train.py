@@ -32,6 +32,7 @@ from docopt import docopt
 from tensorboardX import SummaryWriter
 from torch.nn import DataParallel  # TODO: switch to DistributedDataParallel
 from torch.utils.data import DataLoader
+# import torch.profiler
 
 from config import Config
 from dataloader.train_loader import FileLoader
@@ -140,7 +141,6 @@ class TrainManager(Config):
         if self.logging:
             # check_log_dir(log_dir)
             rm_n_mkdir(log_dir)
-
             tfwriter = SummaryWriter(log_dir=log_dir)
             json_log_file = log_dir + "/stats.json"
             with open(json_log_file, "w") as json_file:
@@ -160,6 +160,10 @@ class TrainManager(Config):
                 nr_procs=runner_opt["nr_procs"],
                 fold_idx=fold_idx,
             )
+
+        # prof.step() use of profiler 
+
+
         ####
         def get_last_chkpt_path(prev_phase_dir, net_name):
             stat_file_path = prev_phase_dir + "/stats.json"
@@ -306,6 +310,17 @@ if __name__ == "__main__":
             raise Exception('Use "train" or "valid" for --view.')
         trainer.view_dataset(args["--view"])
     else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args["--gpu"]
-
+        # os.environ["CUDA_VISIBLE_DEVICES"] = args["--gpu"] #use of slurm so comment line
+ 
+        # prepare profiler file to have more information abot the trianing and indentify some time bottleneck
+        # prof = torch.profiler.profile(
+        #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        #     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/resnet18'),
+        #     record_shapes=True,
+        #     with_stack=True)
+        # prof.start()
+        
         trainer.run()
+        
+        # prof.stop()    
+            # It looks like it is working but

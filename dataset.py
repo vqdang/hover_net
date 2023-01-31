@@ -106,6 +106,17 @@ class __DLBCL(__AbstractDataset):
     
     """
 
+####
+class __DLBCL3(__AbstractDataset):
+    """DLBCL data set
+    
+    """
+
+####
+class __DLBCL4(__AbstractDataset):
+    """DLBCL data set
+    
+    """
 
 
 ####
@@ -117,6 +128,8 @@ def get_dataset(name):
         "consep": lambda: __CoNSeP(),
         "pannukeskin": lambda: __PANNUKEskin(),
         "dlbcl": lambda: __DLBCL(),
+        "dlbcl3": lambda: __DLBCL3(),
+        "dlbcl4": lambda: __DLBCL4(),
     }
     if name.lower() in name_dict:
         return name_dict[name]()

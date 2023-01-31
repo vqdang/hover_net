@@ -45,15 +45,15 @@ class Config(object):
             if act_shape != [256,256] or out_shape != [164,164]:
                 raise Exception("If using `original` mode, input shape must be [256,256] and output shape must be [164,164]")
 
-        self.dataset_name = "dlbcl" # extracts dataset info from dataset.py
+        self.dataset_name = "dlbcl3" # extracts dataset info from dataset.py
         self.log_dir = "logs_DLBCL/{}/".format(self.optname) # where checkpoints will be saved
 
         # paths to training and validation patches
         self.train_dir_list = [
-            "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/dlbcl/dlbcl/train/540x540_164x164/"
+            "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/dlbcl3/dlbcl3/train/540x540_164x164/"
         ]
         self.valid_dir_list = [
-            "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/dlbcl/dlbcl/valid/540x540_164x164/"
+            "/data/lsancere/Hover_Net_Complete/pytorch-final/hover_net/dataset/training_data/dlbcl3/dlbcl3/valid/540x540_164x164/"
         ]
 
         self.shape_info = {
