@@ -3,7 +3,7 @@
 Main HoVer-Net training script.
 
 Usage:
-  run_train.py [--gpu=<id>] [--view=<dset>]
+  run_train.py [--gpu=<id>] [--view=<dset>] [--optname=<optfilename>]
   run_train.py (-h | --help)
   run_train.py --version
 
@@ -32,6 +32,7 @@ from docopt import docopt
 from tensorboardX import SummaryWriter
 from torch.nn import DataParallel  # TODO: switch to DistributedDataParallel
 from torch.utils.data import DataLoader
+# import torch.profiler
 
 from config import Config
 from dataloader.train_loader import FileLoader
@@ -66,8 +67,8 @@ def worker_init_fn(worker_id):
 class TrainManager(Config):
     """Either used to view the dataset or to initialise the main training loop."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, optname):
+        super().__init__(optname)
         return
 
     ####
@@ -140,7 +141,6 @@ class TrainManager(Config):
         if self.logging:
             # check_log_dir(log_dir)
             rm_n_mkdir(log_dir)
-
             tfwriter = SummaryWriter(log_dir=log_dir)
             json_log_file = log_dir + "/stats.json"
             with open(json_log_file, "w") as json_file:
@@ -160,6 +160,10 @@ class TrainManager(Config):
                 nr_procs=runner_opt["nr_procs"],
                 fold_idx=fold_idx,
             )
+
+        # prof.step() use of profiler 
+
+
         ####
         def get_last_chkpt_path(prev_phase_dir, net_name):
             stat_file_path = prev_phase_dir + "/stats.json"
@@ -286,20 +290,37 @@ class TrainManager(Config):
             else:
                 save_path = self.log_dir + "/%02d/" % (phase_idx)
             self.run_once(
-                phase_info, engine_opt, save_path, prev_log_dir=prev_save_path
-            )
+                phase_info, engine_opt, save_path, prev_log_dir=prev_save_path,
+                )
             prev_save_path = save_path
 
 
 ####
 if __name__ == "__main__":
     args = docopt(__doc__, version="HoVer-Net v1.0")
-    trainer = TrainManager()
+    if args["--optname"]:
+        optname = args["--optname"]
+    else:
+        optname = "opt"   
+    print(optname)
+    trainer = TrainManager(optname)
 
     if args["--view"]:
         if args["--view"] != "train" and args["--view"] != "valid":
             raise Exception('Use "train" or "valid" for --view.')
         trainer.view_dataset(args["--view"])
     else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args["--gpu"]
+        # os.environ["CUDA_VISIBLE_DEVICES"] = args["--gpu"] #use of slurm so comment line
+ 
+        # prepare profiler file to have more information abot the trianing and indentify some time bottleneck
+        # prof = torch.profiler.profile(
+        #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        #     on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/resnet18'),
+        #     record_shapes=True,
+        #     with_stack=True)
+        # prof.start()
+        
         trainer.run()
+        
+        # prof.stop()    
+            # It looks like it is working but

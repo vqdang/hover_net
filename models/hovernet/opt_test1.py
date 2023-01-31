@@ -52,7 +52,7 @@ def get_config(nr_type, mode):
                         },
                         # path to load, -1 to auto load checkpoint from previous phase,
                         # None to start from scratch
-                        "pretrained": "/data/lsancere/Data_General/PreTrained_Weights/ImageNet-ResNet50-Preact_pytorch.tar",
+                        "pretrained": "/data/lsancere/Data_General/PreTrained_Weights/Hovernet/ImageNet-ResNet50-Preact_pytorch.tar",
                         #'pretrained': None,
                     },
                 },
@@ -91,7 +91,7 @@ def get_config(nr_type, mode):
                 },
                 "target_info": {"gen": (gen_targets, {}), "viz": (prep_sample, {})},
                 "batch_size": {"train": 4, "valid": 8,}, # batch size per gpu
-                "nr_epochs": 50,
+                "nr_epochs": 100,
             },
         ],
         # ------------------------------------------------------------------

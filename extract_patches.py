@@ -28,18 +28,18 @@ if __name__ == "__main__":
 
     # Name of dataset 
     # This used to get the specific dataset img and ann loading scheme from dataset.py
-    dataset_name = "pannukeskin"
+    dataset_name = "dlbcl3"
     save_root = "dataset/training_data/%s/" % dataset_name
 
     # a dictionary to specify where the dataset path should be
     dataset_info = {
         "train": {
-            "img": (".png", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Train/Images/"),
-            "ann": (".npy", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Train/Labels/"),
+            "img": (".png", "/data/lsancere/Data_General/TrainingSets/Hovernet/Carina-Corinna-Johannes-Data/PannukeOriginal/Training2/TrainReduced/Images/"),
+            "ann": (".npy", "/data/lsancere/Data_General/TrainingSets/Hovernet/Carina-Corinna-Johannes-Data/PannukeOriginal/Training2/TrainReduced/Labels/"),
         },
         "valid": {
-            "img": (".png", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Test/Images/"),
-            "ann": (".npy", "/home/lsancere/These/CMMC/Local_DATA/DATASETS/PANNUKEskin/SkinHoverNet/Test/Labels/"),
+            "img": (".png", "/data/lsancere/Data_General/TrainingSets/Hovernet/Carina-Corinna-Johannes-Data/PannukeOriginal/Training2/Valid/Images/"),
+            "ann": (".npy", "/data/lsancere/Data_General/TrainingSets/Hovernet/Carina-Corinna-Johannes-Data/PannukeOriginal/Training2/Valid/Labels/"),
         },
     }
 
