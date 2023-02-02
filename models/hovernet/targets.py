@@ -56,7 +56,7 @@ def gen_instance_hv_map(ann, crop_shape):
 
         # instance center of mass, rounded to nearest pixel
         inst_com = list(measurements.center_of_mass(inst_map))
-
+        inst_com = [x if math.isnan(x) == False else 0 for x in inst_com]
         inst_com[0] = int(inst_com[0] + 0.5)
         inst_com[1] = int(inst_com[1] + 0.5)
 
