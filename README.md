@@ -1,10 +1,13 @@
 
-# HoVer-Net on ADA
+# HoVer-Net as histo-miner submodule
 
-Implementation of HoverNet for ADA. I keep seperated the different versions of Hovernet under the cluster used (or locally), because I ofter change the code according to the data present on this ones. I would like to keep at least 2 versions, ADA and local one.
+Here is the presentation of Hovernet model, as a submodule of histo-miner. The original code is coming from: [enter].
+This fork contains some variation corresponding to the specific training used for histo-miner pipeline. 
 
 
-# HoVer-Net: Simultaneous Segmentation and Classification of Nuclei in Multi-Tissue Histology Images
+## Presentation of Hovernet
+
+This README is a copy of the original readme one can find [enter link].
 
 A multiple branch network that performs nuclear instance segmentation and classification within a single network. The network leverages the horizontal and vertical distances of nuclear pixels to their centres of mass to separate clustered cells. A dedicated up-sampling branch is used to classify the nuclear type for each segmented instance. <br />
 
