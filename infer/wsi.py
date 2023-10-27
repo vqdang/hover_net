@@ -732,6 +732,8 @@ class InferManager(base.InferManager):
         wsi_path_list = glob.glob(self.input_dir + "/*")
         wsi_path_list.sort()  # ensure ordering
         for wsi_path in wsi_path_list[:]:
+            if os.path.isdir(wsi_path):
+                continue
             wsi_base_name = pathlib.Path(wsi_path).stem
             msk_path = "%s/%s.png" % (self.input_mask_dir, wsi_base_name)
             if self.save_thumb or self.save_mask:
