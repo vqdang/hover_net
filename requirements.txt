@@ -14,3 +14,5 @@ tensorboard==2.3.0
 tensorboardx==2.1
 termcolor==1.1.0
 tqdm==4.48.0
+Shapely==1.7.1
+h5py==3.1.0

@@ -1,6 +1,6 @@
 import multiprocessing as mp
 from concurrent.futures import FIRST_EXCEPTION, ProcessPoolExecutor, as_completed, wait
-from multiprocessing import Lock, Pool
+from multiprocessing import Pool
 
 mp.set_start_method("spawn", True)  # ! must be at top for VScode debugging
 
@@ -37,15 +37,6 @@ from misc.utils import (
 from misc.wsi_handler import get_file_handler
 
 from . import base
-
-thread_lock = Lock()
-
-
-####
-def _init_worker_child(lock_):
-    global lock
-    lock = lock_
-
 
 ####
 def _remove_inst(inst_map, remove_id_list):

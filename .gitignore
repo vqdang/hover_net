@@ -10,3 +10,6 @@ exp_output/
 *.npz
 *.png
 *.log
+
+# chunk feature maps
+*.h5

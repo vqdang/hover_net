@@ -16,6 +16,7 @@ class HoVerNet(Net):
 
     def __init__(self, input_ch=3, nr_types=None, freeze=False, mode='original'):
         super().__init__()
+        assert mode in ['original', 'fast'], "Unknown Model Mode %s" % mode
         self.mode = mode
         self.freeze = freeze
         self.nr_types = nr_types
@@ -99,7 +100,6 @@ class HoVerNet(Net):
         self.weights_init()
 
     def forward(self, imgs):
-
         imgs = imgs / 255.0  # to 0-1 range to match XY
 
         if self.training:
