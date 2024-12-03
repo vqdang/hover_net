@@ -191,10 +191,12 @@ def infer_step(batch_data, model):
             type_map = torch.argmax(type_map, dim=-1, keepdim=True)
             type_map = type_map.type(torch.float32)
             pred_dict["tp"] = type_map
+        pred_output1 = pred_dict['encoder_features']
+        del pred_dict['encoder_features']
         pred_output = torch.cat(list(pred_dict.values()), -1)
-
+    # print("pred_output", pred_dict)
     # * Its up to user to define the protocol to process the raw output per step!
-    return pred_output.cpu().numpy()
+    return pred_output.cpu().numpy(), pred_output1.cpu().numpy()
 
 
 ####

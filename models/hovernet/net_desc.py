@@ -129,6 +129,8 @@ class HoVerNet(Net):
             d[1] = crop_op(d[1], [36, 36])
 
         out_dict = OrderedDict()
+        out_dict["encoder_features"] = d3
+
         for branch_name, branch_desc in self.decoder.items():
             u3 = self.upsample2x(d[-1]) + d[-2]
             u3 = branch_desc[0](u3)
