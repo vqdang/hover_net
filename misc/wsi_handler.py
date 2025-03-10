@@ -5,6 +5,7 @@ from skimage import img_as_ubyte
 from skimage import color
 import re
 import subprocess
+from PIL import Image
 
 import openslide
 
@@ -21,7 +22,24 @@ class FileHandler(object):
             ("mpp  ", None),
             ("base_shape", None),
         }
-        pass
+        self.image_ptr = None
+        self.read_lv = None
+
+    @staticmethod
+    def pil_to_rgb_array(pil_img):
+        """Convert PIL image to RGB numpy array, properly handling transparency.
+        
+        Args:
+            pil_img: PIL image object (can be RGBA or any other mode)
+        
+        Returns:
+            numpy array with RGB values
+        """
+        if pil_img.mode == 'RGBA':
+            background = Image.new('RGBA', pil_img.size, (255, 255, 255, 255))
+            return np.array(Image.alpha_composite(background, pil_img).convert('RGB'))
+        else:
+            return np.array(pil_img.convert('RGB'))
 
     def __load_metadata(self):
         raise NotImplementedError
@@ -157,12 +175,15 @@ class OpenSlideHandler(FileHandler):
             new_coord = [0, 0]
             new_coord[0] = int(coords[0] * up_sample)
             new_coord[1] = int(coords[1] * up_sample)
-            region = self.file_ptr.read_region(new_coord, self.read_lv, size)
+            
+            # Read the region and handle transparency
+            region_pil = self.file_ptr.read_region(new_coord, self.read_lv, size)
+            return self.pil_to_rgb_array(region_pil)
         else:
             region = self.image_ptr[
                 coords[1] : coords[1] + size[1], coords[0] : coords[0] + size[0]
             ]
-        return np.array(region)[..., :3]
+            return np.array(region)[..., :3]
 
     def get_full_img(self, read_mag=None, read_mpp=None):
         """Only use `read_mag` or `read_mpp`, not both, prioritize `read_mpp`.
@@ -176,8 +197,10 @@ class OpenSlideHandler(FileHandler):
 
         read_size = self.file_ptr.level_dimensions[read_lv]
 
-        wsi_img = self.file_ptr.read_region((0, 0), read_lv, read_size)
-        wsi_img = np.array(wsi_img)[..., :3]  # remove alpha channel
+        # Read the WSI and handle transparency 
+        wsi_pil = self.file_ptr.read_region((0, 0), read_lv, read_size)
+        wsi_img = self.pil_to_rgb_array(wsi_pil)
+            
         if scale_factor is not None:
             # now rescale then return
             if scale_factor > 1.0:
